@@ -3,6 +3,9 @@ from flask_cors import CORS
 import pandas as pd
 import os
 from vector_builder import build_vector_db
+import chromadb
+from sentence_transformers import SentenceTransformer
+from pathlib import Path
 
 # Import the process_file function from the script we made earlier
 from anonymizer import process_file
@@ -13,6 +16,7 @@ CORS(app)
 
 UPLOAD_FILE = "temp_upload.csv"
 OUTPUT_FILE = "anonymized_output.csv"
+VECTOR_DB_PATH = Path('./survey_vector_db')
 
 @app.route('/api/inspect-file', methods=['POST'])
 def inspect_file():
@@ -80,5 +84,129 @@ def status():
         'vector_db_exists': vector_db_exists
     })
 
+# ── QUERY VECTORS ────────────────────────────────────────────────────────────
+
+@app.route('/api/query-vectors', methods=['GET'])
+def query_vectors():
+    """Search vectors with metadata filtering"""
+    try:
+        query_text = request.args.get('query', '').strip()
+        top_k = min(int(request.args.get('n', 10)), 50)
+        institution = request.args.get('institution', None)
+        
+        if not query_text:
+            return jsonify({"status": "error", "error": "Empty query"}), 400
+        
+        print(f"[QUERY] Searching: '{query_text}' | Institution: {institution or 'all'} | Top-K: {top_k}")
+        
+        # Connect to vector DB
+        client = chromadb.PersistentClient(path=str(VECTOR_DB_PATH))
+        
+        try:
+            collection = client.get_collection("survey_responses")
+        except:
+            return jsonify({"status": "error", "error": "Vector database not found. Build vectors first."}), 400
+        
+        # Encode query
+        model = SentenceTransformer('BAAI/bge-m3')
+        query_embedding = model.encode(query_text, normalize_embeddings=True)
+        
+        # Build where filter
+        where_filter = None
+        if institution and institution != 'all':
+            where_filter = {"institution": institution}
+        
+        # Query collection
+        results = collection.query(
+            query_embeddings=[query_embedding.tolist()],
+            n_results=top_k,
+            where=where_filter,
+            include=["documents", "metadatas", "distances"]
+        )
+        
+        # Format results
+        formatted = []
+        if results['documents'] and len(results['documents']) > 0:
+            for i, doc in enumerate(results['documents'][0]):
+                distance = results['distances'][0][i]
+                similarity = max(0, 1 - distance)
+                
+                result_item = {
+                    "id": i + 1,
+                    "document": doc,
+                    "preview": doc[:300] + "..." if len(doc) > 300 else doc,
+                    "similarity": round(similarity, 3),
+                    "percentage": round(similarity * 100, 1)
+                }
+                
+                if results['metadatas'] and i < len(results['metadatas'][0]):
+                    result_item["metadata"] = results['metadatas'][0][i]
+                
+                formatted.append(result_item)
+        
+        return jsonify({
+            "status": "success",
+            "results": formatted,
+            "count": len(formatted),
+            "query": query_text
+        })
+        
+    except Exception as e:
+        print(f"[QUERY ERROR] {str(e)}")
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+
+# ── VECTOR STATS ─────────────────────────────────────────────────────────────
+
+@app.route('/api/vector-stats', methods=['GET'])
+def vector_stats():
+    """Get statistics and sample documents from vector DB"""
+    try:
+        client = chromadb.PersistentClient(path=str(VECTOR_DB_PATH))
+        
+        try:
+            collection = client.get_collection("survey_responses")
+        except:
+            return jsonify({
+                "status": "empty",
+                "data": [],
+                "total_documents": 0,
+                "message": "Vector DB not initialized"
+            }), 200
+        
+        count = collection.count()
+        
+        if count == 0:
+            return jsonify({
+                "status": "empty",
+                "data": [],
+                "total_documents": 0
+            }), 200
+        
+        # Get sample documents
+        all_docs = collection.get(limit=min(count, 50))
+        
+        documents = []
+        if all_docs['documents']:
+            for i, doc in enumerate(all_docs['documents'][:50]):
+                documents.append({
+                    "id": i + 1,
+                    "text": doc[:200] + "..." if len(doc) > 200 else doc,
+                    "full_text": doc,
+                    "metadata": all_docs['metadatas'][i] if all_docs['metadatas'] else {}
+                })
+        
+        return jsonify({
+            "status": "success",
+            "data": documents,
+            "total_documents": count,
+            "samples": len(documents)
+        }), 200
+        
+    except Exception as e:
+        print(f"[VECTOR STATS ERROR] {str(e)}")
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+
 if __name__ == '__main__':
-    app.run(port=5000, debug=True)
+    app.run(debug=True, port=5000)

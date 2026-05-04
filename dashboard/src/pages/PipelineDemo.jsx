@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import AnonymizerTab from '../components/AnonymizerTab';
-// Assume VectorDBBuilder and QueryTab are similarly updated to match this sleek design
 import VectorDBBuilder from '../components/VectorDBBuilder'; 
 import QueryTab from '../components/QueryTab';
 
@@ -8,6 +7,7 @@ export default function PipelineDemo() {
   const [activeTab, setActiveTab] = useState('anonymize');
   const [isAnonymized, setIsAnonymized] = useState(false);
   const [vectorDbReady, setVectorDbReady] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   // Check backend for existing anonymized CSV / vector DB and enable steps if present
   useEffect(() => {
@@ -28,8 +28,8 @@ export default function PipelineDemo() {
 
   const steps = [
     { id: 'anonymize', title: '1. Anonymize Data', icon: '🔒', enabled: true },
-    { id: 'vectors', title: '2. Build Vector DB', icon: '🗄️', enabled: isAnonymized },
-    { id: 'query', title: '3. AI Query', icon: '✨', enabled: vectorDbReady },
+    { id: 'vectors', title: '2. Build Vector DB', icon: '🗄️', enabled: true },
+    { id: 'query', title: '3. AI Query', icon: '✨', enabled: true },
   ];
 
   return (
@@ -42,6 +42,12 @@ export default function PipelineDemo() {
           <p className="mt-2 text-sm text-gray-500">
             Securely anonymize feedback, vectorize the text, and query using AI.
           </p>
+          {isProcessing && (
+            <div className="mt-4 p-3 bg-blue-50 border border-blue-300 rounded-lg flex items-center">
+              <div className="animate-spin mr-3 text-xl">⏳</div>
+              <span className="text-blue-700 font-medium">Processing in backend...</span>
+            </div>
+          )}
         </div>
 
         {/* Navigation Tabs */}
@@ -50,13 +56,13 @@ export default function PipelineDemo() {
             <button
               key={step.id}
               onClick={() => setActiveTab(step.id)}
-              disabled={!step.enabled}
+              disabled={isProcessing}
               className={`
                 flex items-center px-6 py-3 text-sm font-medium rounded-t-lg transition-colors
                 ${activeTab === step.id 
                   ? 'bg-blue-50 text-blue-700 border-b-2 border-blue-600' 
                   : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'}
-                ${!step.enabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}
+                ${isProcessing ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
               `}
             >
               <span className="mr-2 text-lg">{step.icon}</span>
@@ -70,7 +76,6 @@ export default function PipelineDemo() {
           {activeTab === 'anonymize' && (
             <AnonymizerTab existingAnonymized={isAnonymized} onComplete={() => {
               setIsAnonymized(true);
-              setActiveTab('vectors');
             }} />
           )}
           
@@ -82,19 +87,24 @@ export default function PipelineDemo() {
                 </p>
                 <button 
                   onClick={async () => {
-                    // This calls our new Flask endpoint!
-                    const res = await fetch('http://localhost:5000/api/build-vectordb', { method: 'POST' });
-                    const data = await res.json();
-                    if(data.status === 'success') {
-                       setVectorDbReady(true);
-                       setActiveTab('query');
-                    } else {
-                       alert("Error building DB: " + data.error);
+                    setIsProcessing(true);
+                    try {
+                      const res = await fetch('http://localhost:5000/api/build-vectordb', { method: 'POST' });
+                      const data = await res.json();
+                      if(data.status === 'success') {
+                         setVectorDbReady(true);
+                         setActiveTab('query');
+                      } else {
+                         alert("Error building DB: " + data.error);
+                      }
+                    } finally {
+                      setIsProcessing(false);
                     }
                   }}
-                  className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm transition"
+                  disabled={isProcessing}
+                  className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm transition disabled:opacity-50"
                 >
-                  Start Vectorization Process
+                  {isProcessing ? '⏳ Processing...' : 'Start Vectorization Process'}
                 </button>
              </div>
           )}
