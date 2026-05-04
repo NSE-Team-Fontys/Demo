@@ -70,5 +70,15 @@ def build_db():
     except Exception as e:
         return jsonify({'status': 'error', 'error': str(e)})
 
+@app.route('/api/status', methods=['GET'])
+def status():
+    anonymized_exists = os.path.exists(OUTPUT_FILE)
+    vector_db_exists = os.path.exists('survey_vector_db') and any(os.scandir('survey_vector_db'))
+    return jsonify({
+        'status': 'success',
+        'anonymized_exists': anonymized_exists,
+        'vector_db_exists': vector_db_exists
+    })
+
 if __name__ == '__main__':
     app.run(port=5000, debug=True)

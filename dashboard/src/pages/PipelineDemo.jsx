@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import AnonymizerTab from '../components/AnonymizerTab';
 // Assume VectorDBBuilder and QueryTab are similarly updated to match this sleek design
 import VectorDBBuilder from '../components/VectorDBBuilder'; 
@@ -8,6 +8,23 @@ export default function PipelineDemo() {
   const [activeTab, setActiveTab] = useState('anonymize');
   const [isAnonymized, setIsAnonymized] = useState(false);
   const [vectorDbReady, setVectorDbReady] = useState(false);
+
+  // Check backend for existing anonymized CSV / vector DB and enable steps if present
+  useEffect(() => {
+    const checkStatus = async () => {
+      try {
+        const res = await fetch('http://localhost:5000/api/status');
+        const data = await res.json();
+        if (data.status === 'success') {
+          setIsAnonymized(Boolean(data.anonymized_exists));
+          setVectorDbReady(Boolean(data.vector_db_exists));
+        }
+      } catch (e) {
+        console.warn('Failed to fetch status:', e);
+      }
+    };
+    checkStatus();
+  }, []);
 
   const steps = [
     { id: 'anonymize', title: '1. Anonymize Data', icon: '🔒', enabled: true },
@@ -51,7 +68,7 @@ export default function PipelineDemo() {
         {/* Content Area */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 min-h-[500px]">
           {activeTab === 'anonymize' && (
-            <AnonymizerTab onComplete={() => {
+            <AnonymizerTab existingAnonymized={isAnonymized} onComplete={() => {
               setIsAnonymized(true);
               setActiveTab('vectors');
             }} />

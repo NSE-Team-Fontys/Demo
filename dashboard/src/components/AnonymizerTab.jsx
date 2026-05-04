@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-export default function AnonymizerTab({ onComplete }) {
+export default function AnonymizerTab({ onComplete, existingAnonymized }) {
   const [file, setFile] = useState(null);
   const [columns, setColumns] = useState([]);
   const [selectedColumns, setSelectedColumns] = useState([]);
@@ -106,6 +106,20 @@ export default function AnonymizerTab({ onComplete }) {
             />
             {file && <p className="mt-2 text-green-600">✓ {file.name}</p>}
           </div>
+
+          {existingAnonymized && (
+            <div className="mt-3">
+              <p className="text-sm text-gray-600">An anonymized CSV was found on the server.</p>
+              <button
+                onClick={() => {
+                  if (typeof onComplete === 'function') onComplete();
+                }}
+                className="mt-2 px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600"
+              >
+                Use existing anonymized CSV
+              </button>
+            </div>
+          )}
         </div>
       )}
 
