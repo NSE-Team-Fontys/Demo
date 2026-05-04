@@ -1,13 +1,48 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 export default function QueryTab() {
   const [query, setQuery] = useState('');
   const [institution, setInstitution] = useState('all');
-  const [numResults, setNumResults] = useState(10);
+  const [year, setYear] = useState('all');
+  const [location, setLocation] = useState('all');
+  const [programme, setProgramme] = useState('all');
+  const [studyMode, setStudyMode] = useState('all');
+  const [cohort, setCohort] = useState('all');
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [searchPerformed, setSearchPerformed] = useState(false);
+  
+  // Filter options state
+  const [filterOptions, setFilterOptions] = useState({
+    institutions: [],
+    academic_years: [],
+    locations: [],
+    programmes: [],
+    study_modes: [],
+    cohorts: []
+  });
+  const [optionsLoading, setOptionsLoading] = useState(true);
+
+  // Fetch filter options on mount
+  useEffect(() => {
+    const fetchFilterOptions = async () => {
+      try {
+        const response = await fetch('http://localhost:5000/api/filter-options');
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+          setFilterOptions(data.options);
+        }
+      } catch (err) {
+        console.error('Error fetching filter options:', err);
+      } finally {
+        setOptionsLoading(false);
+      }
+    };
+    
+    fetchFilterOptions();
+  }, []);
 
   const handleSearch = async (e) => {
     e.preventDefault();
@@ -23,9 +58,16 @@ export default function QueryTab() {
     try {
       const params = new URLSearchParams({
         query: query.trim(),
-        n: numResults.toString(),
-        ...(institution !== 'all' && { institution })
+        n: '10'
       });
+
+      // Add filters only if not 'all'
+      if (institution !== 'all') params.append('institution', institution);
+      if (year !== 'all') params.append('academic_year', year);
+      if (location !== 'all') params.append('location', location);
+      if (programme !== 'all') params.append('programme', programme);
+      if (studyMode !== 'all') params.append('study_mode', studyMode);
+      if (cohort !== 'all') params.append('cohort', cohort);
 
       const response = await fetch(`http://localhost:5000/api/query-vectors?${params}`, {
         method: 'GET',
@@ -72,40 +114,112 @@ export default function QueryTab() {
           </div>
 
           {/* Filters */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Institution</label>
-              <select
-                value={institution}
-                onChange={(e) => setInstitution(e.target.value)}
-                disabled={loading}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
-              >
-                <option value="all">All Institutions</option>
-                <option value="1">Institution 1</option>
-                <option value="2">Institution 2</option>
-                <option value="3">Institution 3</option>
-              </select>
-            </div>
+          <div className="space-y-3">
+            <p className="text-sm font-semibold text-gray-700">🔍 Filters (optional)</p>
+            
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+              {/* Institution */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Institution</label>
+                <select
+                  value={institution}
+                  onChange={(e) => setInstitution(e.target.value)}
+                  disabled={loading || optionsLoading}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
+                >
+                  <option value="all">All</option>
+                  {filterOptions.institutions.map(inst => (
+                    <option key={inst} value={inst}>{inst}</option>
+                  ))}
+                </select>
+              </div>
 
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Results</label>
-              <input
-                type="number"
-                min="1"
-                max="50"
-                value={numResults}
-                onChange={(e) => setNumResults(Math.max(1, parseInt(e.target.value) || 10))}
-                disabled={loading}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
-              />
+              {/* Academic Year */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Academic Year</label>
+                <select
+                  value={year}
+                  onChange={(e) => setYear(e.target.value)}
+                  disabled={loading || optionsLoading}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
+                >
+                  <option value="all">All</option>
+                  {filterOptions.academic_years.map(yr => (
+                    <option key={yr} value={yr}>{yr}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Location */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Location</label>
+                <select
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  disabled={loading || optionsLoading}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
+                >
+                  <option value="all">All</option>
+                  {filterOptions.locations.map(loc => (
+                    <option key={loc} value={loc}>{loc}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Programme */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Programme</label>
+                <select
+                  value={programme}
+                  onChange={(e) => setProgramme(e.target.value)}
+                  disabled={loading || optionsLoading}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
+                >
+                  <option value="all">All</option>
+                  {filterOptions.programmes.map(prog => (
+                    <option key={prog} value={prog}>{prog}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Study Mode */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Study Mode</label>
+                <select
+                  value={studyMode}
+                  onChange={(e) => setStudyMode(e.target.value)}
+                  disabled={loading || optionsLoading}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
+                >
+                  <option value="all">All</option>
+                  {filterOptions.study_modes.map(mode => (
+                    <option key={mode} value={mode}>{mode}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Cohort */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Cohort</label>
+                <select
+                  value={cohort}
+                  onChange={(e) => setCohort(e.target.value)}
+                  disabled={loading || optionsLoading}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
+                >
+                  <option value="all">All</option>
+                  {filterOptions.cohorts.map(coh => (
+                    <option key={coh} value={coh}>{coh}</option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
 
           {/* Submit Button */}
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || optionsLoading}
             className="w-full px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold rounded-lg transition flex items-center justify-center gap-2"
           >
             {loading ? (
@@ -138,13 +252,13 @@ export default function QueryTab() {
               📊 Results for "{query}"
             </h3>
             <span className="text-sm text-gray-600">
-              {institution !== 'all' ? `[${institution}]` : '[All institutions]'} • {results.length} found
+              {results.length} found
             </span>
           </div>
 
           {results.length === 0 ? (
             <div className="p-6 text-center bg-gray-50 rounded-lg border border-gray-200">
-              <p className="text-gray-600">No results found. Try a different query.</p>
+              <p className="text-gray-600">No results found. Try a different query or adjust filters.</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -155,12 +269,7 @@ export default function QueryTab() {
                 >
                   <div className="flex items-start justify-between mb-2">
                     <span className="font-bold text-blue-700">#{idx + 1}</span>
-                    <div className="flex gap-2 text-xs">
-                      {result.metadata?.institution && (
-                        <span className="px-2 py-1 bg-blue-200 text-blue-800 rounded">
-                          {result.metadata.institution}
-                        </span>
-                      )}
+                    <div className="flex gap-2 text-xs flex-wrap justify-end">
                       {result.similarity !== undefined && (
                         <span className="px-2 py-1 bg-green-200 text-green-800 rounded">
                           Match: {(result.similarity * 100).toFixed(1)}%

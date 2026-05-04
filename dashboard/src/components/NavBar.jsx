@@ -8,11 +8,9 @@ export default function NavBar() {
           📊 Overview
         </Link>
         <Link to="/pipeline-demo" className="hover:underline font-bold">
-          🔄 Pipeline Demo
+          🔄 Pipeline
         </Link>
-        <Link to="/vergelijken" className="hover:underline font-bold">
-          📈 Compare
-        </Link>
+        
         <Link to="/presentatie" className="hover:underline font-bold">
           🎯 Presentation
         </Link>

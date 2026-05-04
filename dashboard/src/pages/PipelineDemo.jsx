@@ -80,33 +80,12 @@ export default function PipelineDemo() {
           )}
           
           {activeTab === 'vectors' && (
-             <div className="space-y-6">
-                <h2 className="text-2xl font-bold text-gray-800">🗄️ Vectorize Dataset</h2>
-                <p className="text-gray-600">
-                  Convert your safely anonymized text into embeddings using <strong>BAAI/bge-m3</strong> and store them in ChromaDB.
-                </p>
-                <button 
-                  onClick={async () => {
-                    setIsProcessing(true);
-                    try {
-                      const res = await fetch('http://localhost:5000/api/build-vectordb', { method: 'POST' });
-                      const data = await res.json();
-                      if(data.status === 'success') {
-                         setVectorDbReady(true);
-                         setActiveTab('query');
-                      } else {
-                         alert("Error building DB: " + data.error);
-                      }
-                    } finally {
-                      setIsProcessing(false);
-                    }
-                  }}
-                  disabled={isProcessing}
-                  className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm transition disabled:opacity-50"
-                >
-                  {isProcessing ? '⏳ Processing...' : 'Start Vectorization Process'}
-                </button>
-             </div>
+            <VectorDBBuilder 
+              onSuccess={() => {
+                setVectorDbReady(true);
+                setActiveTab('query');
+              }} 
+            />
           )}
           
           {activeTab === 'query' && (
