@@ -1,0 +1,1498 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Protecting Student Voices — NSE Privacy & Access Model</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <style>
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --bg: #0a1628;
+      --bg2: #0e1f3a;
+      --card: rgba(255, 255, 255, 0.06);
+      --card-border: rgba(255, 255, 255, 0.10);
+      --teal: #4ecdc4;
+      --orange: #ff6b35;
+      --green: #52b788;
+      --yellow: #ffd166;
+      --red: #ef476f;
+      --text: #ffffff;
+      --dim: rgba(255, 255, 255, 0.60);
+      --dimmer: rgba(255, 255, 255, 0.30);
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    /* ── Progress bar ── */
+    #progress-bar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--teal), var(--orange));
+      transition: width .45s ease;
+      z-index: 200;
+      box-shadow: 0 0 12px rgba(78, 205, 196, .5);
+    }
+
+    /* ── Navigation ── */
+    #nav {
+      position: fixed;
+      bottom: 22px;
+      right: 28px;
+      display: flex;
+      gap: 10px;
+      z-index: 200;
+    }
+
+    #nav button {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      color: #fff;
+      padding: 9px 22px;
+      border-radius: 24px;
+      cursor: pointer;
+      font-size: 14px;
+      backdrop-filter: blur(10px);
+      transition: background .2s, border-color .2s;
+    }
+
+    #nav button:hover {
+      background: rgba(255, 255, 255, 0.16);
+      border-color: rgba(255, 255, 255, 0.35);
+    }
+
+    #nav button:disabled {
+      opacity: .3;
+      cursor: default;
+    }
+
+    /* ── Slide dots ── */
+    #dots {
+      position: fixed;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 8px;
+      z-index: 200;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.25);
+      cursor: pointer;
+      transition: all .3s ease;
+    }
+
+    .dot.on {
+      background: var(--teal);
+      width: 24px;
+    }
+
+    /* ── Slide wrapper ── */
+    #stage {
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+    }
+
+    .slide {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 64px 100px 80px;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(18px);
+      transition: opacity .45s ease, transform .45s ease;
+    }
+
+    .slide.on {
+      opacity: 1;
+      pointer-events: all;
+      transform: translateY(0);
+    }
+
+    /* ── Shared typography ── */
+    .eyebrow {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 3.5px;
+      text-transform: uppercase;
+      color: var(--teal);
+      margin-bottom: 14px;
+    }
+
+    h1 {
+      font-size: 58px;
+      font-weight: 800;
+      line-height: 1.08;
+    }
+
+    h2 {
+      font-size: 36px;
+      font-weight: 700;
+      line-height: 1.2;
+      text-align: center;
+      margin-bottom: 10px;
+    }
+
+    h3 {
+      font-size: 17px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .sub {
+      font-size: 19px;
+      color: var(--dim);
+      line-height: 1.65;
+      max-width: 680px;
+      text-align: center;
+    }
+
+    /* ── Card ── */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      border-radius: 18px;
+      padding: 28px 30px;
+      backdrop-filter: blur(8px);
+    }
+
+    /* ── Grids ── */
+    .g2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      width: 100%;
+    }
+
+    .g3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 18px;
+      width: 100%;
+    }
+
+    .g4 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr 1fr;
+      gap: 16px;
+      width: 100%;
+    }
+
+    /* ── Badge ── */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 13px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .5px;
+    }
+
+    .b-red {
+      background: rgba(239, 71, 111, .15);
+      color: #ef476f;
+      border: 1px solid rgba(239, 71, 111, .3);
+    }
+
+    .b-green {
+      background: rgba(82, 183, 136, .15);
+      color: #52b788;
+      border: 1px solid rgba(82, 183, 136, .3);
+    }
+
+    .b-yellow {
+      background: rgba(255, 209, 102, .15);
+      color: #ffd166;
+      border: 1px solid rgba(255, 209, 102, .3);
+    }
+
+    .b-teal {
+      background: rgba(78, 205, 196, .15);
+      color: #4ecdc4;
+      border: 1px solid rgba(78, 205, 196, .3);
+    }
+
+    /* ─────────────────────────────────────────
+       SLIDE 1 — Title
+    ───────────────────────────────────────── */
+    #s1 {
+      background:
+        radial-gradient(ellipse 60% 60% at 25% 55%, rgba(78, 205, 196, .12) 0%, transparent 70%),
+        radial-gradient(ellipse 50% 50% at 75% 30%, rgba(255, 107, 53, .10) 0%, transparent 70%),
+        var(--bg);
+      text-align: center;
+      gap: 20px;
+    }
+
+    #s1 .shield {
+      width: 80px;
+      height: 80px;
+      border-radius: 24px;
+      background: linear-gradient(135deg, var(--teal), #2196f3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 36px;
+      margin-bottom: 8px;
+      box-shadow: 0 0 40px rgba(78, 205, 196, .35);
+    }
+
+    #s1 h1 span {
+      color: var(--teal);
+    }
+
+    #s1 .meta {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      color: var(--dimmer);
+      font-size: 14px;
+      margin-top: 12px;
+    }
+
+    #s1 .meta .sep {
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: var(--dimmer);
+    }
+
+    /* ─────────────────────────────────────────
+       SLIDE 2 — The Current Risk
+    ───────────────────────────────────────── */
+    #s2 {
+      gap: 36px;
+    }
+
+    .flow-row {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      width: 100%;
+    }
+
+    .flow-box {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 10px;
+    }
+
+    .flow-icon-wrap {
+      width: 68px;
+      height: 68px;
+      border-radius: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 30px;
+      flex-shrink: 0;
+    }
+
+    .fi-blue {
+      background: rgba(33, 150, 243, .18);
+      border: 1px solid rgba(33, 150, 243, .35);
+    }
+
+    .fi-grey {
+      background: rgba(255, 255, 255, .08);
+      border: 1px solid rgba(255, 255, 255, .15);
+    }
+
+    .fi-orange {
+      background: rgba(255, 107, 53, .18);
+      border: 1px solid rgba(255, 107, 53, .35);
+    }
+
+    .fi-red {
+      background: rgba(239, 71, 111, .18);
+      border: 1px solid rgba(239, 71, 111, .35);
+    }
+
+    .fi-green {
+      background: rgba(82, 183, 136, .18);
+      border: 1px solid rgba(82, 183, 136, .35);
+    }
+
+    .fi-teal {
+      background: rgba(78, 205, 196, .18);
+      border: 1px solid rgba(78, 205, 196, .35);
+    }
+
+    .flow-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--dim);
+    }
+
+    .flow-arrow-svg {
+      flex-shrink: 0;
+      margin: 0 -2px;
+    }
+
+    .alert-box {
+      width: 100%;
+      padding: 16px 24px;
+      background: rgba(239, 71, 111, .12);
+      border: 1px solid rgba(239, 71, 111, .30);
+      border-radius: 14px;
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+    }
+
+    .alert-icon {
+      font-size: 28px;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .alert-text {
+      font-size: 15px;
+      line-height: 1.6;
+      color: var(--dim);
+    }
+
+    .alert-text strong {
+      color: #ef476f;
+    }
+
+    /* ─────────────────────────────────────────
+       SLIDE 3 — Sensitive Data
+    ───────────────────────────────────────── */
+    #s3 {
+      gap: 32px;
+    }
+
+    .data-card {
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      border-radius: 18px;
+      padding: 28px 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 14px;
+      transition: border-color .2s;
+    }
+
+    .data-card:hover {
+      border-color: rgba(255, 255, 255, .25);
+    }
+
+    .data-icon {
+      width: 64px;
+      height: 64px;
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+    }
+
+    .data-card p {
+      font-size: 13px;
+      color: var(--dim);
+      line-height: 1.55;
+    }
+
+    .data-card .example {
+      font-size: 12px;
+      color: var(--dimmer);
+      font-style: italic;
+      border-top: 1px solid rgba(255, 255, 255, .08);
+      padding-top: 10px;
+      width: 100%;
+    }
+
+    .art9-note {
+      font-size: 13px;
+      color: var(--dimmer);
+      text-align: center;
+      margin-top: 4px;
+    }
+
+    /* ─────────────────────────────────────────
+       SLIDE 4 — The Solution
+    ───────────────────────────────────────── */
+    #s4 {
+      gap: 32px;
+    }
+
+    .compare-col {
+      border-radius: 20px;
+      padding: 30px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .col-bad {
+      background: rgba(239, 71, 111, .08);
+      border: 1px solid rgba(239, 71, 111, .25);
+    }
+
+    .col-good {
+      background: rgba(82, 183, 136, .08);
+      border: 1px solid rgba(82, 183, 136, .25);
+    }
+
+    .compare-col h3 {
+      font-size: 20px;
+    }
+
+    .col-bad h3 {
+      color: #ef476f;
+    }
+
+    .col-good h3 {
+      color: #52b788;
+    }
+
+    .compare-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      font-size: 15px;
+      color: var(--dim);
+      line-height: 1.5;
+    }
+
+    .ci-icon {
+      font-size: 18px;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    /* ─────────────────────────────────────────
+       SLIDE 5 — How It Works
+    ───────────────────────────────────────── */
+    #s5 {
+      gap: 36px;
+    }
+
+    .pipeline {
+      width: 100%;
+      display: flex;
+      align-items: stretch;
+      gap: 0;
+    }
+
+    .pipe-step {
+      flex: 1;
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      border-radius: 20px;
+      padding: 28px 22px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 14px;
+    }
+
+    .pipe-step .ps-icon {
+      width: 72px;
+      height: 72px;
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 32px;
+    }
+
+    .pipe-step h3 {
+      font-size: 16px;
+    }
+
+    .pipe-step p {
+      font-size: 13px;
+      color: var(--dim);
+      line-height: 1.55;
+    }
+
+    .pipe-connector {
+      display: flex;
+      align-items: center;
+      flex-shrink: 0;
+      margin: 0 -1px;
+      z-index: 1;
+    }
+
+    .remove-tags {
+      width: 100%;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
+    }
+
+    .rtag {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      background: rgba(239, 71, 111, .12);
+      border: 1px solid rgba(239, 71, 111, .25);
+      border-radius: 20px;
+      padding: 6px 14px;
+      font-size: 13px;
+      color: #ef476f;
+    }
+
+    .rtag .x {
+      font-size: 11px;
+      opacity: .7;
+    }
+
+    /* ─────────────────────────────────────────
+       SLIDE 6 — The Group Rule
+    ───────────────────────────────────────── */
+    #s6 {
+      gap: 30px;
+    }
+
+    .group-rule-wrap {
+      width: 100%;
+      display: flex;
+      gap: 28px;
+      align-items: flex-start;
+    }
+
+    .gr-left {
+      flex: 1.1;
+    }
+
+    .gr-right {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .gr-explain {
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 24px;
+      font-size: 15px;
+      color: var(--dim);
+      line-height: 1.65;
+    }
+
+    .gr-explain strong {
+      color: var(--text);
+    }
+
+    .gr-example {
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 20px;
+    }
+
+    .gr-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, .06);
+    }
+
+    .gr-row:last-child {
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+
+    .gr-name {
+      font-size: 13px;
+      color: var(--dim);
+      width: 90px;
+      flex-shrink: 0;
+    }
+
+    .gr-bar-wrap {
+      flex: 1;
+      height: 22px;
+      background: rgba(255, 255, 255, .06);
+      border-radius: 6px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .gr-bar {
+      height: 100%;
+      border-radius: 6px;
+      transition: width 1s ease .3s;
+    }
+
+    .gr-bar.hidden-bar {
+      background: rgba(239, 71, 111, .5);
+    }
+
+    .gr-bar.visible-bar {
+      background: rgba(82, 183, 136, .6);
+    }
+
+    .gr-status {
+      font-size: 12px;
+      font-weight: 700;
+      flex-shrink: 0;
+      width: 72px;
+      text-align: right;
+    }
+
+    .gr-status.s-hidden {
+      color: #ef476f;
+    }
+
+    .gr-status.s-visible {
+      color: #52b788;
+    }
+
+    .gr-threshold-line {
+      position: absolute;
+      left: 0;
+      top: -10px;
+      bottom: -10px;
+      border-left: 2px dashed rgba(255, 209, 102, .6);
+      pointer-events: none;
+    }
+
+    /* ─────────────────────────────────────────
+       SLIDE 8 — Where Data Lives
+    ───────────────────────────────────────── */
+    #s8 {
+      gap: 32px;
+    }
+
+    .hosting-card {
+      border-radius: 20px;
+      padding: 28px 26px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hc-1 {
+      background: rgba(82, 183, 136, .08);
+      border: 1px solid rgba(82, 183, 136, .3);
+    }
+
+    .hc-2 {
+      background: rgba(255, 209, 102, .08);
+      border: 1px solid rgba(255, 209, 102, .25);
+    }
+
+    .hc-3 {
+      background: rgba(239, 71, 111, .08);
+      border: 1px solid rgba(239, 71, 111, .3);
+    }
+
+    .hc-icon {
+      font-size: 36px;
+    }
+
+    .hc-title {
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .hc-1 .hc-title {
+      color: #52b788;
+    }
+
+    .hc-2 .hc-title {
+      color: #ffd166;
+    }
+
+    .hc-3 .hc-title {
+      color: #ef476f;
+    }
+
+    .hc-desc {
+      font-size: 13px;
+      color: var(--dim);
+      line-height: 1.6;
+      flex: 1;
+    }
+
+    .hc-stamp {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      padding: 5px 12px;
+      border-radius: 20px;
+      text-transform: uppercase;
+    }
+
+    .stamp-rec {
+      background: rgba(82, 183, 136, .2);
+      color: #52b788;
+    }
+
+    .stamp-cond {
+      background: rgba(255, 209, 102, .2);
+      color: #ffd166;
+    }
+
+    .stamp-no {
+      background: rgba(239, 71, 111, .2);
+      color: #ef476f;
+    }
+
+    /* ─────────────────────────────────────────
+       SLIDE 9 — Key Guarantees
+    ───────────────────────────────────────── */
+    #s9 {
+      background:
+        radial-gradient(ellipse 60% 60% at 75% 55%, rgba(78, 205, 196, .10) 0%, transparent 70%),
+        radial-gradient(ellipse 50% 50% at 25% 30%, rgba(255, 107, 53, .08) 0%, transparent 70%),
+        var(--bg);
+      gap: 32px;
+    }
+
+    .stat-card {
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      border-radius: 20px;
+      padding: 32px 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 10px;
+    }
+
+    .stat-num {
+      font-size: 52px;
+      font-weight: 900;
+      line-height: 1;
+      background: linear-gradient(135deg, var(--teal), #2196f3);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .stat-num.orange {
+      background: linear-gradient(135deg, var(--orange), #ffd166);
+      -webkit-background-clip: text;
+      background-clip: text;
+    }
+
+    .stat-num.green {
+      background: linear-gradient(135deg, var(--green), var(--teal));
+      -webkit-background-clip: text;
+      background-clip: text;
+    }
+
+    .stat-label {
+      font-size: 14px;
+      color: var(--dim);
+      line-height: 1.5;
+    }
+
+    .stat-art {
+      font-size: 11px;
+      color: var(--dimmer);
+      font-weight: 700;
+      letter-spacing: 1px;
+      margin-top: 4px;
+    }
+
+    .legal-strip {
+      display: flex;
+      gap: 24px;
+      align-items: center;
+      flex-wrap: wrap;
+      justify-content: center;
+      font-size: 12px;
+      color: var(--dimmer);
+      padding-top: 4px;
+    }
+
+    .legal-strip span {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .legal-strip .dot2 {
+      width: 3px;
+      height: 3px;
+      border-radius: 50%;
+      background: var(--dimmer);
+    }
+
+    /* ── Assumption Slide ── */
+    #s_assumption {
+      gap: 36px;
+    }
+
+    .assumption-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      width: 100%;
+      max-width: 900px;
+    }
+
+    .assumption-item {
+      background: rgba(255, 209, 102, .08);
+      border: 1px solid rgba(255, 209, 102, .25);
+      border-radius: 16px;
+      padding: 22px 24px;
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+    }
+
+    .assumption-item i {
+      font-size: 22px;
+      color: #ffd166;
+      flex-shrink: 0;
+      margin-top: 3px;
+    }
+
+    .assumption-item h3 {
+      font-size: 15px;
+      font-weight: 700;
+      color: #ffd166;
+      margin-bottom: 4px;
+    }
+
+    .assumption-item p {
+      font-size: 13px;
+      color: rgba(255, 209, 102, 0.75);
+      line-height: 1.55;
+      margin: 0;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div id="progress-bar"></div>
+  <div id="dots"></div>
+  <div id="nav">
+    <button id="btn-prev" onclick="go(-1)"><i class="fa fa-arrow-left"></i> Back</button>
+    <button id="btn-next" onclick="go(+1)">Next <i class="fa fa-arrow-right"></i></button>
+  </div>
+
+  <div id="stage">
+
+    <!-- ─────── SLIDE 1 · Title ─────── -->
+    <section class="slide on" id="s1">
+      <div class="shield"><i class="fa-solid fa-shield-halved" style="color:#fff"></i></div>
+      <h1>Protecting<br><span>Student Voices</span></h1>
+      <p class="sub">NSE Open Response Analysis — AI Proof of Concept<br>Privacy Model</p>
+    </section>
+
+    <!-- ─────── SLIDE 2 · The Current Risk ─────── -->
+    <section class="slide" id="s2">
+      <div class="eyebrow">Why This Matters</div>
+      <h2>How Student Feedback Travels Today</h2>
+
+      <div class="flow-row">
+        <div class="flow-box">
+          <div class="flow-icon-wrap fi-blue"><i class="fa-solid fa-clipboard-list" style="color:#2196f3"></i></div>
+          <div class="flow-label">NSE Survey<br>responses collected</div>
+        </div>
+
+        <svg class="flow-arrow-svg" width="40" height="24" viewBox="0 0 40 24">
+          <path d="M2 12 H34 M26 4 L38 12 L26 20" stroke="rgba(255,255,255,0.25)" stroke-width="2" fill="none"
+            stroke-linecap="round" />
+        </svg>
+
+        <div class="flow-box">
+          <div class="flow-icon-wrap fi-grey"><i class="fa-solid fa-file-excel" style="color:rgba(255,255,255,.6)"></i>
+          </div>
+          <div class="flow-label">Exported as<br>an Excel file</div>
+        </div>
+
+        <svg class="flow-arrow-svg" width="40" height="24" viewBox="0 0 40 24">
+          <path d="M2 12 H34 M26 4 L38 12 L26 20" stroke="rgba(255,255,255,0.25)" stroke-width="2" fill="none"
+            stroke-linecap="round" />
+        </svg>
+
+        <div class="flow-box">
+          <div class="flow-icon-wrap fi-orange"><i class="fa-solid fa-envelope" style="color:#ff6b35"></i></div>
+          <div class="flow-label">Distributed<br>by email</div>
+        </div>
+
+        <svg class="flow-arrow-svg" width="40" height="24" viewBox="0 0 40 24">
+          <path d="M2 12 H34 M26 4 L38 12 L26 20" stroke="rgba(255,255,255,0.25)" stroke-width="2" fill="none"
+            stroke-linecap="round" />
+        </svg>
+
+        <div class="flow-box">
+          <div class="flow-icon-wrap fi-grey"><i class="fa-solid fa-users" style="color:rgba(255,255,255,.6)"></i></div>
+          <div class="flow-label">Researchers &amp;<br>quality officers</div>
+        </div>
+
+        <svg class="flow-arrow-svg" width="40" height="24" viewBox="0 0 40 24">
+          <path d="M2 12 H34 M26 4 L38 12 L26 20" stroke="rgba(239,71,111,0.5)" stroke-width="2" fill="none"
+            stroke-linecap="round" />
+        </svg>
+
+        <div class="flow-box">
+          <div class="flow-icon-wrap fi-red"><i class="fa-solid fa-robot" style="color:#ef476f"></i></div>
+          <div class="flow-label" style="color:#ef476f;font-weight:700">Some paste into<br>public AI tools</div>
+        </div>
+      </div>
+
+      <div class="alert-box">
+        <div class="alert-icon"><i class="fa-solid fa-triangle-exclamation" style="color:#ef476f"></i></div>
+        <div class="alert-text">
+          <strong>This is happening right now.</strong> When student data is pasted into public AI tools, it leaves the
+          Fontys environment without consent, without agreements, and without any privacy protection. This is a direct
+          violation of European privacy law — the Dutch Data Protection Authority can impose fines of <strong>up to 4%
+            of annual turnover</strong> (GDPR Art. 83).
+        </div>
+      </div>
+    </section>
+
+    <!-- ─────── SLIDE 3 · What's Inside the Responses ─────── -->
+    <section class="slide" id="s3">
+      <div class="eyebrow">The Data We're Handling</div>
+      <h2>Student Responses Contain Very Sensitive Information</h2>
+
+      <div class="g4">
+        <div class="data-card">
+          <div class="data-icon" style="background:rgba(33,150,243,.18); border:1px solid rgba(33,150,243,.3)"><i
+              class="fa-solid fa-wheelchair" style="color:#2196f3; font-size:26px"></i></div>
+          <h3>Health &amp; Disability</h3>
+          <p>Students describing their own physical conditions or disabilities</p>
+          <div class="example">"As someone with dyslexia, I find the reading load…"</div>
+        </div>
+
+        <div class="data-card">
+          <div class="data-icon" style="background:rgba(156,39,176,.18); border:1px solid rgba(156,39,176,.3)"><i
+              class="fa-solid fa-brain" style="color:#9c27b0; font-size:26px"></i></div>
+          <h3>Mental Health</h3>
+          <p>Mentions of burnout, anxiety, depression, or study-related stress</p>
+          <div class="example">"I've been struggling with anxiety this year and…"</div>
+        </div>
+
+        <div class="data-card">
+          <div class="data-icon" style="background:rgba(255,152,0,.18); border:1px solid rgba(255,152,0,.3)"><i
+              class="fa-solid fa-mosque" style="color:#ff9800; font-size:26px"></i></div>
+          <h3>Religion &amp; Beliefs</h3>
+          <p>References to religious background, practices, or obligations</p>
+          <div class="example">"During Ramadan I found it difficult to attend…"</div>
+        </div>
+
+        <div class="data-card">
+          <div class="data-icon" style="background:rgba(239,71,111,.18); border:1px solid rgba(239,71,111,.3)"><i
+              class="fa-solid fa-person-circle-exclamation" style="color:#ef476f; font-size:26px"></i></div>
+          <h3>Discrimination</h3>
+          <p>Experiences of discrimination based on ethnicity or background</p>
+          <div class="example">"As an international student I often felt excluded…"</div>
+        </div>
+      </div>
+
+      <div class="art9-note">
+        These categories carry the <strong style="color:var(--text)">highest level of legal protection</strong> under
+        European privacy law (GDPR Article 9) — they require special safeguards and cannot be processed without specific
+        justification.
+      </div>
+    </section>
+
+    <!-- ─────── SLIDE 4 · The Solution ─────── -->
+    <section class="slide" id="s4">
+      <div class="eyebrow">Our Approach</div>
+      <h2>A Controlled System That Keeps Data Safe</h2>
+
+      <div class="g2" style="max-width:900px">
+        <div class="compare-col col-bad">
+          <h3> Today — Uncontrolled</h3>
+          <div class="compare-item">
+            <div class="ci-icon"><i class="fa-solid fa-xmark" style="color:#ef476f"></i></div>
+            <div>Raw student data distributed to many people via email</div>
+          </div>
+          <div class="compare-item">
+            <div class="ci-icon"><i class="fa-solid fa-xmark" style="color:#ef476f"></i></div>
+            <div>No control over what external tools people use</div>
+          </div>
+          <div class="compare-item">
+            <div class="ci-icon"><i class="fa-solid fa-xmark" style="color:#ef476f"></i></div>
+            <div>Individual responses visible to everyone who receives the file</div>
+          </div>
+          <div class="compare-item">
+            <div class="ci-icon"><i class="fa-solid fa-xmark" style="color:#ef476f"></i></div>
+            <div>No record of who accessed what</div>
+          </div>
+          <div class="compare-item">
+            <div class="ci-icon"><i class="fa-solid fa-xmark" style="color:#ef476f"></i></div>
+            <div>Active GDPR risk (Art. 5, 9, 32)</div>
+          </div>
+        </div>
+
+        <div class="compare-col col-good">
+          <h3> New System — Controlled</h3>
+          <div class="compare-item">
+            <div class="ci-icon"><i class="fa-solid fa-check" style="color:#52b788"></i></div>
+            <div>All data stays within Fontys infrastructure</div>
+          </div>
+          <div class="compare-item">
+            <div class="ci-icon"><i class="fa-solid fa-check" style="color:#52b788"></i></div>
+            <div>Personal details removed before anyone sees the data</div>
+          </div>
+          <div class="compare-item">
+            <div class="ci-icon"><i class="fa-solid fa-check" style="color:#52b788"></i></div>
+            <div>Researchers only ever see patterns and aggregated insights</div>
+          </div>
+          <div class="compare-item">
+            <div class="ci-icon"><i class="fa-solid fa-check" style="color:#52b788"></i></div>
+            <div>Small groups automatically protected — no results shown</div>
+          </div>
+          <div class="compare-item">
+            <div class="ci-icon"><i class="fa-solid fa-check" style="color:#52b788"></i></div>
+            <div>GDPR-compliant by design (Art. 5, 9, 32)</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+
+
+    <!-- ─────── SLIDE: Our Assumption ─────── -->
+    <section class="slide" id="s_assumption">
+      <div class="eyebrow">Open Questions</div>
+      <h2>Our Assumption</h2>
+      <p class="sub" style="margin-bottom:4px">Quality officers have already expressed a preference for student privacy
+        &amp; safety — we are presenting these choices to confirm.</p>
+
+      <div class="assumption-grid">
+        <div class="assumption-item">
+          <i class="fa-solid fa-scissors"></i>
+          <div>
+            <h3>Contextual descriptions are removed</h3>
+            <p><i class="fa-solid fa-shield-halved" style="font-size:12px;margin-right:4px"></i>Quality officers lean
+              toward <strong style="color:#ffd166">removing</strong> these to protect students. We confirm: are we all
+              aligned?</p>
+          </div>
+        </div>
+        <div class="assumption-item">
+          <i class="fa-solid fa-users-between-lines"></i>
+          <div>
+            <h3>Threshold set at 10 students</h3>
+            <p><i class="fa-solid fa-shield-halved" style="font-size:12px;margin-right:4px"></i>Quality officers prefer
+              a <strong style="color:#ffd166">conservative threshold</strong> to protect small groups. We confirm: is 10
+              the right number?</p>
+          </div>
+        </div>
+      </div>
+
+      <div
+        style="background:rgba(255,209,102,.06); border:1px solid rgba(255,209,102,.2); border-radius:12px; padding:14px 24px; font-size:13px; color:rgba(255,209,102,0.7); text-align:center; max-width:700px;">
+        <i class="fa-solid fa-circle-check" style="margin-right:8px; color:#52b788"></i>Quality officers have showed
+        inclination towards the privacy-first approach — this is a final confirmation with you.
+      </div>
+    </section>
+
+    <!-- ─────── SLIDE 6 · The Group Rule ─────── -->
+    <section class="slide" id="s6">
+      <div class="eyebrow">Privacy by Design</div>
+      <h2>Small Groups Are Always Protected</h2>
+
+      <div class="group-rule-wrap">
+        <div class="gr-left">
+          <canvas id="groupChart" width="500" height="280"></canvas>
+          <div
+            style="text-align:center; margin-top:10px; font-size:12px; color:rgba(255,209,102,0.7); font-style:italic;">
+            Threshold: 10 students — confirmed direction from quality officers</div>
+        </div>
+
+        <div class="gr-right">
+          <div class="gr-explain">
+
+            <strong>The rule is simple:</strong><br><br>
+            If fewer than <strong>10 students</strong> responded in a group, the system shows <strong>no results at
+              all</strong> for that group — not even a partial answer.<br><br>
+            This prevents anyone from piecing together who said what, even after personal details have been removed.
+          </div>
+
+          <div class="gr-example">
+            <div
+              style="font-size:12px; color:var(--dimmer); font-weight:700; letter-spacing:2px; text-transform:uppercase; margin-bottom:14px">
+              Example groups</div>
+            <div class="gr-row">
+              <div class="gr-name">Evening class</div>
+              <div class="gr-bar-wrap">
+                <div class="gr-bar hidden-bar" style="width:0%" data-w="27%"></div>
+              </div>
+              <div class="gr-status s-hidden"> Hidden</div>
+            </div>
+            <div class="gr-row">
+              <div class="gr-name">Year 2 cohort</div>
+              <div class="gr-bar-wrap">
+                <div class="gr-bar visible-bar" style="width:0%" data-w="72%"></div>
+              </div>
+              <div class="gr-status s-visible"> Visible</div>
+            </div>
+            <div class="gr-row">
+              <div class="gr-name">Elective group</div>
+              <div class="gr-bar-wrap">
+                <div class="gr-bar hidden-bar" style="width:0%" data-w="40%"></div>
+              </div>
+              <div class="gr-status s-hidden"> Hidden</div>
+            </div>
+            <div class="gr-row">
+              <div class="gr-name">Year 3 cohort</div>
+              <div class="gr-bar-wrap">
+                <div class="gr-bar visible-bar" style="width:0%" data-w="88%"></div>
+              </div>
+              <div class="gr-status s-visible"> Visible</div>
+            </div>
+          </div>
+
+          <div style="font-size:12px; color:var(--dimmer)">
+            GDPR Art. 32 — "appropriate level of security commensurate with the risk"
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─────── SLIDE 5 · How It Works ─────── -->
+    <section class="slide" id="s5">
+      <div class="eyebrow">Privacy Protection</div>
+      <h2>What Happens Before Anyone Sees the Data</h2>
+
+      <div class="pipeline">
+        <div class="pipe-step">
+          <div class="ps-icon" style="background:rgba(239,71,111,.18); border:1px solid rgba(239,71,111,.3)"><i
+              class="fa-solid fa-database" style="color:#ef476f"></i></div>
+          <h3>Raw Responses</h3>
+          <p>Student feedback as submitted — names, personal details, individual stories fully intact</p>
+          <div class="badge b-red" style="margin-top:6px"><i class="fa-solid fa-lock"></i> Sensitive</div>
+        </div>
+
+        <div class="pipe-connector">
+          <svg width="52" height="32" viewBox="0 0 52 32">
+            <path d="M4 16 H40 M32 6 L48 16 L32 26" stroke="rgba(78,205,196,0.5)" stroke-width="2.5" fill="none"
+              stroke-linecap="round" />
+          </svg>
+        </div>
+
+        <div class="pipe-step" style="border-color:rgba(78,205,196,.25)">
+          <div class="ps-icon fi-teal"><i class="fa-solid fa-user-shield" style="color:#4ecdc4"></i></div>
+          <h3>Privacy Protection</h3>
+          <p>Identifying details are automatically found and removed. Runs inside Fontys — never connected to the
+            internet.</p>
+          <div class="badge b-teal" style="margin-top:6px"><i class="fa-solid fa-building"></i> Within Fontys</div>
+        </div>
+
+        <div class="pipe-connector">
+          <svg width="52" height="32" viewBox="0 0 52 32">
+            <path d="M4 16 H40 M32 6 L48 16 L32 26" stroke="rgba(78,205,196,0.5)" stroke-width="2.5" fill="none"
+              stroke-linecap="round" />
+          </svg>
+        </div>
+
+        <div class="pipe-step" style="border-color:rgba(82,183,136,.25)">
+          <div class="ps-icon fi-green"><i class="fa-solid fa-chart-bar" style="color:#52b788"></i></div>
+          <h3>Insights Only</h3>
+          <p>Researchers access only patterns, summaries, and trends — never individual responses</p>
+          <div class="badge b-green" style="margin-top:6px"><i class="fa-solid fa-circle-check"></i> Safe to use</div>
+        </div>
+      </div>
+
+      <div style="width:100%">
+        <div
+          style="font-size:12px; color:var(--dimmer); text-align:center; margin-bottom:12px; font-weight:700; letter-spacing:2px; text-transform:uppercase">
+          What gets removed</div>
+        <div class="remove-tags">
+          <div class="rtag"><i class="fa-solid fa-xmark x"></i> Full names</div>
+          <div class="rtag"><i class="fa-solid fa-xmark x"></i> Email addresses</div>
+          <div class="rtag"><i class="fa-solid fa-xmark x"></i> Phone numbers</div>
+          <div class="rtag"><i class="fa-solid fa-xmark x"></i> Student ID numbers</div>
+          <div class="rtag"><i class="fa-solid fa-xmark x"></i> Home addresses</div>
+          <div class="rtag"><i class="fa-solid fa-xmark x"></i> Identifying descriptions</div>
+        </div>
+      </div>
+
+      <div style="font-size:13px; color:var(--dimmer); text-align:center">
+        GDPR Art. 5 (data minimisation) &middot; Art. 32 (security of processing)
+      </div>
+    </section>
+
+    <!-- ─────── SLIDE 8 · Where Data Lives ─────── -->
+    <section class="slide" id="s8">
+      <div class="eyebrow">Infrastructure</div>
+      <h2>Where the Data Can and Cannot Go</h2>
+      <p class="sub" style="margin-bottom:8px">GDPR does not prohibit cloud use — but given the sensitive nature of this
+        data, only one option is defensible without major legal complications.</p>
+
+      <div class="g3">
+        <div class="hosting-card hc-1">
+          <div class="hc-stamp stamp-rec">Recommended</div>
+          <div class="hc-icon"><i class="fa-solid fa-server" style="color:#52b788"></i></div>
+          <div class="hc-title">Fontys Servers</div>
+          <div class="hc-desc">Data never leaves the Fontys network. All processing takes place on Fontys
+            infrastructure. This is the only option with no additional legal complications.</div>
+          <div class="badge b-green"><i class="fa-solid fa-circle-check"></i> Preferred approach</div>
+        </div>
+
+        <div class="hosting-card hc-2">
+          <div class="hc-stamp stamp-cond">If needed</div>
+          <div class="hc-icon"><i class="fa-solid fa-cloud" style="color:#ffd166"></i></div>
+          <div class="hc-title">EU Cloud Provider</div>
+          <div class="hc-desc">An EU-based provider with no American ownership. Allowed, but requires formal written
+            agreements and explicit approval from the Fontys Privacy Officer.</div>
+          <div class="badge b-yellow"><i class="fa-solid fa-triangle-exclamation"></i> Additional steps required</div>
+        </div>
+
+        <div class="hosting-card hc-3">
+          <div class="hc-stamp stamp-no">Not acceptable</div>
+          <div class="hc-icon"><i class="fa-brands fa-aws" style="color:#ef476f"></i></div>
+          <div class="hc-title">American Cloud Services</div>
+          <div class="hc-desc">Services like ChatGPT or OpenAI transfer data to American servers. Given the special
+            categories of personal data involved, this creates legal risks that cannot be easily resolved.</div>
+          <div class="badge b-red"><i class="fa-solid fa-ban"></i> Not for this project</div>
+        </div>
+      </div>
+
+      <div style="font-size:12px; color:var(--dimmer); text-align:center">
+        GDPR Art. 44–49 (international data transfers) &middot; Art. 28 (processor agreements)
+      </div>
+    </section>
+
+    <!-- ─────── SLIDE 9 · Key Guarantees ─────── -->
+    <section class="slide" id="s9">
+      <div class="eyebrow">Summary</div>
+      <h2>What This System Guarantees</h2>
+
+      <div class="g4">
+        <div class="stat-card">
+          <div class="stat-num" data-count="0" data-suffix="">0</div>
+          <div class="stat-label">Individual student responses ever visible to researchers</div>
+          <div class="stat-art">GDPR ART. 5 · ART. 9</div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-num orange" data-count="10" data-suffix="+">10+</div>
+          <div class="stat-label">Minimum students in a group before any results are shown</div>
+          <div class="stat-art">GDPR ART. 32</div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-num green" data-count="100" data-suffix="%">100%</div>
+          <div class="stat-label">Of all data processing done within Fontys infrastructure</div>
+          <div class="stat-art">GDPR ART. 44–49</div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-num" style="font-size:38px; padding-top:8px" data-count="72" data-suffix="h">72h</div>
+          <div class="stat-label">Maximum time to report any data breach to the Dutch Data Protection Authority</div>
+          <div class="stat-art">GDPR ART. 33</div>
+        </div>
+      </div>
+
+      <div class="legal-strip">
+        <span><i class="fa-solid fa-scale-balanced"></i> GDPR Art. 5 — Data principles</span>
+        <span class="dot2"></span>
+        <span><i class="fa-solid fa-lock"></i> Art. 9 — Special categories</span>
+        <span class="dot2"></span>
+        <span><i class="fa-solid fa-shield-halved"></i> Art. 32 — Security requirements</span>
+        <span class="dot2"></span>
+        <span><i class="fa-solid fa-bell"></i> Art. 33 — Breach notification</span>
+        <span class="dot2"></span>
+        <span><i class="fa-solid fa-euro-sign"></i> Art. 83 — Fines up to 4% turnover</span>
+      </div>
+    </section>
+
+  </div><!-- /stage -->
+
+  <script>
+    const slides = Array.from(document.querySelectorAll('.slide'));
+    const total = slides.length;
+    let cur = 0;
+
+    /* ── Dots ── */
+    const dotsEl = document.getElementById('dots');
+    slides.forEach((_, i) => {
+      const d = document.createElement('div');
+      d.className = 'dot' + (i === 0 ? ' on' : '');
+      d.onclick = () => goTo(i);
+      dotsEl.appendChild(d);
+    });
+
+    function getDots() { return dotsEl.querySelectorAll('.dot'); }
+
+    function goTo(n) {
+      slides[cur].classList.remove('on');
+      getDots()[cur].classList.remove('on');
+      cur = Math.max(0, Math.min(total - 1, n));
+      slides[cur].classList.add('on');
+      getDots()[cur].classList.add('on');
+      document.getElementById('progress-bar').style.width = ((cur + 1) / total * 100) + '%';
+      document.getElementById('btn-prev').disabled = cur === 0;
+      document.getElementById('btn-next').disabled = cur === total - 1;
+
+      /* Animate bars on slide 6 (index 5), stats on slide 9 (index 8) */
+      if (cur === 5) animateBars();
+      if (cur === 8) animateStats();
+    }
+
+    function go(dir) { goTo(cur + dir); }
+
+    document.addEventListener('keydown', e => {
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') go(+1);
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') go(-1);
+    });
+
+    /* init */
+    document.getElementById('progress-bar').style.width = (1 / total * 100) + '%';
+    document.getElementById('btn-prev').disabled = true;
+
+    /* ─────── Chart: Group Rule (slide 6) ─────── */
+    const THRESHOLD = 10;
+    const groups = ['Year 1', 'Elective A', 'Year 2', 'Elective B', 'Year 3', 'Year 4'];
+    const counts = [8, 11, 22, 9, 31, 19];
+
+    const ctx = document.getElementById('groupChart').getContext('2d');
+    const groupChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: groups,
+        datasets: [{
+          label: 'Number of students',
+          data: counts,
+          backgroundColor: counts.map(v => v >= THRESHOLD
+            ? 'rgba(82,183,136,0.65)'
+            : 'rgba(239,71,111,0.55)'),
+          borderColor: counts.map(v => v >= THRESHOLD
+            ? 'rgba(82,183,136,0.9)'
+            : 'rgba(239,71,111,0.9)'),
+          borderWidth: 1.5,
+          borderRadius: 8,
+        }]
+      },
+      options: {
+        animation: { duration: 900, easing: 'easeOutQuart' },
+        responsive: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: ctx => {
+                const v = ctx.parsed.y;
+                return v >= THRESHOLD
+                  ? ` ${v} students —  Results shown`
+                  : ` ${v} students —  Results hidden`;
+              }
+            }
+          },
+          annotation: {}
+        },
+        scales: {
+          x: {
+            ticks: { color: 'rgba(255,255,255,0.6)', font: { size: 12 } },
+            grid: { color: 'rgba(255,255,255,0.06)' },
+          },
+          y: {
+            min: 0, max: 38,
+            ticks: { color: 'rgba(255,255,255,0.5)', font: { size: 12 }, stepSize: 5 },
+            grid: { color: 'rgba(255,255,255,0.06)' },
+            title: { display: true, text: 'Students in group', color: 'rgba(255,255,255,0.4)', font: { size: 12 } }
+          }
+        }
+      },
+      plugins: [{
+        id: 'thresholdLine',
+        afterDraw(chart) {
+          const { ctx, scales: { y } } = chart;
+          const yPx = y.getPixelForValue(THRESHOLD);
+          ctx.save();
+          ctx.beginPath();
+          ctx.moveTo(chart.chartArea.left, yPx);
+          ctx.lineTo(chart.chartArea.right, yPx);
+          ctx.strokeStyle = 'rgba(255,209,102,0.75)';
+          ctx.lineWidth = 2;
+          ctx.setLineDash([6, 4]);
+          ctx.stroke();
+
+          ctx.fillStyle = 'rgba(255,209,102,0.9)';
+          ctx.font = 'bold 12px Segoe UI, system-ui, sans-serif';
+          ctx.textAlign = 'right';
+          ctx.fillText('Threshold: 10 students', chart.chartArea.right - 6, yPx - 6);
+          ctx.restore();
+        }
+      }]
+    });
+
+    /* ─────── Animate example bars on slide 6 ─────── */
+    let barsAnimated = false;
+    function animateBars() {
+      if (barsAnimated) return;
+      barsAnimated = true;
+      document.querySelectorAll('.gr-bar').forEach(bar => {
+        setTimeout(() => { bar.style.width = bar.dataset.w; }, 200);
+      });
+      groupChart.reset();
+      groupChart.update();
+    }
+
+    /* ─────── Count-up animation on slide 9 ─────── */
+    let statsAnimated = false;
+    function animateStats() {
+      if (statsAnimated) return;
+      statsAnimated = true;
+      document.querySelectorAll('.stat-num[data-count]').forEach(el => {
+        const target = parseInt(el.dataset.count, 10);
+        const suffix = el.dataset.suffix || '';
+        const duration = 1200;
+        const startTime = performance.now();
+        function tick(now) {
+          const elapsed = now - startTime;
+          const progress = Math.min(elapsed / duration, 1);
+          const eased = 1 - Math.pow(1 - progress, 3); // ease-out cubic
+          const value = Math.round(eased * target);
+          el.textContent = value + suffix;
+          if (progress < 1) requestAnimationFrame(tick);
+        }
+        requestAnimationFrame(tick);
+      });
+    }
+  </script>
+</body>
+
+</html>
