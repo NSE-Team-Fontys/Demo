@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { getFilteredThemes, FILTER_OPTIONS } from '../data/themes'
 import { mergeWithLiveData } from '../services/api'
 import { useApiData } from '../hooks/useApiData'
@@ -49,12 +49,30 @@ function DataSourceBadge({ isLive, loading, onRefresh }) {
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function Overview() {
   const [filters, setFilters] = useState({
-    jaar:       '2025/2026',
-    locatie:    'All locations',
-    opleiding:  'Software Engineering',
+    jaar: 'All',
+    locatie: 'All',
+    opleiding: 'All',
     studievorm: 'All',
-    cohort:     'All',
+    cohort: 'All',
   })
+
+  // Fetch filter options on mount
+  const [filterOptions, setFilterOptions] = useState({
+    academic_years: [],
+    locations: [],
+    programmes: [],
+    study_modes: [],
+    cohorts: []
+  });
+
+  useEffect(() => {
+    fetch('http://localhost:5000/api/filter-options')
+      .then(r => r.json())
+      .then(data => {
+        if (data.status === 'success') setFilterOptions(data.options);
+      })
+      .catch(e => console.error(e));
+  }, []);
 
   // 1. Mock / enriched mock data (always available)
   const mockThemes = useMemo(() => getFilteredThemes(filters), [filters])
@@ -63,10 +81,37 @@ export default function Overview() {
   const { themes: liveThemes, isLive, loading, refresh } = useApiData(filters)
 
   // 3. Merge: live data overlays mock where theme IDs match
-  const themes = useMemo(
+  const baseThemes = useMemo(
     () => mergeWithLiveData(mockThemes, liveThemes),
     [mockThemes, liveThemes],
   )
+  
+  const [dynamicThemesData, setDynamicThemesData] = useState({})
+  
+  // Fetch dynamic theme data and optionally pass filters in the future
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (filters.jaar !== 'All') params.append('academic_year', filters.jaar);
+    if (filters.locatie !== 'All') params.append('location', filters.locatie);
+    if (filters.opleiding !== 'All') params.append('programme', filters.opleiding);
+    if (filters.studievorm !== 'All') params.append('study_mode', filters.studievorm);
+    if (filters.cohort !== 'All') params.append('cohort', filters.cohort);
+
+    fetch(`http://localhost:5000/api/themes-overview?${params}`)
+      .then(r => r.json())
+      .then(data => setDynamicThemesData(data))
+      .catch(e => console.error(e))
+  }, [filters])
+  
+  const themes = useMemo(() => {
+    return baseThemes.map(t => {
+      const dynamic = dynamicThemesData[t.name]
+      if (dynamic && typeof dynamic.frequency === 'number') {
+        return { ...t, percentage: dynamic.frequency }
+      }
+      return t
+    })
+  }, [baseThemes, dynamicThemesData])
 
   // Sort by percentage and assign bento sizes dynamically
   const bentoThemes = useMemo(() => {
@@ -102,7 +147,7 @@ export default function Overview() {
                 icon="calendar_today"
                 label="Academic Year"
                 value={filters.jaar}
-                options={FILTER_OPTIONS.jaar}
+                options={['All', ...filterOptions.academic_years]}
                 onChange={(v) => setFilter('jaar', v)}
               />
             </div>
@@ -111,7 +156,7 @@ export default function Overview() {
                 icon="location_on"
                 label="Location"
                 value={filters.locatie}
-                options={FILTER_OPTIONS.locatie}
+                options={['All', ...filterOptions.locations]}
                 onChange={(v) => setFilter('locatie', v)}
               />
             </div>
@@ -120,7 +165,7 @@ export default function Overview() {
                 icon="school"
                 label="Programme"
                 value={filters.opleiding}
-                options={FILTER_OPTIONS.opleiding}
+                options={['All', ...filterOptions.programmes]}
                 onChange={(v) => setFilter('opleiding', v)}
               />
             </div>
@@ -129,7 +174,7 @@ export default function Overview() {
                 icon="history_edu"
                 label="Study Mode"
                 value={filters.studievorm}
-                options={FILTER_OPTIONS.studievorm}
+                options={['All', ...filterOptions.study_modes]}
                 onChange={(v) => setFilter('studievorm', v)}
               />
             </div>
@@ -138,7 +183,7 @@ export default function Overview() {
                 icon="group"
                 label="Cohort"
                 value={filters.cohort}
-                options={FILTER_OPTIONS.cohort}
+                options={['All', ...filterOptions.cohorts]}
                 onChange={(v) => setFilter('cohort', v)}
               />
             </div>
@@ -162,25 +207,11 @@ export default function Overview() {
             <div className="flex items-end justify-between mb-5">
               <div>
                 <h2 className="text-2xl font-bold font-headline text-primary">
-                  Theme Frequency &amp; Sentiment
+                  Theme Frequency Insights
                 </h2>
-                {isLive && (
-                  <p className="text-xs text-tertiary-container mt-0.5">
-                    Enriched with live pipeline data
-                  </p>
-                )}
-              </div>
-              <div className="flex gap-3">
-                {[
-                  { color: '#005119', label: 'Positive' },
-                  { color: '#d97706', label: 'Neutral' },
-                  { color: '#ba1a1a', label: 'Critical' },
-                ].map(({ color, label }) => (
-                  <span key={label} className="flex items-center gap-1.5 text-xs font-medium text-on-surface-variant">
-                    <span className="w-2.5 h-2.5 rounded-full" style={{ background: color }} />
-                    {label}
-                  </span>
-                ))}
+                <p className="text-xs text-tertiary-container mt-0.5">
+                  Live response frequencies from VectorDB
+                </p>
               </div>
             </div>
 
@@ -260,80 +291,7 @@ export default function Overview() {
         </aside>
       </div>
 
-      {/* ── Vector DB Section ── */}
-      <section className="mt-10">
-        <h2 className="text-2xl font-bold mb-4">Vector Database</h2>
-        {vectorLoading ? (
-          <div className="animate-pulse space-y-4">
-            <div className="h-8 bg-gray-200 rounded w-1/3"></div>
-            <div className="h-4 bg-gray-200 rounded w-2/3"></div>
-            <div className="space-y-2">
-              {[1, 2, 3].map(i => (
-                <div key={i} className="h-20 bg-gray-100 rounded"></div>
-              ))}
-            </div>
-          </div>
-        ) : (
-          <div className="p-6 space-y-6">
-            <div className="flex justify-between items-center">
-              <h1 className="text-3xl font-bold">📊 Survey Data Overview</h1>
-              <button
-                onClick={vectorRefresh}
-                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-              >
-                🔄 Refresh
-              </button>
-            </div>
 
-            {error && (
-              <div className="p-4 bg-yellow-100 text-yellow-800 rounded border border-yellow-300">
-                ⚠️ {error}
-              </div>
-            )}
-
-            {vectorData.length === 0 ? (
-              <div className="p-8 bg-gray-50 rounded border-2 border-dashed text-center">
-                <p className="text-gray-600 text-lg">
-                  📭 No data yet. Run the <strong>Pipeline Demo</strong> to process survey data.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="bg-blue-50 p-4 rounded border border-blue-200">
-                  <p className="text-sm text-gray-700">
-                    <strong>Total Documents:</strong> {vectorData.length} entries
-                    {lastUpdated && <span className="text-gray-500 ml-4">Last updated: {lastUpdated}</span>}
-                  </p>
-                </div>
-
-                <div className="grid gap-4">
-                  {vectorData.map((item) => (
-                    <div 
-                      key={item.id}
-                      className="p-4 bg-white rounded border border-gray-200 hover:border-blue-400 hover:shadow-md transition"
-                    >
-                      <div className="flex justify-between items-start mb-2">
-                        <span className="text-sm font-semibold text-gray-600">Entry #{item.id}</span>
-                      </div>
-                      <p className="text-gray-800 text-sm leading-relaxed mb-2">
-                        {item.text}
-                      </p>
-                      {item.text !== item.full_text && (
-                        <details className="text-xs text-gray-500 cursor-pointer hover:text-gray-700">
-                          <summary>Read more...</summary>
-                          <p className="mt-2 p-2 bg-gray-50 rounded text-gray-700">
-                            {item.full_text}
-                          </p>
-                        </details>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </section>
     </main>
   )
 }

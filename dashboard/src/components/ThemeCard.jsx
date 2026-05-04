@@ -1,33 +1,10 @@
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 
-const SENTIMENT_STYLES = {
-  positive: {
-    bg: 'bg-tertiary-container/20',
-    border: 'border-tertiary-container/30',
-    badge: 'bg-tertiary-container text-white',
-    icon: 'text-tertiary-container',
-  },
-  neutral: {
-    bg: 'bg-orange-50',
-    border: 'border-orange-200/40',
-    badge: 'bg-orange-200 text-orange-900',
-    icon: 'text-orange-500',
-  },
-  critical: {
-    bg: 'bg-error-container/20',
-    border: 'border-error/20',
-    badge: 'bg-error-container text-on-error-container',
-    icon: 'text-error',
-  },
-}
-
 export default function ThemeCard({ theme, isActive, onClick, size }) {
-  const styles = SENTIMENT_STYLES[theme.sentiment]
-
   const activeCls = isActive
-    ? 'ring-2 ring-primary scale-[1.02] shadow-ambient'
-    : 'hover:scale-[1.02] hover:shadow-ambient'
+    ? 'ring-2 ring-primary scale-[1.02] shadow-ambient bg-blue-50/50'
+    : 'hover:scale-[1.02] hover:shadow-ambient bg-white'
 
   const transition = { type: 'spring', stiffness: 300, damping: 30 }
 
@@ -38,16 +15,16 @@ export default function ThemeCard({ theme, isActive, onClick, size }) {
         layoutId={theme.id}
         transition={transition}
         onClick={onClick}
-        className={`col-span-2 md:row-span-2 ${styles.bg} rounded-xl p-4 md:p-6 flex flex-col justify-between cursor-pointer ${activeCls} border ${styles.border} min-h-[160px]`}
+        className={`col-span-2 md:row-span-2 rounded-xl p-4 md:p-6 flex flex-col justify-between cursor-pointer ${activeCls} border border-gray-200 min-h-[160px]`}
       >
         <div className="flex justify-between items-start">
           <span
-            className={`material-symbols-outlined text-2xl md:text-3xl ${styles.icon}`}
+            className="material-symbols-outlined text-2xl md:text-3xl text-primary"
             style={{ fontVariationSettings: "'FILL' 1" }}
           >
             {theme.icon}
           </span>
-          <span className={`text-xs font-bold px-2 py-1 rounded ${styles.badge}`}>
+          <span className="text-xs font-bold px-2 py-1 rounded bg-blue-100 text-blue-800">
             {theme.percentage}%
           </span>
         </div>
@@ -75,11 +52,11 @@ export default function ThemeCard({ theme, isActive, onClick, size }) {
         layoutId={theme.id}
         transition={transition}
         onClick={onClick}
-        className={`col-span-2 ${styles.bg} rounded-xl p-4 md:p-5 flex flex-col justify-between cursor-pointer ${activeCls} border ${styles.border} min-h-[120px]`}
+        className={`col-span-2 rounded-xl p-4 md:p-5 flex flex-col justify-between cursor-pointer ${activeCls} border border-gray-200 min-h-[120px]`}
       >
         <div className="flex justify-between items-start">
-          <span className={`material-symbols-outlined text-2xl ${styles.icon}`}>{theme.icon}</span>
-          <span className="text-xs font-bold text-on-surface-variant">{theme.percentage}%</span>
+          <span className="material-symbols-outlined text-2xl text-primary">{theme.icon}</span>
+          <span className="text-xs font-bold text-blue-800 bg-blue-100 px-2 rounded">{theme.percentage}%</span>
         </div>
         <h3 className="text-base md:text-lg font-bold font-headline text-primary mt-2">{theme.name}</h3>
         <Link
@@ -100,11 +77,11 @@ export default function ThemeCard({ theme, isActive, onClick, size }) {
       layoutId={theme.id}
       transition={transition}
       onClick={onClick}
-      className={`${styles.bg} rounded-xl p-3 md:p-4 flex flex-col justify-between cursor-pointer ${activeCls} border ${styles.border} min-h-[110px]`}
+      className={`rounded-xl p-3 md:p-4 flex flex-col justify-between cursor-pointer ${activeCls} border border-gray-200 min-h-[110px]`}
     >
       <div className="flex justify-between items-start">
-        <span className={`material-symbols-outlined text-xl ${styles.icon}`}>{theme.icon}</span>
-        <span className="text-xs font-bold text-on-surface-variant">{theme.percentage}%</span>
+        <span className="material-symbols-outlined text-xl text-primary">{theme.icon}</span>
+        <span className="text-xs font-bold text-blue-800 bg-blue-100 px-1.5 rounded">{theme.percentage}%</span>
       </div>
       <h3 className="text-sm font-bold font-headline text-primary leading-tight mt-2">
         {theme.name}

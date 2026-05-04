@@ -10,10 +10,8 @@ def build_vector_db(csv_path="anonymized_output.csv", db_path="./survey_vector_d
 
     # 1. Config 
     CSV_SEP = ';' 
-    # Update these columns to match the actual feedback columns you want to embed
-    ANSWER_COLS = [
-        'Would you like to give your institution any other feedback on the teachers on your course programme?'
-    ]
+    df_temp = pd.read_csv(csv_path, sep=CSV_SEP, nrows=1)
+    ANSWER_COLS = [col for col in df_temp.columns if 'feedback' in col.lower()]
     COLLECTION = 'survey_responses'
     EMBEDDING_MODEL = 'BAAI/bge-m3'
     BATCH_SIZE = 64
@@ -75,14 +73,9 @@ def build_vector_db_stream(csv_path="anonymized_survey.csv", db_path="./survey_v
     if not os.path.exists(csv_path):
         yield json.dumps({"status": "error", "error": f"Input file {csv_path} not found. Please anonymize first."}) + "\n"
         return
-
+    
     try:
-        yield json.dumps({"status": "progress", "message": "Initializing Vector DB Builder...", "progress": 5}) + "\n"
-        
         CSV_SEP = ';' 
-        ANSWER_COLS = [
-            'Would you like to give your institution any other feedback on the teachers on your course programme?'
-        ]
         COLLECTION = 'survey_responses'
         EMBEDDING_MODEL = 'BAAI/bge-m3'
         BATCH_SIZE = 50
@@ -90,6 +83,13 @@ def build_vector_db_stream(csv_path="anonymized_survey.csv", db_path="./survey_v
         # Load CSV
         yield json.dumps({"status": "progress", "message": f"Loading CSV from {csv_path}...", "progress": 10}) + "\n"
         df = pd.read_csv(csv_path, sep=CSV_SEP)
+
+        # Dynamically find all feedback columns
+        ANSWER_COLS = [col for col in df.columns if 'feedback' in col.lower()]
+        
+        if not ANSWER_COLS:
+            yield json.dumps({"status": "error", "error": "No feedback columns found in the dataset."}) + "\n"
+            return
 
         all_records = []
         for question_col in ANSWER_COLS:
@@ -173,4 +173,4 @@ def build_vector_db_stream(csv_path="anonymized_survey.csv", db_path="./survey_v
         }) + "\n"
         
     except Exception as e:
-        yield json.dumps({"status": "error", "error": str(e)}) + "\n"
+        yield json.dumps({"status": "error", "error": str(e)}) + "\n"

@@ -1,55 +1,13 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 
-const SENTIMENT_COLOR = {
-  positive: '#005119',
-  neutral: '#b45309',
-  critical: '#ba1a1a',
-}
-
-function DonutChart({ breakdown }) {
-  const size = 64
-  const r = 26
-  const cx = size / 2
-  const cy = size / 2
-  const circumference = 2 * Math.PI * r
-
-  const segments = [
-    { value: breakdown.positive, color: '#005119' },
-    { value: breakdown.neutral, color: '#b45309' },
-    { value: breakdown.negative, color: '#ba1a1a' },
-  ]
-
-  let offset = 0
-  const arcs = segments.map((seg) => {
-    const dash = (seg.value / 100) * circumference
-    const arc = { ...seg, dash, offset }
-    offset += dash
-    return arc
-  })
-
-  return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90">
-      <circle cx={cx} cy={cy} r={r} fill="transparent" stroke="#e7e8e9" strokeWidth="6" />
-      {arcs.map((arc, i) => (
-        <circle
-          key={i}
-          cx={cx}
-          cy={cy}
-          r={r}
-          fill="transparent"
-          stroke={arc.color}
-          strokeWidth="6"
-          strokeDasharray={`${arc.dash} ${circumference - arc.dash}`}
-          strokeDashoffset={-arc.offset}
-        />
-      ))}
-    </svg>
-  )
-}
+// Removed static DonutChart as per user request
 
 export default function DetailDrawer({ theme, onClose }) {
   const drawerRef = useRef(null)
+
+  const [liveData, setLiveData] = useState(null)
+  const [loadingLive, setLoadingLive] = useState(false)
 
   useEffect(() => {
     if (drawerRef.current) {
@@ -68,6 +26,40 @@ export default function DetailDrawer({ theme, onClose }) {
     }
   }, [theme?.id])
 
+  useEffect(() => {
+    if (!theme) return
+    let isMounted = true
+
+    const fetchLiveSummary = async () => {
+      setLoadingLive(true)
+      setLiveData(null)
+      try {
+        const res = await fetch('http://localhost:5000/api/theme-summary', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ theme: theme.name, query: theme.name })
+        })
+        const data = await res.json()
+        if (isMounted) {
+          if (data.status === 'success') {
+            setLiveData(data)
+          } else {
+            setLiveData({ error: data.error || 'Failed to generate summary' })
+          }
+        }
+      } catch (e) {
+        console.error("Failed to fetch Gemma 4 summary:", e)
+        if (isMounted) setLiveData({ error: 'Failed to connect to backend server.' })
+      } finally {
+        if (isMounted) setLoadingLive(false)
+      }
+    }
+
+    fetchLiveSummary()
+
+    return () => { isMounted = false }
+  }, [theme?.id, theme?.name])
+
   if (!theme) return null
 
   return (
@@ -80,15 +72,9 @@ export default function DetailDrawer({ theme, onClose }) {
         className="p-4 md:p-6 text-white relative"
         style={{ background: 'linear-gradient(135deg, #002F59 0%, #00467F 100%)' }}
       >
-        <div className="flex justify-between items-start mb-4">
+        <div className="flex justify-between items-start">
           <h3 className="text-xl font-bold font-headline">{theme.name}</h3>
           <div className="flex items-center gap-2">
-            <span
-              className="text-[10px] font-bold px-2 py-1 rounded"
-              style={{ background: SENTIMENT_COLOR[theme.sentiment] }}
-            >
-              ACTIVE
-            </span>
             {onClose && (
               <button onClick={onClose} className="p-1 rounded hover:bg-white/10 transition-colors">
                 <span className="material-symbols-outlined text-sm">close</span>
@@ -96,81 +82,85 @@ export default function DetailDrawer({ theme, onClose }) {
             )}
           </div>
         </div>
-        <div className="flex items-center gap-4">
-          <div className="relative w-16 h-16 flex items-center justify-center">
-            <DonutChart breakdown={theme.sentimentBreakdown} />
-            <span className="absolute text-xs font-bold">{theme.sentimentScore}%</span>
-          </div>
-          <div>
-            <p className="text-xs opacity-70">Sentiment Score</p>
-            <p className="text-lg font-bold">{theme.sentimentLabel}</p>
-          </div>
-        </div>
       </div>
 
       {/* Body */}
-      <div className="p-4 md:p-6 space-y-5">
-        {/* AI Summary */}
-        <div>
-          <div className="flex items-center gap-2 mb-2">
-            <span
-              className="material-symbols-outlined text-sm text-secondary"
-              style={{ fontVariationSettings: "'FILL' 1" }}
-            >
-              auto_awesome
-            </span>
-            <h4 className="text-xs font-bold uppercase tracking-wider text-secondary">
-              AI Summary
-            </h4>
+      <div className="p-4 md:p-6 space-y-6">
+
+        {/* Live Gemma 4 Summary */}
+        <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
+          <div className="flex justify-between items-center mb-3">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-blue-600">psychology</span>
+              <h4 className="text-sm font-bold text-blue-900">Gemma 4 Live Insights</h4>
+            </div>
+            {loadingLive && (
+              <span className="flex items-center gap-1 text-[10px] uppercase font-bold text-blue-500 tracking-wider animate-pulse">
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                Querying VectorDB...
+              </span>
+            )}
           </div>
-          <p className="text-sm text-on-surface-variant leading-relaxed">{theme.aiSummary}</p>
+
+          {loadingLive ? (
+            <div className="space-y-2 py-2">
+              <div className="h-2 bg-blue-200/50 rounded animate-pulse w-full"></div>
+              <div className="h-2 bg-blue-200/50 rounded animate-pulse w-5/6"></div>
+              <div className="h-2 bg-blue-200/50 rounded animate-pulse w-4/6"></div>
+            </div>
+          ) : liveData?.error ? (
+            <div className="p-3 bg-red-50 text-red-700 text-xs rounded-lg border border-red-200">
+              ⚠️ {liveData.error}
+            </div>
+          ) : liveData ? (
+            <div className="space-y-4 animate-in fade-in duration-500">
+              <p className="text-sm text-blue-800 leading-relaxed bg-white/50 p-3 rounded-lg border border-blue-100/50">
+                {liveData.summary}
+              </p>
+              {liveData.sentiments && liveData.sentiments.length > 0 && (
+                <div className="space-y-2 pt-2">
+                  <h5 className="text-[10px] font-bold uppercase tracking-wider text-blue-700/70">Top Sentiments Detected</h5>
+                  <div className="space-y-2">
+                    {liveData.sentiments.map((s, idx) => (
+                      <div key={idx} className="flex gap-2 items-start bg-white/60 p-2 rounded border border-blue-50/50">
+                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase mt-0.5
+                          ${s.sentiment === 'Positive' ? 'bg-green-100 text-green-700' :
+                            s.sentiment === 'Critical' ? 'bg-red-100 text-red-700' :
+                              'bg-yellow-100 text-yellow-700'}
+                        `}>
+                          {s.sentiment}
+                        </span>
+                        <span className="text-xs text-blue-900 leading-snug">{s.point}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className="text-xs text-blue-600/70 italic">Vector database query failed or offline.</p>
+          )}
         </div>
 
         {/* Frequency */}
         <div className="flex items-center gap-3 bg-surface-container-low rounded-xl p-3">
           <span className="material-symbols-outlined text-outline text-sm">bar_chart</span>
           <span className="text-sm font-semibold text-on-surface">
-            Mentioned in{' '}
-            <span className="text-primary font-bold">{theme.percentage}%</span> of responses
+            Relevant responses for this theme:{' '}
+            <span className="text-primary font-bold">{theme.percentage}%</span>
           </span>
-        </div>
-
-        {/* Sentiment breakdown bar */}
-        <div>
-          <h4 className="text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-2">
-            Sentiment Distribution
-          </h4>
-          <div className="flex rounded-full overflow-hidden h-2 gap-px">
-            <div
-              className="h-full transition-all duration-500"
-              style={{ width: `${theme.sentimentBreakdown.positive}%`, background: '#005119' }}
-            />
-            <div
-              className="h-full transition-all duration-500"
-              style={{ width: `${theme.sentimentBreakdown.neutral}%`, background: '#d97706' }}
-            />
-            <div
-              className="h-full transition-all duration-500"
-              style={{ width: `${theme.sentimentBreakdown.negative}%`, background: '#ba1a1a' }}
-            />
-          </div>
-          <div className="flex justify-between text-[10px] text-on-surface-variant mt-1">
-            <span>Positive {theme.sentimentBreakdown.positive}%</span>
-            <span>Neutral {theme.sentimentBreakdown.neutral}%</span>
-            <span>Critical {theme.sentimentBreakdown.negative}%</span>
-          </div>
         </div>
 
         {/* Sub-themes */}
         <div>
           <h4 className="text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-2">
-            Sub-themes
+            Key Sub-themes Detected
           </h4>
           <div className="flex flex-wrap gap-2">
-            {theme.subthemes.map((st) => (
+            {(liveData?.subthemes?.length > 0 ? liveData.subthemes : theme.subthemes).map((st, i) => (
               <span
-                key={st}
-                className="px-3 py-1 bg-surface-container rounded-full text-[10px] font-semibold text-on-surface-variant"
+                key={i}
+                className="px-3 py-1 bg-surface-container rounded-full text-[10px] font-semibold text-on-surface-variant border border-outline/10 shadow-sm"
               >
                 {st}
               </span>
@@ -181,29 +171,21 @@ export default function DetailDrawer({ theme, onClose }) {
         {/* Quotes */}
         <div className="space-y-3 pt-2 border-t border-outline-variant/10">
           <h4 className="text-xs font-bold uppercase tracking-wider text-on-surface-variant">
-            Example Comments
+            Actual Student Comments
           </h4>
-          {theme.quotes.map((q, i) => (
+          {(liveData?.quotes?.length > 0 ? liveData.quotes : theme.quotes).map((q, i) => (
             <blockquote
               key={i}
-              className="bg-surface p-4 rounded-xl border-l-4 border-tertiary-container italic text-xs text-on-surface-variant leading-relaxed"
+              className="bg-surface p-4 rounded-xl border-l-4 border-blue-500 italic text-xs text-on-surface-variant leading-relaxed shadow-sm"
             >
-              {q}
+              "{q}"
             </blockquote>
           ))}
           <p className="text-[10px] text-on-surface-variant/50 italic">
-            * Illustrative examples, not individual student records.
+            * Actual verbatim quotes retrieved from the database.
           </p>
         </div>
 
-        {/* Full analysis link */}
-        <Link
-          to={`/thema/${theme.id}`}
-          onClick={() => window.scrollTo(0, 0)}
-          className="border border-primary text-primary rounded-xl px-4 py-2 text-sm font-semibold w-full text-center block hover:bg-primary hover:text-white transition-colors"
-        >
-          View full analysis →
-        </Link>
       </div>
     </div>
   )
