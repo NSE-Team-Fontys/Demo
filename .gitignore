@@ -15,7 +15,9 @@ npm-debug.log*
 
 # Python
 __pycache__/
+**/__pycache__/
 *.py[cod]
+**/*.py[cod]
 *.pyo
 *.pyd
 *.pdb
@@ -38,13 +40,26 @@ htmlcov/
 
 # Database / cache
 *.sqlite3
+**/*.sqlite3
 *.db
 *.log
 *.cache
 *.pyc
 
+# Chroma / vector DB storage
+chroma/
+**/chroma/
+chroma.sqlite3
+**/chroma.sqlite3
+
 # VS Code
 .vscode/
+
+# Playwright-cli artifacts
+.playwright-cli/
+**/.playwright-cli/
+*.yml
+*.yaml
 
 # OS files
 .DS_Store
@@ -52,4 +67,7 @@ Thumbs.db
 
 # Local survey/vector DB storage
 survey_vector_db/
+
+# Local data files
+data/
 

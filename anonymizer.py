@@ -2,12 +2,25 @@ import pandas as pd
 from presidio_analyzer import AnalyzerEngine
 from transformers import pipeline
 
+import csv
 import json
 import os
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-def process_file_with_layers(input_path: str, output_path: str, columns_to_anonymize: list, layers: list, sep: str = ';'):
-    df = pd.read_csv(input_path, sep=sep)
+
+def detect_sep(path: str) -> str:
+    try:
+        with open(path, 'r', encoding='utf-8-sig') as f:
+            sample = f.read(8192)
+        return csv.Sniffer().sniff(sample, delimiters=',;\t').delimiter
+    except Exception:
+        return ';'
+
+
+def process_file_with_layers(input_path: str, output_path: str, columns_to_anonymize: list, layers: list, sep: str = None):
+    if sep is None:
+        sep = detect_sep(input_path)
+    df = pd.read_csv(input_path, sep=sep, encoding='utf-8-sig')
     
     yield json.dumps({"status": "progress", "message": "Initializing...", "progress": 5}) + "\n"
     

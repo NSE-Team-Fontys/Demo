@@ -1,16 +1,26 @@
 import pandas as pd
 import chromadb
 from sentence_transformers import SentenceTransformer
+import csv
 import os
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 import json
+
+
+def detect_sep(path: str) -> str:
+    try:
+        with open(path, 'r', encoding='utf-8-sig') as f:
+            sample = f.read(8192)
+        return csv.Sniffer().sniff(sample, delimiters=',;\t').delimiter
+    except Exception:
+        return ';'
 
 def build_vector_db(csv_path="data/anonymized_output.csv", db_path="./survey_vector_db"):
     if not os.path.exists(csv_path):
         raise Exception(f"Input file {csv_path} not found. Please anonymize first.")
 
-    # 1. Config 
-    CSV_SEP = ';' 
+    # 1. Config
+    CSV_SEP = detect_sep(csv_path)
     df_temp = pd.read_csv(csv_path, sep=CSV_SEP, nrows=1)
     ANSWER_COLS = [col for col in df_temp.columns if 'feedback' in col.lower()]
     COLLECTION = 'survey_responses'
@@ -76,7 +86,7 @@ def build_vector_db_stream(csv_path="data/anonymized_survey.csv", db_path="./sur
         return
     
     try:
-        CSV_SEP = ';' 
+        CSV_SEP = detect_sep(csv_path)
         COLLECTION = 'survey_responses'
         EMBEDDING_MODEL = 'BAAI/bge-m3'
         BATCH_SIZE = 50

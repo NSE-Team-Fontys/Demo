@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify, Response
 from flask_cors import CORS
 import pandas as pd
 import os
+import csv
 
 # Fix for macOS (Apple Silicon) deadlocks when using HuggingFace models in Flask threads
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -22,6 +23,16 @@ OUTPUT_FILE = "data/anonymized_output.csv"
 VECTOR_DB_PATH = Path('./survey_vector_db')
 TEMP_DIR = Path('./temp')
 ANONYMIZED_CSV_PATH = Path('./data/anonymized_survey.csv')
+SEP_FILE = Path('./data/detected_sep.txt')
+
+
+def detect_sep(path: str) -> str:
+    try:
+        with open(path, 'r', encoding='utf-8-sig') as f:
+            sample = f.read(8192)
+        return csv.Sniffer().sniff(sample, delimiters=',;\t').delimiter
+    except Exception:
+        return ';'
 
 @app.route('/api/inspect-file', methods=['POST'])
 def inspect_file():
@@ -33,13 +44,22 @@ def inspect_file():
     file.save(UPLOAD_FILE)
     
     try:
-        # Read just the first few rows to get columns and a preview
-        df = pd.read_csv(UPLOAD_FILE, sep=';', nrows=5)
-        
+        sep = detect_sep(UPLOAD_FILE)
+        SEP_FILE.parent.mkdir(parents=True, exist_ok=True)
+        SEP_FILE.write_text(sep)
+
+        df = pd.read_csv(UPLOAD_FILE, sep=sep, nrows=5)
+        preview_records = df.head(1).to_dict(orient='records')
+        # JSON must not contain NaN/NaT/Infinity; convert missing values to null.
+        for rec in preview_records:
+            for k, v in list(rec.items()):
+                if pd.isna(v):
+                    rec[k] = None
+
         return jsonify({
             'status': 'success',
             'columns': df.columns.tolist(),
-            'preview': df.head(1).to_dict(orient='records')
+            'preview': preview_records
         })
     except Exception as e:
         return jsonify({'status': 'error', 'error': str(e)})
@@ -58,14 +78,16 @@ def anonymize():
         if not input_file.exists():
             return jsonify({"status": "error", "error": "No file uploaded"}), 400
         
-        print(f"[ANONYMIZE] Columns: {selected_columns} | Layers: {selected_layers}")
-        
+        sep = SEP_FILE.read_text().strip() if SEP_FILE.exists() else detect_sep(str(input_file))
+        print(f"[ANONYMIZE] Columns: {selected_columns} | Layers: {selected_layers} | sep={repr(sep)}")
+
         return Response(
             process_file_with_layers(
                 str(input_file),
                 str(output_file),
                 selected_columns,
-                selected_layers
+                selected_layers,
+                sep=sep,
             ),
             mimetype='application/x-ndjson'
         )
