@@ -10,7 +10,7 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
   const [result, setResult] = useState(null);
   const [preview, setPreview] = useState([]);
   const [progress, setProgress] = useState(0);
-  
+
   // Real-time stream states
   const [statusMessage, setStatusMessage] = useState('');
   const [currentPreview, setCurrentPreview] = useState('');
@@ -51,16 +51,16 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
   };
 
   const toggleColumn = (col) => {
-    setSelectedColumns(prev => 
-      prev.includes(col) 
+    setSelectedColumns(prev =>
+      prev.includes(col)
         ? prev.filter(c => c !== col)
         : [...prev, col]
     );
   };
 
   const toggleLayer = (layer) => {
-    setSelectedLayers(prev => 
-      prev.includes(layer) 
+    setSelectedLayers(prev =>
+      prev.includes(layer)
         ? prev.filter(l => l !== layer)
         : [...prev, layer]
     );
@@ -88,7 +88,7 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
       const response = await fetch('http://localhost:5001/api/anonymize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           selected_columns: selectedColumns,
           selected_layers: selectedLayers
         })
@@ -159,7 +159,7 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
         <div className="flex items-center justify-between mb-8 relative z-10">
           <div className="absolute top-1/2 -translate-y-1/2 left-0 w-full h-1 bg-gray-100 rounded-full -z-10"></div>
           <div className={`absolute top-1/2 -translate-y-1/2 left-0 h-1 bg-indigo-500 rounded-full -z-10 transition-all duration-700 ease-out`} style={{ width: step === 1 ? '0%' : step === 2 ? '50%' : '100%' }}></div>
-          
+
           {[1, 2, 3].map(s => (
             <div key={s} className={`flex items-center justify-center w-10 h-10 rounded-full font-bold transition-all duration-500 shadow-md ${step >= s ? 'bg-indigo-600 text-white scale-110' : 'bg-white text-gray-400 border-2 border-gray-200'}`}>
               {step > s ? '✓' : s}
@@ -226,9 +226,6 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
                   {columns.map(col => {
                     const isSelected = selectedColumns.includes(col);
                     return (
-<<<<<<< HEAD
-                      <label key={col} onClick={() => toggleColumn(col)} className={`flex items-center p-3 rounded-xl border-2 cursor-pointer transition-all duration-200 ${isSelected ? 'border-indigo-500 bg-indigo-50/50' : 'border-gray-100 hover:border-gray-200 bg-white'}`}>
-=======
                       <label
                         key={col}
                         className={`flex items-center p-3 rounded-xl border-2 cursor-pointer transition-all duration-200 ${isSelected ? 'border-indigo-500 bg-indigo-50/50' : 'border-gray-100 hover:border-gray-200 bg-white'}`}
@@ -243,7 +240,6 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
                           }
                         }}
                       >
->>>>>>> 174ab10e51540bfbaf1fb02e57b06b54be502187
                         <div className={`flex items-center justify-center w-5 h-5 rounded flex-shrink-0 mr-3 transition-colors ${isSelected ? 'bg-indigo-500' : 'border border-gray-300'}`}>
                           {isSelected && <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>}
                         </div>
@@ -261,9 +257,6 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
                   <h3 className="font-bold text-gray-800">Security Layers</h3>
                 </div>
                 <div className="space-y-3">
-<<<<<<< HEAD
-                  <label onClick={() => toggleLayer('presidio')} className={`flex items-start p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 ${selectedLayers.includes('presidio') ? 'border-purple-500 bg-purple-50/50 shadow-sm' : 'border-gray-100 hover:border-gray-200 bg-white'}`}>
-=======
                   <label
                     className={`flex items-start p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 ${selectedLayers.includes('presidio') ? 'border-purple-500 bg-purple-50/50 shadow-sm' : 'border-gray-100 hover:border-gray-200 bg-white'}`}
                     role="checkbox"
@@ -277,7 +270,6 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
                       }
                     }}
                   >
->>>>>>> 174ab10e51540bfbaf1fb02e57b06b54be502187
                     <div className={`mt-0.5 flex items-center justify-center w-5 h-5 rounded flex-shrink-0 mr-4 transition-colors ${selectedLayers.includes('presidio') ? 'bg-purple-500' : 'border border-gray-300'}`}>
                       {selectedLayers.includes('presidio') && <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>}
                     </div>
@@ -287,9 +279,6 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
                     </div>
                   </label>
 
-<<<<<<< HEAD
-                  <label onClick={() => toggleLayer('eu-pii')} className={`flex items-start p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 ${selectedLayers.includes('eu-pii') ? 'border-purple-500 bg-purple-50/50 shadow-sm' : 'border-gray-100 hover:border-gray-200 bg-white'}`}>
-=======
                   <label
                     className={`flex items-start p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 ${selectedLayers.includes('eu-pii') ? 'border-purple-500 bg-purple-50/50 shadow-sm' : 'border-gray-100 hover:border-gray-200 bg-white'}`}
                     role="checkbox"
@@ -303,7 +292,6 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
                       }
                     }}
                   >
->>>>>>> 174ab10e51540bfbaf1fb02e57b06b54be502187
                     <div className={`mt-0.5 flex items-center justify-center w-5 h-5 rounded flex-shrink-0 mr-4 transition-colors ${selectedLayers.includes('eu-pii') ? 'bg-purple-500' : 'border border-gray-300'}`}>
                       {selectedLayers.includes('eu-pii') && <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>}
                     </div>
@@ -361,25 +349,25 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
         {/* --- STEP 3 --- */}
         {step === 3 && (
           <div className="space-y-6 animate-in fade-in slide-in-from-right-8 duration-500">
-            
+
             <div className="p-8 bg-gray-900 rounded-3xl shadow-2xl relative overflow-hidden ring-1 ring-white/10">
               <div className="absolute top-0 left-0 w-full h-1 bg-gray-800">
-                <div 
-                  className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 transition-all duration-300 ease-out" 
+                <div
+                  className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 transition-all duration-300 ease-out"
                   style={{ width: `${progress}%` }}
                 ></div>
               </div>
 
               <div className="flex flex-col md:flex-row gap-8 items-center md:items-start justify-between">
-                
+
                 <div className="flex-1 space-y-4 w-full">
                   <div className="flex items-center justify-between">
                     <h3 className="text-xl font-bold text-white flex items-center gap-3">
                       {progress < 100 ? (
-                         <div className="relative flex h-4 w-4">
-                           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
-                           <span className="relative inline-flex rounded-full h-4 w-4 bg-indigo-500"></span>
-                         </div>
+                        <div className="relative flex h-4 w-4">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-4 w-4 bg-indigo-500"></span>
+                        </div>
                       ) : (
                         <span className="text-emerald-400">✓</span>
                       )}
@@ -397,11 +385,11 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
                     </p>
                     {currentPreview && (
                       <div className="mt-2 animate-in fade-in slide-in-from-bottom-2">
-                         <p className="text-gray-400 text-xs mb-1 uppercase tracking-wider font-bold">Live Data Feed</p>
-                         <p className="text-gray-200 text-sm font-mono leading-relaxed line-clamp-2">
-                           <span className="text-emerald-400 mr-2">▶</span>
-                           {currentPreview}
-                         </p>
+                        <p className="text-gray-400 text-xs mb-1 uppercase tracking-wider font-bold">Live Data Feed</p>
+                        <p className="text-gray-200 text-sm font-mono leading-relaxed line-clamp-2">
+                          <span className="text-emerald-400 mr-2">▶</span>
+                          {currentPreview}
+                        </p>
                       </div>
                     )}
                   </div>
