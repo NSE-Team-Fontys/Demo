@@ -520,7 +520,7 @@ def precompute_insights():
                     "status": "progress", 
                     "theme": theme_name, 
                     "progress": int(((i + 0.5) / len(themes)) * 100),
-                    "message": f"Generating {ollama_model} summary for {theme_name}..."
+                    "message": f" {ollama_model} is generating summary for {theme_name}..."
                 }) + "\n"
                 
                 if not relevant_docs:

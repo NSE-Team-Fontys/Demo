@@ -5,27 +5,77 @@ const AVAILABLE_MODELS = [
     id: 'BAAI/bge-m3',
     name: 'BGE-M3',
     provider: 'BAAI',
-    description: 'State-of-the-art multilingual embedding model. Best for mixed-language datasets.',
-    size: '~2.3 GB',
+    description: 'Top-performing multilingual model. Highest silhouette score in benchmarks — best semantic clustering quality.',
+    silhouette: 0.93,
+    daviesBouldin: 0.34,
+    embedTime: '42s',
     languages: '100+ languages',
     recommended: true
   },
   {
-    id: 'sentence-transformers/all-MiniLM-L6-v2',
-    name: 'MiniLM-L6-v2',
-    provider: 'Microsoft',
-    description: 'Lightweight, fast model optimized for English semantic search.',
-    size: '~80 MB',
+    id: 'intfloat/multilingual-e5-large-instruct',
+    name: 'E5-Large Instruct',
+    provider: 'Intfloat',
+    description: 'Instruction-tuned multilingual model. Strong silhouette with low noise — excellent for guided embedding tasks.',
+    silhouette: 0.91,
+    daviesBouldin: 0.47,
+    embedTime: '28s',
+    languages: 'Multilingual',
+    recommended: false
+  },
+  {
+    id: 'BAAI/bge-large-en-v1.5',
+    name: 'BGE-Large EN v1.5',
+    provider: 'BAAI',
+    description: 'English-focused large model. Very low Davies-Bouldin score — tightest clusters among all tested models.',
+    silhouette: 0.90,
+    daviesBouldin: 0.14,
+    embedTime: '52s',
     languages: 'English',
     recommended: false
   },
   {
-    id: 'sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2',
-    name: 'Multilingual MiniLM',
+    id: 'Qwen/Qwen3-Embedding-0.6B',
+    name: 'Qwen3 Embedding 0.6B',
+    provider: 'Alibaba / Qwen',
+    description: 'Compact 0.6B param model from Qwen3 family. Lowest noise percentage in benchmarks but slower inference.',
+    silhouette: 0.90,
+    daviesBouldin: 0.41,
+    embedTime: '431s',
+    languages: 'Multilingual',
+    recommended: false
+  },
+  {
+    id: 'paraphrase-multilingual-MiniLM-L12-v2',
+    name: 'Multilingual MiniLM-L12',
     provider: 'Microsoft',
-    description: 'Compact multilingual model supporting 50+ languages with good quality.',
-    size: '~470 MB',
+    description: 'Ultra-fast lightweight model. Best Davies-Bouldin score (0.15) and fastest embedding time — ideal for quick iteration.',
+    silhouette: 0.90,
+    daviesBouldin: 0.15,
+    embedTime: '5s',
     languages: '50+ languages',
+    recommended: false
+  },
+  {
+    id: 'clips/e5-large-trm-nl',
+    name: 'E5-Large TRM (Dutch)',
+    provider: 'CLIPS',
+    description: 'Dutch-optimized large transformer. Low noise and strong clustering — best pick for Dutch-heavy survey data.',
+    silhouette: 0.88,
+    daviesBouldin: 0.38,
+    embedTime: '38s',
+    languages: 'Dutch / English',
+    recommended: false
+  },
+  {
+    id: 'clips/e5-small-trm-nl',
+    name: 'E5-Small TRM (Dutch)',
+    provider: 'CLIPS',
+    description: 'Lightweight Dutch transformer. Fastest of all tested models with solid clustering quality.',
+    silhouette: 0.86,
+    daviesBouldin: 0.32,
+    embedTime: '4s',
+    languages: 'Dutch / English',
     recommended: false
   }
 ];
@@ -205,25 +255,31 @@ export default function VectorDBBuilder({ onSuccess }) {
                 <span className="text-xl">🧠</span>
                 <h3 className="font-bold text-gray-800">Embedding Model</h3>
               </div>
-              <div className="space-y-3">
+              <div className="space-y-2 max-h-80 overflow-y-auto p-1">
                 {AVAILABLE_MODELS.map(model => {
                   const isSelected = selectedModel === model.id;
                   return (
-                    <label key={model.id} onClick={() => setSelectedModel(model.id)} className={`block p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 ${isSelected ? 'border-fuchsia-500 bg-fuchsia-50/50 shadow-sm' : 'border-gray-100 hover:border-gray-200 bg-white'}`}>
+                    <label key={model.id} onClick={() => setSelectedModel(model.id)} className={`block p-3 rounded-xl border-2 cursor-pointer transition-all duration-200 ${isSelected ? 'border-fuchsia-500 bg-fuchsia-50/50 shadow-sm' : 'border-gray-100 hover:border-gray-200 bg-white'}`}>
                       <div className="flex items-start gap-3">
                         <div className={`mt-0.5 flex items-center justify-center w-5 h-5 rounded-full flex-shrink-0 transition-colors ${isSelected ? 'bg-fuchsia-500' : 'border-2 border-gray-300'}`}>
                           {isSelected && <div className="w-2 h-2 bg-white rounded-full"></div>}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <p className={`font-bold text-sm ${isSelected ? 'text-fuchsia-900' : 'text-gray-700'}`}>{model.name}</p>
                             <span className="text-[10px] font-medium text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">{model.provider}</span>
-                            {model.recommended && <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">Recommended</span>}
+                            {model.recommended && <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">Best Score</span>}
                           </div>
                           <p className="text-xs text-gray-500 mt-1">{model.description}</p>
-                          <div className="flex gap-3 mt-2">
-                            <span className="text-[10px] text-gray-400">📦 {model.size}</span>
-                            <span className="text-[10px] text-gray-400">🌍 {model.languages}</span>
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${model.silhouette >= 0.92 ? 'bg-emerald-100 text-emerald-700' : model.silhouette >= 0.90 ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
+                              Silhouette: {model.silhouette.toFixed(2)}
+                            </span>
+                            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${model.daviesBouldin <= 0.20 ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}>
+                              DB: {model.daviesBouldin.toFixed(2)}
+                            </span>
+                            <span className="text-[10px] font-semibold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">⚡ {model.embedTime}</span>
+                            <span className="text-[10px] text-gray-400 bg-gray-50 px-1.5 py-0.5 rounded">🌍 {model.languages}</span>
                           </div>
                         </div>
                       </div>
@@ -231,6 +287,7 @@ export default function VectorDBBuilder({ onSuccess }) {
                   );
                 })}
               </div>
+              <p className="text-[11px] text-gray-400">Benchmarked on 1000 survey responses using HDBSCAN clustering</p>
             </div>
           </div>
 

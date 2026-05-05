@@ -1,205 +1,51 @@
 {
-  "Professional Practice": {
-    "status": "success",
-    "theme": "Professional Practice",
-    "document_count": 20,
-    "summary": "Students consistently seek more practical, real-world application and skill-based training, suggesting a strong need to bridge the gap between academic theory and professional industry demands. The primary areas for improvement involve developing specific professional competencies, such as networking, advanced documentation, and job application preparation.",
-    "sentiments": [
-      {
-        "sentiment": "Positive",
-        "point": "Students value the opportunity to receive targeted, specialized instruction on professional skills."
-      },
-      {
-        "sentiment": "Neutral",
-        "point": "There is a moderate concern regarding the perceived consistency and quality of practical knowledge shared by different instructors."
-      },
-      {
-        "sentiment": "Critical",
-        "point": "A significant need exists for structured opportunities to build professional networks and receive mentorship from industry experts."
-      }
-    ],
-    "subthemes": [
-      "Practical Workshops/Sessions",
-      "Industry Networking/Mentorship",
-      "Professional Documentation (CVs/Portfolios)",
-      "Real-World Case Studies/Best Practices",
-      "Specific Professional Skills (Negotiation, etc.)"
-    ],
-    "quotes": [
-      "Please organize more practical sessions focused on different career paths and skill gaps.",
-      "Graag meer tips over het opbouwen van een robuust professioneel netwerk.",
-      "Graag meer praktijkgerichte workshops over het schrijven van academische en professionele documentatie."
-    ],
-    "frequency": 1
-  },
   "Content and Organisation": {
     "frequency": 3,
-    "summary": "Students find the content depth and academic rigor highly valuable, often praising the clarity of complex explanations and the insightful perspectives provided. However, there is a consistent concern regarding the organization, delivery format, and overall consistency of the learning environment.",
-    "sentiments": [
-      {
-        "sentiment": "Positive",
-        "point": "Students appreciate the rigor and depth of the content, especially when complex topics are explained accessibly."
-      },
-      {
-        "sentiment": "Critical",
-        "point": "Multiple users reported issues with organizational chaos, confusing guidelines, and inconsistent communication across learning resources."
-      },
-      {
-        "sentiment": "Neutral",
-        "point": "Feedback suggested improvements are needed in balancing content focus with professional presentation and addressing workload management."
-      }
-    ],
-    "subthemes": [
-      "Organization and Structure",
-      "Workload/Pacing",
-      "Communication Consistency",
-      "Relevance of Material",
-      "Accessibility of Complexity"
-    ],
-    "quotes": [
-      "I wish the course material and teacher explanations were presented in a more organized and digestible manner.",
-      "When are we supposed to focus on content versus presentation? The guidelines are confusing.",
-      "[] is interessant, [] [] structuur."
-    ]
+    "summary": "Failed to generate summary: HTTPConnectionPool(host='localhost', port=11434): Read timed out. (read timeout=120)",
+    "sentiments": [],
+    "subthemes": [],
+    "quotes": []
+  },
+  "Professional Practice": {
+    "frequency": 1,
+    "summary": "Failed to generate summary: HTTPConnectionPool(host='localhost', port=11434): Read timed out. (read timeout=120)",
+    "sentiments": [],
+    "subthemes": [],
+    "quotes": []
   },
   "Teachers": {
-    "frequency": 16,
-    "summary": "While students highly value the teachers' expertise and ability to teach complex material effectively, there is a strong consensus that the logistical aspects of accessing teachers outside of class and improving communication need significant attention.",
-    "sentiments": [
-      {
-        "sentiment": "Positive",
-        "point": "Students praise the teachers' skill in making difficult subjects engaging and explaining complex topics accessibly."
-      },
-      {
-        "sentiment": "Neutral",
-        "point": "Students are requesting general improvements to the structure and clarity of communication regarding academic policies and availability."
-      },
-      {
-        "sentiment": "Critical",
-        "point": "Multiple students feel that the current systems and availability of teachers outside of class are restrictive, inconsistent, and a major area for improvement."
-      }
-    ],
-    "subthemes": [
-      "Accessibility/Availability outside class",
-      "Clarity of guidelines and communication",
-      "Teaching quality/Expertise",
-      "Consistency of administrative support"
-    ],
-    "quotes": [
-      "De docenten [], [] met [] overzichtsvragen [].",
-      "[] we de docenten [] we vragen hebben.",
-      "De docenten lijken [] wijzigingen, []."
-    ]
+    "frequency": 13,
+    "summary": "Failed to generate summary: HTTPConnectionPool(host='localhost', port=11434): Read timed out. (read timeout=120)",
+    "sentiments": [],
+    "subthemes": [],
+    "quotes": []
   },
   "Support / Mentoring": {
-    "frequency": 45,
-    "summary": "Students generally find the project guidance positive and beneficial for skill development, but there is a clear consensus regarding a need for more structured, immediate, and consistent support across multiple areas.",
-    "sentiments": [
-      {
-        "sentiment": "Positive",
-        "point": "Project guidance and general support are highly praised for being beneficial and challenging at the right level."
-      },
-      {
-        "sentiment": "Critical",
-        "point": "Multiple students criticize the lack of consistency, structure, and timeliness in technical support, feedback, and general assistance."
-      },
-      {
-        "sentiment": "Neutral",
-        "point": "Students are requesting more specific, defined resources, such as extra reading materials or dedicated workshop time, rather than just general support."
-      }
-    ],
-    "subthemes": [
-      "Structured/Immediate Support",
-      "Technical Reliability/Tools",
-      "Feedback/Grading Speed",
-      "Curriculum/Skills Gap",
-      "Availability/Access to Instructors"
-    ],
-    "quotes": [
-      "De begeleiding bij projecten is fantastisch en heeft [] geholpen bij mijn vaardigheden.",
-      "Ik denk dat de begeleiding op het gebied [] is.",
-      "[]? We hebben meer directe ondersteuning nodig bij moeilijkheden."
-    ]
+    "frequency": 63,
+    "summary": "Failed to generate summary: HTTPConnectionPool(host='localhost', port=11434): Read timed out. (read timeout=120)",
+    "sentiments": [],
+    "subthemes": [],
+    "quotes": []
   },
   "Examination & Assessment": {
-    "frequency": 1,
-    "summary": "The consensus indicates a desire for greater clarity regarding grading expectations and assessment structures, alongside tangible improvements to the logistical support provided during the academic process.",
-    "sentiments": [
-      {
-        "sentiment": "Critical",
-        "point": "There is strong criticism regarding the lack of transparency in assessment criteria and the time taken for grading."
-      },
-      {
-        "sentiment": "Neutral",
-        "point": "Students are suggesting general resource enhancements, such as more allocated time for problem-solving and study."
-      },
-      {
-        "sentiment": "Positive",
-        "point": "The responses implicitly acknowledge the value of structured assessments by suggesting improvements to their existing forms."
-      }
-    ],
-    "subthemes": [
-      "Assessment Clarity/Criteria",
-      "Grading Efficiency/Time",
-      "Technical Tool Reliability",
-      "Study/Review Time Allocation"
-    ],
-    "quotes": [
-      "It would help greatly if the criteria were documented better, especially for the essays.",
-      "It would help if the grading criteria were explicitly outlined at the start.",
-      "Could we get a more detailed breakdown of the assessment? [NAME] is."
-    ]
+    "frequency": 0,
+    "summary": "Failed to generate summary: HTTPConnectionPool(host='localhost', port=11434): Read timed out. (read timeout=120)",
+    "sentiments": [],
+    "subthemes": [],
+    "quotes": []
   },
   "Engagement & Contact": {
-    "frequency": 3,
-    "summary": "Students feel a strong need for increased, varied, and immediate contact points with instructors and peers. While the material's quality and the instructors' passion are appreciated, the primary concern revolves around limited dedicated time for interaction and feedback.",
-    "sentiments": [
-      {
-        "sentiment": "Positive",
-        "point": "Students highly value interactive sessions and the instructors' subject expertise."
-      },
-      {
-        "sentiment": "Neutral",
-        "point": "Students request more varied communication channels beyond just email."
-      },
-      {
-        "sentiment": "Critical",
-        "point": "The most common concern is the limited availability of contact hours and immediate feedback."
-      }
-    ],
-    "subthemes": [
-      "Need for more interaction/engagement",
-      "Feedback timeliness/availability",
-      "Instructor accessibility/Consultation time",
-      "Variety of communication channels",
-      "Length/Depth of contact hours"
-    ],
-    "quotes": [
-      "We really need easier ways to connect with our instructors when we have specific questions.",
-      "De contacturen zijn te [] diepgaand begrijpen [] vakgebied.",
-      "I really appreciate the interactive sessions, it keeps the material engaging and memorable."
-    ]
+    "frequency": 11,
+    "summary": "Failed to generate summary: HTTPConnectionPool(host='localhost', port=11434): Read timed out. (read timeout=120)",
+    "sentiments": [],
+    "subthemes": [],
+    "quotes": []
   },
   "Special Circumstances": {
     "frequency": 0,
-    "summary": "The student responses provide no data regarding 'Special Circumstances'.",
-    "sentiments": [
-      {
-        "sentiment": "Positive",
-        "point": "No positive feedback was provided to evaluate."
-      },
-      {
-        "sentiment": "Neutral",
-        "point": "No neutral points were provided to evaluate."
-      },
-      {
-        "sentiment": "Critical",
-        "point": "No critical feedback was provided to evaluate."
-      }
-    ],
+    "summary": "Failed to generate summary: HTTPConnectionPool(host='localhost', port=11434): Read timed out. (read timeout=120)",
+    "sentiments": [],
     "subthemes": [],
-    "quotes": [
-      "[], [] concrete voorbeelden."
-    ]
+    "quotes": []
   }
 }
