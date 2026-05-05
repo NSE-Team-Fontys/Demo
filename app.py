@@ -2,6 +2,10 @@ from flask import Flask, request, jsonify, Response
 from flask_cors import CORS
 import pandas as pd
 import os
+
+# Fix for macOS (Apple Silicon) deadlocks when using HuggingFace models in Flask threads
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
 from vector_builder import build_vector_db_stream
 from anonymizer import process_file_with_layers
 from pathlib import Path
@@ -13,11 +17,11 @@ app = Flask(__name__)
 # Enable CORS so your React app (localhost:5173) can talk to this API (localhost:5000)
 CORS(app)
 
-UPLOAD_FILE = "temp_upload.csv"
-OUTPUT_FILE = "anonymized_output.csv"
+UPLOAD_FILE = "data/temp_upload.csv"
+OUTPUT_FILE = "data/anonymized_output.csv"
 VECTOR_DB_PATH = Path('./survey_vector_db')
 TEMP_DIR = Path('./temp')
-ANONYMIZED_CSV_PATH = Path('./anonymized_survey.csv')
+ANONYMIZED_CSV_PATH = Path('./data/anonymized_survey.csv')
 
 @app.route('/api/inspect-file', methods=['POST'])
 def inspect_file():

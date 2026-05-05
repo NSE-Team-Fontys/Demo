@@ -2,9 +2,10 @@ import pandas as pd
 import chromadb
 from sentence_transformers import SentenceTransformer
 import os
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 import json
 
-def build_vector_db(csv_path="anonymized_output.csv", db_path="./survey_vector_db"):
+def build_vector_db(csv_path="data/anonymized_output.csv", db_path="./survey_vector_db"):
     if not os.path.exists(csv_path):
         raise Exception(f"Input file {csv_path} not found. Please anonymize first.")
 
@@ -69,7 +70,7 @@ def build_vector_db(csv_path="anonymized_output.csv", db_path="./survey_vector_d
 
     return {"status": "success", "rows_embedded": len(df_combined)}
 
-def build_vector_db_stream(csv_path="anonymized_survey.csv", db_path="./survey_vector_db"):
+def build_vector_db_stream(csv_path="data/anonymized_survey.csv", db_path="./survey_vector_db"):
     if not os.path.exists(csv_path):
         yield json.dumps({"status": "error", "error": f"Input file {csv_path} not found. Please anonymize first."}) + "\n"
         return
