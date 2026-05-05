@@ -74,6 +74,30 @@ def anonymize():
         return jsonify({"status": "error", "error": str(e)}), 500
 
 
+@app.route('/api/inspect-anonymized', methods=['GET'])
+def inspect_anonymized():
+    """Return the columns of the anonymized CSV so the frontend can let users pick which to vectorize."""
+    try:
+        if not ANONYMIZED_CSV_PATH.exists():
+            return jsonify({"status": "error", "error": "Anonymized CSV not found"}), 400
+        
+        df = pd.read_csv(str(ANONYMIZED_CSV_PATH), sep=';', nrows=0)
+        all_columns = df.columns.tolist()
+        
+        # Separate metadata columns from text/feedback columns
+        metadata_cols = {'ID', 'Institution', 'academic_year', 'location', 'programme', 'study_mode', 'cohort'}
+        text_columns = [col for col in all_columns if col not in metadata_cols]
+        
+        return jsonify({
+            "status": "success",
+            "columns": all_columns,
+            "text_columns": text_columns,
+            "row_count": sum(1 for _ in open(str(ANONYMIZED_CSV_PATH), encoding='utf-8')) - 1
+        })
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+
 @app.route('/api/build-vectors', methods=['POST'])
 def build_vectors():
     """Build vector database with proper metadata storage"""
@@ -81,7 +105,11 @@ def build_vectors():
         if not ANONYMIZED_CSV_PATH.exists():
             return jsonify({"status": "error", "error": "Anonymized CSV not found"}), 400
         
-        print("[BUILD-VECTORS] Starting vector DB build...")
+        data = request.json or {}
+        embedding_model = data.get('embedding_model', 'BAAI/bge-m3')
+        selected_columns = data.get('selected_columns', None)
+        
+        print(f"[BUILD-VECTORS] Starting vector DB build with model={embedding_model}, columns={selected_columns}")
         
         # Clear the old AI insights cache so we generate fresh insights for the new data
         if CACHE_FILE.exists():
@@ -93,7 +121,9 @@ def build_vectors():
         return Response(
             build_vector_db_stream(
                 csv_path=str(ANONYMIZED_CSV_PATH),
-                db_path=str(VECTOR_DB_PATH)
+                db_path=str(VECTOR_DB_PATH),
+                embedding_model=embedding_model,
+                selected_columns=selected_columns
             ),
             mimetype='application/x-ndjson'
         )
@@ -412,11 +442,23 @@ Responses:
         print(f"[GEMMA4 ERROR] {str(e)}")
         return jsonify({"status": "error", "error": str(e)}), 500
 
+@app.route('/api/clear-cache', methods=['POST'])
+def clear_cache():
+    """Delete the gemma_cache.json file so insights are regenerated fresh."""
+    try:
+        if CACHE_FILE.exists():
+            CACHE_FILE.unlink()
+        return jsonify({"status": "success", "message": "Cache cleared"})
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e)}), 500
+
 @app.route('/api/precompute-insights', methods=['POST'])
 def precompute_insights():
     """Stream NDJSON progress as we precompute insights for all themes."""
     data = request.json
     themes = data.get('themes', [])
+    ollama_model = data.get('ollama_model', 'gemma4:e4b')
+    custom_prompt = data.get('custom_prompt', '')
     
     if not themes:
         return jsonify({"error": "No themes provided"}), 400
@@ -478,7 +520,7 @@ def precompute_insights():
                     "status": "progress", 
                     "theme": theme_name, 
                     "progress": int(((i + 0.5) / len(themes)) * 100),
-                    "message": f"Generating Gemma summary for {theme_name}..."
+                    "message": f"Generating {ollama_model} summary for {theme_name}..."
                 }) + "\n"
                 
                 if not relevant_docs:
@@ -490,7 +532,11 @@ def precompute_insights():
                     save_cache(cache)
                     continue
                 
-                prompt = f"""You are an expert data analyst. Read the following student survey responses about '{theme_name}'.
+                # Use custom prompt if provided, otherwise use default
+                if custom_prompt.strip():
+                    prompt = custom_prompt.replace('{theme_name}', theme_name) + "\n\nResponses:\n"
+                else:
+                    prompt = f"""You are an expert data analyst. Read the following student survey responses about '{theme_name}'.
 Summarize the general consensus in 2 sentences. Extract 3 key sentiments (Positive, Neutral, or Critical) and provide a 1-sentence point for each.
 Also extract 3 to 5 short sub-themes or topics mentioned.
 Respond EXACTLY in this JSON format:
@@ -511,7 +557,7 @@ Responses:
                     
                 try:
                     response = requests.post('http://localhost:11434/api/generate', json={
-                        "model": "gemma4:e4b", "prompt": prompt, "stream": False, "format": "json"
+                        "model": ollama_model, "prompt": prompt, "stream": False, "format": "json"
                     }, timeout=120)
                     
                     if response.status_code == 200:

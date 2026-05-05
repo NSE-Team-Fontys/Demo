@@ -226,7 +226,7 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
                   {columns.map(col => {
                     const isSelected = selectedColumns.includes(col);
                     return (
-                      <label key={col} className={`flex items-center p-3 rounded-xl border-2 cursor-pointer transition-all duration-200 ${isSelected ? 'border-indigo-500 bg-indigo-50/50' : 'border-gray-100 hover:border-gray-200 bg-white'}`}>
+                      <label key={col} onClick={() => toggleColumn(col)} className={`flex items-center p-3 rounded-xl border-2 cursor-pointer transition-all duration-200 ${isSelected ? 'border-indigo-500 bg-indigo-50/50' : 'border-gray-100 hover:border-gray-200 bg-white'}`}>
                         <div className={`flex items-center justify-center w-5 h-5 rounded flex-shrink-0 mr-3 transition-colors ${isSelected ? 'bg-indigo-500' : 'border border-gray-300'}`}>
                           {isSelected && <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>}
                         </div>
@@ -244,7 +244,7 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
                   <h3 className="font-bold text-gray-800">Security Layers</h3>
                 </div>
                 <div className="space-y-3">
-                  <label className={`flex items-start p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 ${selectedLayers.includes('presidio') ? 'border-purple-500 bg-purple-50/50 shadow-sm' : 'border-gray-100 hover:border-gray-200 bg-white'}`}>
+                  <label onClick={() => toggleLayer('presidio')} className={`flex items-start p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 ${selectedLayers.includes('presidio') ? 'border-purple-500 bg-purple-50/50 shadow-sm' : 'border-gray-100 hover:border-gray-200 bg-white'}`}>
                     <div className={`mt-0.5 flex items-center justify-center w-5 h-5 rounded flex-shrink-0 mr-4 transition-colors ${selectedLayers.includes('presidio') ? 'bg-purple-500' : 'border border-gray-300'}`}>
                       {selectedLayers.includes('presidio') && <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>}
                     </div>
@@ -254,7 +254,7 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
                     </div>
                   </label>
 
-                  <label className={`flex items-start p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 ${selectedLayers.includes('eu-pii') ? 'border-purple-500 bg-purple-50/50 shadow-sm' : 'border-gray-100 hover:border-gray-200 bg-white'}`}>
+                  <label onClick={() => toggleLayer('eu-pii')} className={`flex items-start p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 ${selectedLayers.includes('eu-pii') ? 'border-purple-500 bg-purple-50/50 shadow-sm' : 'border-gray-100 hover:border-gray-200 bg-white'}`}>
                     <div className={`mt-0.5 flex items-center justify-center w-5 h-5 rounded flex-shrink-0 mr-4 transition-colors ${selectedLayers.includes('eu-pii') ? 'bg-purple-500' : 'border border-gray-300'}`}>
                       {selectedLayers.includes('eu-pii') && <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>}
                     </div>

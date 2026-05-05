@@ -1,4 +1,34 @@
-import { useState, useRef } from 'react';
+import { useState, useEffect } from 'react';
+
+const AVAILABLE_MODELS = [
+  {
+    id: 'BAAI/bge-m3',
+    name: 'BGE-M3',
+    provider: 'BAAI',
+    description: 'State-of-the-art multilingual embedding model. Best for mixed-language datasets.',
+    size: '~2.3 GB',
+    languages: '100+ languages',
+    recommended: true
+  },
+  {
+    id: 'sentence-transformers/all-MiniLM-L6-v2',
+    name: 'MiniLM-L6-v2',
+    provider: 'Microsoft',
+    description: 'Lightweight, fast model optimized for English semantic search.',
+    size: '~80 MB',
+    languages: 'English',
+    recommended: false
+  },
+  {
+    id: 'sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2',
+    name: 'Multilingual MiniLM',
+    provider: 'Microsoft',
+    description: 'Compact multilingual model supporting 50+ languages with good quality.',
+    size: '~470 MB',
+    languages: '50+ languages',
+    recommended: false
+  }
+];
 
 export default function VectorDBBuilder({ onSuccess }) {
   const [loading, setLoading] = useState(false);
@@ -7,7 +37,46 @@ export default function VectorDBBuilder({ onSuccess }) {
   const [currentStage, setCurrentStage] = useState('');
   const [currentDoc, setCurrentDoc] = useState('');
 
+  // Configuration state
+  const [columns, setColumns] = useState([]);
+  const [selectedColumns, setSelectedColumns] = useState([]);
+  const [selectedModel, setSelectedModel] = useState('BAAI/bge-m3');
+  const [rowCount, setRowCount] = useState(0);
+  const [configLoaded, setConfigLoaded] = useState(false);
+  const [configError, setConfigError] = useState(null);
+
+  // Load columns from anonymized CSV on mount
+  useEffect(() => {
+    const fetchColumns = async () => {
+      try {
+        const res = await fetch('http://localhost:5001/api/inspect-anonymized');
+        const data = await res.json();
+        if (data.status === 'success') {
+          setColumns(data.text_columns || []);
+          setSelectedColumns(data.text_columns || []);
+          setRowCount(data.row_count || 0);
+          setConfigLoaded(true);
+        } else {
+          setConfigError(data.error || 'Could not load columns');
+        }
+      } catch (e) {
+        setConfigError('Could not connect to the backend. Is the Flask server running?');
+      }
+    };
+    fetchColumns();
+  }, []);
+
+  const toggleColumn = (col) => {
+    setSelectedColumns(prev =>
+      prev.includes(col)
+        ? prev.filter(c => c !== col)
+        : [...prev, col]
+    );
+  };
+
   const handleBuild = async () => {
+    if (selectedColumns.length === 0) return;
+
     setLoading(true);
     setProgress(0);
     setCurrentStage('Initializing Connection...');
@@ -18,7 +87,10 @@ export default function VectorDBBuilder({ onSuccess }) {
       const response = await fetch('http://localhost:5001/api/build-vectors', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({})
+        body: JSON.stringify({
+          embedding_model: selectedModel,
+          selected_columns: selectedColumns
+        })
       });
       
       if (!response.body) throw new Error("ReadableStream not yet supported in this browser.");
@@ -65,41 +137,120 @@ export default function VectorDBBuilder({ onSuccess }) {
     }
   };
 
+  const activeModel = AVAILABLE_MODELS.find(m => m.id === selectedModel);
+
   return (
     <div className="max-w-4xl mx-auto space-y-8 p-6 bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl border border-gray-100 transition-all duration-500">
       <div className="flex items-center space-x-4 pb-4 border-b border-gray-100">
         <div className="p-3 bg-gradient-to-tr from-fuchsia-500 to-rose-500 text-white rounded-xl shadow-lg">
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
           </svg>
         </div>
         <div>
           <h2 className="text-3xl font-extrabold tracking-tight text-gray-900">Semantic Vector Database</h2>
-          <p className="text-gray-500 text-sm mt-1">Convert text answers into high-dimensional semantic vectors using BAAI/bge-m3</p>
+          <p className="text-gray-500 text-sm mt-1">Configure and build high-dimensional semantic vectors from your anonymized data</p>
         </div>
       </div>
 
+      {/* --- CONFIGURATION PANEL --- */}
       {!loading && !result && (
-        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 text-center py-8 px-4">
-          <div className="bg-fuchsia-50 p-6 rounded-3xl border border-fuchsia-100 inline-block mb-6 shadow-sm">
-            <svg className="w-16 h-16 text-fuchsia-400 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2 1m2-1l-2-1m2 1v2.5M14 4l-2-1-2 1M4 7l2-1M4 7l2 1M4 7v2.5M12 21l-2-1m2 1l2-1m-2 1v-2.5M6 18l-2-1v-2.5M18 18l2-1v-2.5" />
-            </svg>
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
+
+          {configError && (
+            <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-sm flex items-start gap-3">
+              <svg className="w-5 h-5 mt-0.5 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
+              <span>{configError}</span>
+            </div>
+          )}
+
+          <div className="grid md:grid-cols-2 gap-6">
+
+            {/* Column Selector */}
+            <div className="space-y-4 p-6 bg-white border border-gray-100 shadow-sm rounded-2xl">
+              <div className="flex items-center justify-between pb-2 border-b border-gray-50">
+                <div className="flex items-center space-x-2">
+                  <span className="text-xl">📋</span>
+                  <h3 className="font-bold text-gray-800">Columns to Vectorize</h3>
+                </div>
+                {configLoaded && (
+                  <span className="text-xs text-gray-400 font-medium">{rowCount} rows</span>
+                )}
+              </div>
+              {configLoaded ? (
+                <div className="space-y-2 max-h-52 overflow-y-auto p-1">
+                  {columns.map(col => {
+                    const isSelected = selectedColumns.includes(col);
+                    return (
+                      <label key={col} onClick={() => toggleColumn(col)} className={`flex items-center p-3 rounded-xl border-2 cursor-pointer transition-all duration-200 ${isSelected ? 'border-fuchsia-500 bg-fuchsia-50/50' : 'border-gray-100 hover:border-gray-200 bg-white'}`}>
+                        <div className={`flex items-center justify-center w-5 h-5 rounded flex-shrink-0 mr-3 transition-colors ${isSelected ? 'bg-fuchsia-500' : 'border border-gray-300'}`}>
+                          {isSelected && <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>}
+                        </div>
+                        <span className={`text-sm truncate font-medium ${isSelected ? 'text-fuchsia-900' : 'text-gray-600'}`} title={col}>{col}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="flex items-center justify-center h-32 text-gray-400 text-sm">
+                  {configError ? 'Unavailable' : 'Loading columns...'}
+                </div>
+              )}
+              <p className="text-xs text-gray-400">{selectedColumns.length} of {columns.length} columns selected</p>
+            </div>
+
+            {/* Model Selector */}
+            <div className="space-y-4 p-6 bg-white border border-gray-100 shadow-sm rounded-2xl">
+              <div className="flex items-center space-x-2 pb-2 border-b border-gray-50">
+                <span className="text-xl">🧠</span>
+                <h3 className="font-bold text-gray-800">Embedding Model</h3>
+              </div>
+              <div className="space-y-3">
+                {AVAILABLE_MODELS.map(model => {
+                  const isSelected = selectedModel === model.id;
+                  return (
+                    <label key={model.id} onClick={() => setSelectedModel(model.id)} className={`block p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 ${isSelected ? 'border-fuchsia-500 bg-fuchsia-50/50 shadow-sm' : 'border-gray-100 hover:border-gray-200 bg-white'}`}>
+                      <div className="flex items-start gap-3">
+                        <div className={`mt-0.5 flex items-center justify-center w-5 h-5 rounded-full flex-shrink-0 transition-colors ${isSelected ? 'bg-fuchsia-500' : 'border-2 border-gray-300'}`}>
+                          {isSelected && <div className="w-2 h-2 bg-white rounded-full"></div>}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className={`font-bold text-sm ${isSelected ? 'text-fuchsia-900' : 'text-gray-700'}`}>{model.name}</p>
+                            <span className="text-[10px] font-medium text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">{model.provider}</span>
+                            {model.recommended && <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">Recommended</span>}
+                          </div>
+                          <p className="text-xs text-gray-500 mt-1">{model.description}</p>
+                          <div className="flex gap-3 mt-2">
+                            <span className="text-[10px] text-gray-400">📦 {model.size}</span>
+                            <span className="text-[10px] text-gray-400">🌍 {model.languages}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
           </div>
-          <h3 className="text-xl font-bold text-gray-800 mb-2">Ready to Build the Knowledge Base</h3>
-          <p className="text-gray-500 max-w-lg mx-auto mb-8 text-sm">
-            This will take the anonymized survey records, encode them into high-dimensional vectors, and store them securely in a local ChromaDB collection for fast semantic search.
-          </p>
-          <button
-            onClick={handleBuild}
-            disabled={loading}
-            className="px-8 py-4 bg-gradient-to-r from-fuchsia-600 to-rose-600 text-white rounded-xl font-bold shadow-lg shadow-fuchsia-200 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 text-lg"
-          >
-            Launch Vector Builder 🚀
-          </button>
+
+          {/* Summary + Launch */}
+          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-100">
+            <div className="text-sm text-gray-600">
+              <span className="font-semibold text-gray-800">{selectedColumns.length}</span> column{selectedColumns.length !== 1 ? 's' : ''} × <span className="font-semibold text-gray-800">{rowCount}</span> rows → <span className="font-semibold text-fuchsia-700">{activeModel?.name || selectedModel}</span>
+            </div>
+            <button
+              onClick={handleBuild}
+              disabled={loading || selectedColumns.length === 0}
+              className="px-8 py-3 bg-gradient-to-r from-fuchsia-600 to-rose-600 text-white rounded-xl font-bold shadow-lg shadow-fuchsia-200 disabled:opacity-50 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300"
+            >
+              Launch Vector Builder 🚀
+            </button>
+          </div>
         </div>
       )}
 
+      {/* --- BUILDING PROGRESS --- */}
       {loading && (
         <div className="space-y-6 animate-in fade-in zoom-in-95 duration-500">
           <div className="p-8 bg-gray-900 rounded-3xl shadow-2xl relative overflow-hidden ring-1 ring-white/10">
@@ -126,6 +277,12 @@ export default function VectorDBBuilder({ onSuccess }) {
                 <span className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-fuchsia-400 to-rose-400">
                   {progress}%
                 </span>
+              </div>
+
+              {/* Active model badge */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-fuchsia-300 bg-fuchsia-500/20 px-2 py-1 rounded-md">Model: {activeModel?.name || selectedModel}</span>
+                <span className="text-xs font-medium text-rose-300 bg-rose-500/20 px-2 py-1 rounded-md">{selectedColumns.length} column{selectedColumns.length !== 1 ? 's' : ''}</span>
               </div>
 
               <div className="grid md:grid-cols-2 gap-4">
@@ -176,6 +333,7 @@ export default function VectorDBBuilder({ onSuccess }) {
         </div>
       )}
 
+      {/* --- RESULT --- */}
       {result && !loading && (
         <div className={`p-6 rounded-2xl animate-in fade-in slide-in-from-bottom-4 ${result.error ? 'bg-red-50 border border-red-100' : 'bg-emerald-50 border border-emerald-100'}`}>
           <div className="flex items-start gap-4">
@@ -195,7 +353,7 @@ export default function VectorDBBuilder({ onSuccess }) {
               </p>
               
               {!result.error && (
-                <div className="mt-6 grid grid-cols-2 gap-4">
+                <div className="mt-6 grid grid-cols-3 gap-4">
                   <div className="bg-white/60 p-4 rounded-xl">
                     <p className="text-emerald-600/70 text-xs font-bold uppercase tracking-wider">Documents Indexed</p>
                     <p className="text-3xl font-black text-emerald-700 mt-1">{result.document_count}</p>
@@ -203,6 +361,10 @@ export default function VectorDBBuilder({ onSuccess }) {
                   <div className="bg-white/60 p-4 rounded-xl">
                     <p className="text-emerald-600/70 text-xs font-bold uppercase tracking-wider">Vectors Created</p>
                     <p className="text-3xl font-black text-emerald-700 mt-1">{result.vectors_created}</p>
+                  </div>
+                  <div className="bg-white/60 p-4 rounded-xl">
+                    <p className="text-emerald-600/70 text-xs font-bold uppercase tracking-wider">Model Used</p>
+                    <p className="text-lg font-black text-emerald-700 mt-1">{activeModel?.name || selectedModel}</p>
                   </div>
                 </div>
               )}

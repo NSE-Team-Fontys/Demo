@@ -70,7 +70,7 @@ def build_vector_db(csv_path="data/anonymized_output.csv", db_path="./survey_vec
 
     return {"status": "success", "rows_embedded": len(df_combined)}
 
-def build_vector_db_stream(csv_path="data/anonymized_survey.csv", db_path="./survey_vector_db"):
+def build_vector_db_stream(csv_path="data/anonymized_survey.csv", db_path="./survey_vector_db", embedding_model=None, selected_columns=None):
     if not os.path.exists(csv_path):
         yield json.dumps({"status": "error", "error": f"Input file {csv_path} not found. Please anonymize first."}) + "\n"
         return
@@ -78,18 +78,22 @@ def build_vector_db_stream(csv_path="data/anonymized_survey.csv", db_path="./sur
     try:
         CSV_SEP = ';' 
         COLLECTION = 'survey_responses'
-        EMBEDDING_MODEL = 'BAAI/bge-m3'
+        EMBEDDING_MODEL = embedding_model or 'BAAI/bge-m3'
         BATCH_SIZE = 50
 
         # Load CSV
         yield json.dumps({"status": "progress", "message": f"Loading CSV from {csv_path}...", "progress": 10}) + "\n"
         df = pd.read_csv(csv_path, sep=CSV_SEP)
 
-        # Dynamically find all feedback columns
-        ANSWER_COLS = [col for col in df.columns if 'feedback' in col.lower()]
+        # Use selected columns if provided, otherwise auto-detect feedback columns
+        if selected_columns and len(selected_columns) > 0:
+            ANSWER_COLS = [col for col in selected_columns if col in df.columns]
+            yield json.dumps({"status": "progress", "message": f"Using {len(ANSWER_COLS)} selected columns: {', '.join(ANSWER_COLS)}", "progress": 12}) + "\n"
+        else:
+            ANSWER_COLS = [col for col in df.columns if 'feedback' in col.lower()]
         
         if not ANSWER_COLS:
-            yield json.dumps({"status": "error", "error": "No feedback columns found in the dataset."}) + "\n"
+            yield json.dumps({"status": "error", "error": "No matching columns found in the dataset."}) + "\n"
             return
 
         all_records = []

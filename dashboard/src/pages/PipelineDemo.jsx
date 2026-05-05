@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import AnonymizerTab from '../components/AnonymizerTab';
 import VectorDBBuilder from '../components/VectorDBBuilder'; 
+import InsightGenerator from '../components/InsightGenerator';
 import QueryTab from '../components/QueryTab';
 
 export default function PipelineDemo() {
@@ -32,92 +33,6 @@ export default function PipelineDemo() {
     { id: 'insights', title: '3. Generate Insights', icon: '🧠', enabled: true },
     { id: 'query', title: '4. AI Query', icon: '✨', enabled: true },
   ];
-  
-  // Custom Insight Generator Component
-  const InsightGenerator = ({ onComplete }) => {
-    const [progress, setProgress] = useState(0);
-    const [logs, setLogs] = useState([]);
-    const [generating, setGenerating] = useState(false);
-    
-    const startGeneration = async () => {
-      setGenerating(true);
-      setLogs([]);
-      setProgress(0);
-      
-      try {
-        const { THEMES } = await import('../data/themes.js');
-        const res = await fetch('http://localhost:5001/api/precompute-insights', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ themes: THEMES })
-        });
-        
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          
-          const chunk = decoder.decode(value, { stream: true });
-          const lines = chunk.split('\n').filter(Boolean);
-          
-          for (let line of lines) {
-            try {
-              const data = JSON.parse(line);
-              if (data.status === 'progress') {
-                setProgress(data.progress);
-                setLogs(prev => [...prev, `[${data.theme}] ${data.message}`]);
-              } else if (data.status === 'success') {
-                setProgress(100);
-                setLogs(prev => [...prev, "✅ " + data.message]);
-                setTimeout(onComplete, 1000);
-              } else if (data.status === 'error') {
-                setLogs(prev => [...prev, "❌ Error: " + data.message]);
-                setGenerating(false);
-              }
-            } catch (e) {}
-          }
-        }
-      } catch (e) {
-        setLogs(prev => [...prev, "❌ Connection Error: " + e.message]);
-        setGenerating(false);
-      }
-    };
-    
-    return (
-      <div className="space-y-6">
-        <h2 className="text-xl font-bold">Generate AI Insights</h2>
-        <p className="text-sm text-gray-600">
-          Precompute the theme frequencies and run the local Gemma model to generate all AI summaries at once. This ensures the Overview dashboard loads instantly!
-        </p>
-        
-        {!generating && progress === 0 && (
-          <button 
-            onClick={startGeneration}
-            className="bg-blue-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-700"
-          >
-            Start Generation
-          </button>
-        )}
-        
-        {generating && (
-          <div className="space-y-4">
-             <div className="w-full bg-gray-200 rounded-full h-3">
-               <div className="bg-blue-600 h-3 rounded-full transition-all duration-300" style={{ width: `${progress}%` }}></div>
-             </div>
-             <p className="text-sm font-medium text-blue-700">{progress}% Complete</p>
-             
-             <div className="bg-gray-900 rounded-lg p-4 h-48 overflow-y-auto font-mono text-xs text-green-400">
-               {logs.map((log, i) => (
-                 <div key={i}>{log}</div>
-               ))}
-             </div>
-          </div>
-        )}
-      </div>
-    );
-  };
 
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
