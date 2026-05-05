@@ -45,6 +45,7 @@ htmlcov/
 *.log
 *.cache
 *.pyc
+gemma_cache.json
 
 # Chroma / vector DB storage
 chroma/
