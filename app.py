@@ -1,15 +1,24 @@
+from pathlib import Path
+
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv(Path(__file__).resolve().parent / ".env")
+except ImportError:
+    pass
+
+import csv
+import os
+
+import pandas as pd
 from flask import Flask, request, jsonify, Response
 from flask_cors import CORS
-import pandas as pd
-import os
-import csv
 
 # Fix for macOS (Apple Silicon) deadlocks when using HuggingFace models in Flask threads
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 from vector_builder import build_vector_db_stream
 from anonymizer import process_file_with_layers
-from pathlib import Path
 import chromadb
 from sentence_transformers import SentenceTransformer
 import json

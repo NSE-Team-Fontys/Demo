@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState } from 'react';
 
 export default function AnonymizerTab({ onComplete, existingAnonymized }) {
   const [file, setFile] = useState(null);
@@ -14,6 +14,43 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
   // Real-time stream states
   const [statusMessage, setStatusMessage] = useState('');
   const [currentPreview, setCurrentPreview] = useState('');
+
+  const MASKING_INFO = [
+    { tag: '[NAME]',     meaning: 'Names / persons' },
+    { tag: '[LOCATION]', meaning: 'Addresses / locations' },
+    { tag: '[PII]',      meaning: 'Identifiers (email, phone, BSN, student nr, usernames, etc.)' },
+    { tag: '[TITLE]',    meaning: 'Titles (Meneer/Mevrouw, etc.)' },
+  ];
+
+  const LAYER_OPTIONS = [
+    {
+      id: 'presidio',
+      name: 'Layer 1: Presidio + custom regex',
+      badge: 'Fast baseline',
+      description: 'spaCy NL/EN NER plus Fontys-specific regex for names, titles, room codes, floors, BSN, phone, student numbers and emails.',
+      accent: 'indigo',
+    },
+    {
+      id: 'eu-pii',
+      name: 'Layer 2: EU-PII-Safeguard',
+      badge: 'Best recall',
+      description: 'Hugging Face token-classification model for extra GDPR/PII entities missed by regex or Presidio.',
+      accent: 'purple',
+    },
+    {
+      id: 'openai-privacy-filter',
+      name: 'Layer 2: OpenAI Privacy Filter',
+      badge: 'Experimental',
+      description: 'Optional extra privacy filter backend. Use only when the model is supported in your local Transformers setup.',
+      accent: 'rose',
+    },
+  ];
+
+  const LAYER_PRESETS = [
+    { label: 'Fast', layers: ['presidio'], hint: 'Quick regex + spaCy pass' },
+    { label: 'Recommended', layers: ['presidio', 'eu-pii'], hint: 'Matches the privacy_officer flow' },
+    { label: 'Deep', layers: ['presidio', 'eu-pii', 'openai-privacy-filter'], hint: 'All available layers' },
+  ];
 
   const handleFileUpload = async (e) => {
     const uploadedFile = e.target.files[0];
@@ -215,6 +252,24 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
         {/* --- STEP 2 --- */}
         {step === 2 && (
           <div className="space-y-8 animate-in fade-in slide-in-from-right-8 duration-500">
+            <div className="p-5 bg-indigo-50 border border-indigo-100 rounded-xl">
+              <p className="text-xs font-bold text-indigo-700 uppercase tracking-wider mb-3">What gets masked</p>
+              <div className="flex flex-wrap gap-2">
+                {MASKING_INFO.map((item) => (
+                  <div
+                    key={item.tag}
+                    className="px-3 py-2 bg-white rounded-lg border border-indigo-100 shadow-sm"
+                    title={item.meaning}
+                  >
+                    <span className="font-mono text-sm font-bold text-indigo-700">{item.tag}</span>
+                    <span className="ml-2 text-sm text-indigo-900">{item.meaning}</span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-indigo-700 mt-3">
+                Selected layers replace detected entities with these tags; the backend receives the exact layer IDs you choose below.
+              </p>
+            </div>
             <div className="grid md:grid-cols-2 gap-6">
               {/* Columns Section */}
               <div className="space-y-4 p-6 bg-white border border-gray-100 shadow-sm rounded-2xl">
@@ -229,17 +284,13 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
                       <label
                         key={col}
                         className={`flex items-center p-3 rounded-xl border-2 cursor-pointer transition-all duration-200 ${isSelected ? 'border-indigo-500 bg-indigo-50/50' : 'border-gray-100 hover:border-gray-200 bg-white'}`}
-                        role="checkbox"
-                        aria-checked={isSelected}
-                        tabIndex={0}
-                        onClick={() => toggleColumn(col)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            toggleColumn(col);
-                          }
-                        }}
                       >
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleColumn(col)}
+                          className="sr-only"
+                        />
                         <div className={`flex items-center justify-center w-5 h-5 rounded flex-shrink-0 mr-3 transition-colors ${isSelected ? 'bg-indigo-500' : 'border border-gray-300'}`}>
                           {isSelected && <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>}
                         </div>
@@ -252,55 +303,83 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
 
               {/* Layers Section */}
               <div className="space-y-4 p-6 bg-white border border-gray-100 shadow-sm rounded-2xl">
-                <div className="flex items-center space-x-2 pb-2 border-b border-gray-50">
-                  <span className="text-xl">🛡️</span>
-                  <h3 className="font-bold text-gray-800">Security Layers</h3>
+                <div className="flex items-center justify-between gap-3 pb-2 border-b border-gray-50">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-xl">🛡️</span>
+                    <h3 className="font-bold text-gray-800">Choose Layers</h3>
+                  </div>
+                  <span className="text-xs font-bold text-purple-700 bg-purple-50 border border-purple-100 px-2 py-1 rounded-full">
+                    {selectedLayers.length} active
+                  </span>
                 </div>
-                <div className="space-y-3">
-                  <label
-                    className={`flex items-start p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 ${selectedLayers.includes('presidio') ? 'border-purple-500 bg-purple-50/50 shadow-sm' : 'border-gray-100 hover:border-gray-200 bg-white'}`}
-                    role="checkbox"
-                    aria-checked={selectedLayers.includes('presidio')}
-                    tabIndex={0}
-                    onClick={() => toggleLayer('presidio')}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        toggleLayer('presidio');
-                      }
-                    }}
-                  >
-                    <div className={`mt-0.5 flex items-center justify-center w-5 h-5 rounded flex-shrink-0 mr-4 transition-colors ${selectedLayers.includes('presidio') ? 'bg-purple-500' : 'border border-gray-300'}`}>
-                      {selectedLayers.includes('presidio') && <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>}
-                    </div>
-                    <div>
-                      <p className={`font-bold text-sm ${selectedLayers.includes('presidio') ? 'text-purple-900' : 'text-gray-700'}`}>Microsoft Presidio Engine</p>
-                      <p className="text-xs text-gray-500 mt-1">Detects standard PII patterns (names, emails, phones, locations) globally.</p>
-                    </div>
-                  </label>
 
-                  <label
-                    className={`flex items-start p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 ${selectedLayers.includes('eu-pii') ? 'border-purple-500 bg-purple-50/50 shadow-sm' : 'border-gray-100 hover:border-gray-200 bg-white'}`}
-                    role="checkbox"
-                    aria-checked={selectedLayers.includes('eu-pii')}
-                    tabIndex={0}
-                    onClick={() => toggleLayer('eu-pii')}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        toggleLayer('eu-pii');
-                      }
-                    }}
-                  >
-                    <div className={`mt-0.5 flex items-center justify-center w-5 h-5 rounded flex-shrink-0 mr-4 transition-colors ${selectedLayers.includes('eu-pii') ? 'bg-purple-500' : 'border border-gray-300'}`}>
-                      {selectedLayers.includes('eu-pii') && <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>}
-                    </div>
-                    <div>
-                      <p className={`font-bold text-sm ${selectedLayers.includes('eu-pii') ? 'text-purple-900' : 'text-gray-700'}`}>EU-PII-Safeguard AI</p>
-                      <p className="text-xs text-gray-500 mt-1">Deep learning token-classification model fine-tuned for complex GDPR entities.</p>
-                    </div>
-                  </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {LAYER_PRESETS.map((preset) => {
+                    const active = preset.layers.length === selectedLayers.length
+                      && preset.layers.every((layer) => selectedLayers.includes(layer));
+                    return (
+                      <button
+                        key={preset.label}
+                        type="button"
+                        onClick={() => setSelectedLayers(preset.layers)}
+                        className={`p-2 rounded-xl border text-left transition-all ${active ? 'border-purple-500 bg-purple-50 shadow-sm' : 'border-gray-100 bg-gray-50 hover:border-purple-200 hover:bg-white'}`}
+                        title={preset.hint}
+                      >
+                        <span className={`block text-xs font-black ${active ? 'text-purple-800' : 'text-gray-700'}`}>{preset.label}</span>
+                        <span className="block text-[10px] leading-tight text-gray-500 mt-0.5">{preset.layers.length} layer{preset.layers.length > 1 ? 's' : ''}</span>
+                      </button>
+                    );
+                  })}
                 </div>
+
+                <div className="space-y-3">
+                  {LAYER_OPTIONS.map((layer) => {
+                    const isSelected = selectedLayers.includes(layer.id);
+                    const selectedClasses = {
+                      indigo: 'border-indigo-500 bg-indigo-50/70 shadow-sm',
+                      purple: 'border-purple-500 bg-purple-50/70 shadow-sm',
+                      rose: 'border-rose-500 bg-rose-50/70 shadow-sm',
+                    }[layer.accent];
+                    const iconClasses = {
+                      indigo: 'bg-indigo-500',
+                      purple: 'bg-purple-500',
+                      rose: 'bg-rose-500',
+                    }[layer.accent];
+                    const textClasses = {
+                      indigo: 'text-indigo-900',
+                      purple: 'text-purple-900',
+                      rose: 'text-rose-900',
+                    }[layer.accent];
+
+                    return (
+                      <label
+                        key={layer.id}
+                        className={`flex items-start p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 ${isSelected ? selectedClasses : 'border-gray-100 hover:border-gray-200 bg-white'}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleLayer(layer.id)}
+                          className="sr-only"
+                        />
+                        <div className={`mt-0.5 flex items-center justify-center w-5 h-5 rounded flex-shrink-0 mr-4 transition-colors ${isSelected ? iconClasses : 'border border-gray-300'}`}>
+                          {isSelected && <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className={`font-bold text-sm ${isSelected ? textClasses : 'text-gray-700'}`}>{layer.name}</p>
+                            <span className="text-[10px] font-black uppercase tracking-wide text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{layer.badge}</span>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-1 leading-relaxed">{layer.description}</p>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+
+                <p className="text-xs text-gray-500 bg-gray-50 border border-gray-100 rounded-xl p-3">
+                  Recommended uses the same layered flow as <code className="font-mono text-purple-700">privacy_officer</code>: collect spans first, merge/filter them, then apply masks once.
+                </p>
               </div>
             </div>
 
@@ -379,6 +458,16 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
                   </div>
 
                   <div className="p-4 bg-white/5 rounded-xl border border-white/10 backdrop-blur-sm min-h-[120px] flex flex-col justify-center">
+                    <div className="flex flex-wrap gap-2 mb-3">
+                      {selectedLayers.map((layerId) => {
+                        const layer = LAYER_OPTIONS.find((item) => item.id === layerId);
+                        return (
+                          <span key={layerId} className="text-[10px] font-black uppercase tracking-wide text-indigo-100 bg-indigo-500/20 border border-indigo-400/30 px-2 py-1 rounded-full">
+                            {layer?.name || layerId}
+                          </span>
+                        );
+                      })}
+                    </div>
                     <p className="text-indigo-300 font-mono text-sm tracking-tight mb-2 flex items-center gap-2">
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
                       {statusMessage}
@@ -406,7 +495,7 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
                   </div>
                   <div className={`p-3 rounded-lg border flex items-center gap-3 transition-colors ${progress === 100 ? 'bg-emerald-500/20 border-emerald-500/30' : 'bg-gray-800 border-gray-700'}`}>
                     <div className={`w-2 h-2 rounded-full ${progress === 100 ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]' : 'bg-gray-600'}`}></div>
-                    <span className={`text-sm font-medium ${progress === 100 ? 'text-emerald-200' : 'text-gray-500'}`}>Safeguard Applied</span>
+                    <span className={`text-sm font-medium ${progress === 100 ? 'text-emerald-200' : 'text-gray-500'}`}>Selected Layers Applied</span>
                   </div>
                 </div>
 
