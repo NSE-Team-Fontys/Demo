@@ -19,7 +19,7 @@ total      = collection.count()
 print(f"  {total} responses loaded")
 
 print("\nLoading embedding model...")
-model = SentenceTransformer(EMBEDDING_MODEL)
+model = SentenceTransformer(EMBEDDING_MODEL, model_kwargs={'use_safetensors': True})
 print("  Ready\n")
 
 # ── Helper ────────────────────────────────────────────────────────────────────
