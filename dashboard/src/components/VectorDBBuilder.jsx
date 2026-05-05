@@ -15,7 +15,7 @@ export default function VectorDBBuilder({ onSuccess }) {
     setResult(null);
     
     try {
-      const response = await fetch('http://localhost:5000/api/build-vectors', {
+      const response = await fetch('http://localhost:5001/api/build-vectors', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({})

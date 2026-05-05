@@ -27,7 +27,7 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
       const formData = new FormData();
       formData.append('file', uploadedFile);
 
-      const response = await fetch('http://localhost:5000/api/inspect-file', {
+      const response = await fetch('http://localhost:5001/api/inspect-file', {
         method: 'POST',
         body: formData
       });
@@ -85,7 +85,7 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
     setCurrentPreview('');
 
     try {
-      const response = await fetch('http://localhost:5000/api/anonymize', {
+      const response = await fetch('http://localhost:5001/api/anonymize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 

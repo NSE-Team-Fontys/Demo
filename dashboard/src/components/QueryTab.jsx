@@ -28,7 +28,7 @@ export default function QueryTab() {
   useEffect(() => {
     const fetchFilterOptions = async () => {
       try {
-        const response = await fetch('http://localhost:5000/api/filter-options');
+        const response = await fetch('http://localhost:5001/api/filter-options');
         const data = await response.json();
         
         if (data.status === 'success') {
@@ -69,7 +69,7 @@ export default function QueryTab() {
       if (studyMode !== 'all') params.append('study_mode', studyMode);
       if (cohort !== 'all') params.append('cohort', cohort);
 
-      const response = await fetch(`http://localhost:5000/api/query-vectors?${params}`, {
+      const response = await fetch(`http://localhost:5001/api/query-vectors?${params}`, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' }
       });

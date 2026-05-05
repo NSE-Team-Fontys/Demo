@@ -14,7 +14,7 @@ from sentence_transformers import SentenceTransformer
 import json
 
 app = Flask(__name__)
-# Enable CORS so your React app (localhost:5173) can talk to this API (localhost:5000)
+# Enable CORS so your React app (localhost:5173) can talk to this API (localhost:5001)
 CORS(app)
 
 UPLOAD_FILE = "data/temp_upload.csv"
@@ -663,4 +663,4 @@ def vector_stats():
 
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    app.run(debug=True, port=5001)

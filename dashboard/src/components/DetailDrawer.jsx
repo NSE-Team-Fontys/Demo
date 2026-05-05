@@ -34,7 +34,7 @@ export default function DetailDrawer({ theme, onClose }) {
       setLoadingLive(true)
       setLiveData(null)
       try {
-        const res = await fetch('http://localhost:5000/api/theme-summary', {
+        const res = await fetch('http://localhost:5001/api/theme-summary', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ theme: theme.name, query: theme.name })

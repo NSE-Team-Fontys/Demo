@@ -16,7 +16,7 @@ export function VectorDBProvider({ children }) {
   const loadVectorDBStats = async () => {
     try {
       setLoading(true);
-      const response = await fetch('http://localhost:5000/api/vector-stats');
+      const response = await fetch('http://localhost:5001/api/vector-stats');
       const data = await response.json();
       
       if (data.status === 'success') {
