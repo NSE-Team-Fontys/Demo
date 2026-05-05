@@ -1,1 +1,53 @@
-node_modules
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+package-lock.json
+pnpm-lock.yaml
+npm-debug.log*
+# Local env files
+.env
+.env.*
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pdb
+*.egg-info/
+.eggs/
+.python-version
+venv/
+ENV/
+env/
+build/
+dist/
+.pytest_cache/
+*.cover
+*.coverage
+coverage.xml
+htmlcov/
+*.egg
+*.manifest
+*.spec
+
+# Database / cache
+*.sqlite3
+*.db
+*.log
+*.cache
+*.pyc
+
+# VS Code
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Local survey/vector DB storage
+survey_vector_db/
+
