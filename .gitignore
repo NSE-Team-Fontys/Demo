@@ -1,5 +1,7 @@
 # Node.js
 node_modules/
+**/node_modules/
+node_modules/**
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -10,7 +12,7 @@ npm-debug.log*
 # Local env files
 .env
 .env.*
- 
+
 # Python
 __pycache__/
 *.py[cod]
@@ -33,22 +35,21 @@ htmlcov/
 *.egg
 *.manifest
 *.spec
- 
+
 # Database / cache
 *.sqlite3
 *.db
 *.log
 *.cache
 *.pyc
- 
+
 # VS Code
 .vscode/
- 
+
 # OS files
 .DS_Store
 Thumbs.db
- 
+
 # Local survey/vector DB storage
 survey_vector_db/
- 
- 
+

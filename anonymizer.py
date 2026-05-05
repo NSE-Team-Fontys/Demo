@@ -21,9 +21,10 @@ def process_file_with_layers(input_path: str, output_path: str, columns_to_anony
     if 'eu-pii' in layers:
         yield json.dumps({"status": "progress", "message": "Loading Layer 2 (EU-PII-Safeguard)...", "progress": 20}) + "\n"
         hf_pipeline = pipeline(
-            "token-classification", 
-            model="tabularisai/eu-pii-safeguard", 
-            aggregation_strategy="simple"
+            "token-classification",
+            model="tabularisai/eu-pii-safeguard",
+            aggregation_strategy="simple",
+            device=0
         )
 
     def mask_text(text):
