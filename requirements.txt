@@ -1,0 +1,9 @@
+flask
+flask-cors
+pandas
+chromadb
+sentence-transformers
+presidio-analyzer
+presidio-anonymizer
+transformers
+torch
