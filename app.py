@@ -18,7 +18,6 @@ app = Flask(__name__)
 CORS(app)
 
 UPLOAD_FILE = "data/temp_upload.csv"
-OUTPUT_FILE = "data/anonymized_output.csv"
 VECTOR_DB_PATH = Path('./survey_vector_db')
 TEMP_DIR = Path('./temp')
 ANONYMIZED_CSV_PATH = Path('./data/anonymized_survey.csv')

@@ -1,6 +1,6 @@
 {
   "Content and Organisation": {
-    "frequency": 1,
+    "frequency": 4,
     "summary": "While participants generally appreciate the initiative's proactive nature and real-world connections, there is a recurring consensus that the content and organization lack necessary structural consistency and explicit guidelines for resource access.",
     "sentiments": [
       {
@@ -60,7 +60,7 @@
     ]
   },
   "Teachers": {
-    "frequency": 1,
+    "frequency": 5,
     "summary": "Students express a strong desire for increased consistency, stability, and availability from teachers. Key areas of feedback include the need for better individualized connection, clearer communication of strengths, and more predictable guidance.",
     "sentiments": [
       {
@@ -90,7 +90,7 @@
     ]
   },
   "Support / Mentoring": {
-    "frequency": 1,
+    "frequency": 5,
     "summary": "Students generally appreciate the existing support but feel the program lacks structure, depth, and consistent guidance.",
     "sentiments": [
       {
@@ -119,7 +119,7 @@
     ]
   },
   "Examination & Assessment": {
-    "frequency": 0,
+    "frequency": 1,
     "summary": "Students find the current assessment process challenging due to slow feedback and a perceived lack of personalization. Improvements are desired concerning the timeliness, direction, and applicability of academic feedback.",
     "sentiments": [
       {
@@ -148,7 +148,7 @@
     ]
   },
   "Engagement & Contact": {
-    "frequency": 1,
+    "frequency": 4,
     "summary": "Overall, students feel highly valued by mentors and appreciate proactive support, but there is a clear consensus that communication protocols and instructor availability need significant structural improvement.",
     "sentiments": [
       {
