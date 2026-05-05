@@ -13,6 +13,8 @@ from pathlib import Path
 import chromadb
 from sentence_transformers import SentenceTransformer
 import json
+import re
+import requests
 
 app = Flask(__name__)
 # Enable CORS so your React app (localhost:5173) can talk to this API (localhost:5001)
@@ -22,16 +24,6 @@ UPLOAD_FILE = "data/temp_upload.csv"
 VECTOR_DB_PATH = Path('./survey_vector_db')
 TEMP_DIR = Path('./temp')
 ANONYMIZED_CSV_PATH = Path('./data/anonymized_survey.csv')
-SEP_FILE = Path('./data/detected_sep.txt')
-
-
-def detect_sep(path: str) -> str:
-    try:
-        with open(path, 'r', encoding='utf-8-sig') as f:
-            sample = f.read(8192)
-        return csv.Sniffer().sniff(sample, delimiters=',;\t').delimiter
-    except Exception:
-        return ';'
 
 @app.route('/api/inspect-file', methods=['POST'])
 def inspect_file():
@@ -43,22 +35,13 @@ def inspect_file():
     file.save(UPLOAD_FILE)
     
     try:
-        sep = detect_sep(UPLOAD_FILE)
-        SEP_FILE.parent.mkdir(parents=True, exist_ok=True)
-        SEP_FILE.write_text(sep)
-
-        df = pd.read_csv(UPLOAD_FILE, sep=sep, nrows=5)
-        preview_records = df.head(1).to_dict(orient='records')
-        # JSON must not contain NaN/NaT/Infinity; convert missing values to null.
-        for rec in preview_records:
-            for k, v in list(rec.items()):
-                if pd.isna(v):
-                    rec[k] = None
-
+        # Read just the first few rows to get columns and a preview
+        df = pd.read_csv(UPLOAD_FILE, sep=';', nrows=5)
+        
         return jsonify({
             'status': 'success',
             'columns': df.columns.tolist(),
-            'preview': preview_records
+            'preview': df.head(1).to_dict(orient='records')
         })
     except Exception as e:
         return jsonify({'status': 'error', 'error': str(e)})
@@ -77,16 +60,14 @@ def anonymize():
         if not input_file.exists():
             return jsonify({"status": "error", "error": "No file uploaded"}), 400
         
-        sep = SEP_FILE.read_text().strip() if SEP_FILE.exists() else detect_sep(str(input_file))
-        print(f"[ANONYMIZE] Columns: {selected_columns} | Layers: {selected_layers} | sep={repr(sep)}")
-
+        print(f"[ANONYMIZE] Columns: {selected_columns} | Layers: {selected_layers}")
+        
         return Response(
             process_file_with_layers(
                 str(input_file),
                 str(output_file),
                 selected_columns,
-                selected_layers,
-                sep=sep,
+                selected_layers
             ),
             mimetype='application/x-ndjson'
         )
@@ -324,7 +305,7 @@ def load_cache():
 
 def save_cache(cache_data):
     with open(CACHE_FILE, 'w', encoding='utf-8') as f:
-        import json
+
         json.dump(cache_data, f, indent=2)
 
 @app.route('/api/theme-summary', methods=['POST'])
@@ -368,7 +349,7 @@ def theme_summary():
                     relevant_docs.append(doc)
                     
         # Real Gemma Call via Ollama
-        import requests
+
         
         prompt = f"""You are an expert data analyst. Read the following student survey responses about '{theme_name}'.
 Summarize the general consensus in 2 sentences. Extract 3 key sentiments (Positive, Neutral, or Critical) and provide a 1-sentence point for each.
@@ -402,8 +383,7 @@ Responses:
                 result_text = response.json().get('response', '{}')
                 print(f"[GEMMA] Raw response received: {result_text}")
                 
-                import json
-                import re
+
                 
                 # Attempt to extract a JSON block if wrapped in markdown
                 match = re.search(r'\{[\s\S]*\}', result_text)
@@ -491,8 +471,6 @@ def precompute_insights():
             collection = client.get_collection("survey_responses")
             total_docs = collection.count()
             cache = load_cache()
-            
-            import requests, json, re
             
             for i, theme in enumerate(themes):
                 theme_name = theme.get('name')
