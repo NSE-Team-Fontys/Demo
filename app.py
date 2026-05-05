@@ -83,6 +83,13 @@ def build_vectors():
         
         print("[BUILD-VECTORS] Starting vector DB build...")
         
+        # Clear the old AI insights cache so we generate fresh insights for the new data
+        if CACHE_FILE.exists():
+            try:
+                CACHE_FILE.unlink()
+            except Exception as e:
+                print(f"Warning: Could not delete cache file: {e}")
+                
         return Response(
             build_vector_db_stream(
                 csv_path=str(ANONYMIZED_CSV_PATH),
@@ -201,7 +208,7 @@ def query_vectors():
         except:
             return jsonify({"status": "error", "error": "Vector database not found. Build vectors first."}), 400
         
-        model = SentenceTransformer('BAAI/bge-m3')
+        model = SentenceTransformer('BAAI/bge-m3', model_kwargs={'use_safetensors': True})
         query_embedding = model.encode(query_text, normalize_embeddings=True)
         
         # Build where filter - support multiple conditions
@@ -290,7 +297,7 @@ def theme_summary():
         client = chromadb.PersistentClient(path=str(VECTOR_DB_PATH))
         collection = client.get_collection("survey_responses")
         
-        model = SentenceTransformer('BAAI/bge-m3')
+        model = SentenceTransformer('BAAI/bge-m3', model_kwargs={'use_safetensors': True})
         query_embedding = model.encode(theme_query, normalize_embeddings=True)
         
         results = collection.query(
@@ -435,12 +442,12 @@ def precompute_insights():
                 }) + "\n"
                 
                 from sentence_transformers import SentenceTransformer
-                model = SentenceTransformer('BAAI/bge-m3')
+                model = SentenceTransformer('BAAI/bge-m3', model_kwargs={'use_safetensors': True})
                 query_embedding = model.encode(query, normalize_embeddings=True)
                 
                 results = collection.query(
                     query_embeddings=[query_embedding.tolist()],
-                    n_results=min(total_docs, 50),
+                    n_results=total_docs,
                     include=["documents", "distances"]
                 )
                 
@@ -455,10 +462,16 @@ def precompute_insights():
                 frequency = int((len(relevant_docs) / max(total_docs, 1)) * 100) if total_docs > 0 else 0
                 
                 # Check cache for summary
-                if theme_name in cache and "summary" in cache[theme_name] and not "error" in cache[theme_name].get("summary", ""):
+                if theme_name in cache and "summary" in cache[theme_name] and cache[theme_name].get("sentiments"):
                     # Update frequency but keep summary
                     cache[theme_name]["frequency"] = frequency
                     save_cache(cache)
+                    yield json.dumps({
+                        "status": "progress", 
+                        "theme": theme_name, 
+                        "progress": int(((i + 1) / len(themes)) * 100),
+                        "message": f"Loaded cached insights for {theme_name}"
+                    }) + "\n"
                     continue
                     
                 yield json.dumps({
@@ -578,7 +591,7 @@ def get_themes_overview():
             return jsonify(new_cache)
             
         from sentence_transformers import SentenceTransformer
-        model = SentenceTransformer('BAAI/bge-m3')
+        model = SentenceTransformer('BAAI/bge-m3', model_kwargs={'use_safetensors': True})
         
         themes_list = ["Content and Organisation", "Professional Practice", "Teachers", "Support / Mentoring", "Examination & Assessment", "Engagement & Contact", "Special Circumstances"]
         
@@ -588,7 +601,7 @@ def get_themes_overview():
             query_embedding = model.encode(theme_name, normalize_embeddings=True)
             results = collection.query(
                 query_embeddings=[query_embedding.tolist()],
-                n_results=min(total_docs, 50),
+                n_results=total_docs,
                 where=where_clause,
                 include=["documents", "distances"]
             )

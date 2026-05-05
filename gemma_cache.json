@@ -1,185 +1,205 @@
 {
-  "Content and Organisation": {
-    "frequency": 4,
-    "summary": "While participants generally appreciate the initiative's proactive nature and real-world connections, there is a recurring consensus that the content and organization lack necessary structural consistency and explicit guidelines for resource access.",
-    "sentiments": [
-      {
-        "sentiment": "Positive",
-        "point": "Respondents highly value the proactive discussions, instructors' industry insights, and practical application opportunities."
-      },
-      {
-        "sentiment": "Neutral",
-        "point": "The general support and core initiative are deemed adequate, but require specific enhancements."
-      },
-      {
-        "sentiment": "Critical",
-        "point": "Major concerns exist regarding inconsistent quality control, lack of defined structure, and poor coordination among staff."
-      }
-    ],
-    "subthemes": [
-      "Resource guidelines (digital)",
-      "Workshop opportunities (CVs/interviews)",
-      "Structural clarity/Frameworks",
-      "Staff coordination",
-      "Discussions/Initiatives"
-    ],
-    "quotes": [
-      "[]-initiatieven en discussies.",
-      "De open communicatie en de proactieve [] perfect [].",
-      "De ondersteuning is prima, maar een duidelijker structuur zou het nog verbeteren."
-    ]
-  },
   "Professional Practice": {
-    "frequency": 1,
-    "summary": "Students generally feel the program needs to increase its focus on practical, real-world application and industry-specific skills. A significant need is identified for structured networking opportunities and expert mentorship to bridge the gap between theory and professional practice.",
+    "status": "success",
+    "theme": "Professional Practice",
+    "document_count": 20,
+    "summary": "Students consistently seek more practical, real-world application and skill-based training, suggesting a strong need to bridge the gap between academic theory and professional industry demands. The primary areas for improvement involve developing specific professional competencies, such as networking, advanced documentation, and job application preparation.",
     "sentiments": [
       {
         "sentiment": "Positive",
-        "point": "The respondents are enthusiastic about increased practical application and networking opportunities."
+        "point": "Students value the opportunity to receive targeted, specialized instruction on professional skills."
       },
       {
         "sentiment": "Neutral",
-        "point": "Students are seeking clearer structure and guidelines regarding mentor roles and content."
+        "point": "There is a moderate concern regarding the perceived consistency and quality of practical knowledge shared by different instructors."
       },
       {
         "sentiment": "Critical",
-        "point": "Concerns exist regarding the inconsistency of practical knowledge and the lack of adequate mentor training."
+        "point": "A significant need exists for structured opportunities to build professional networks and receive mentorship from industry experts."
       }
     ],
     "subthemes": [
-      "Networking and professional contacts",
-      "Practical skills/Case studies",
-      "Mentorship and expert guidance",
-      "Job application and career readiness",
-      "Curriculum consistency"
+      "Practical Workshops/Sessions",
+      "Industry Networking/Mentorship",
+      "Professional Documentation (CVs/Portfolios)",
+      "Real-World Case Studies/Best Practices",
+      "Specific Professional Skills (Negotiation, etc.)"
     ],
     "quotes": [
+      "Please organize more practical sessions focused on different career paths and skill gaps.",
       "Graag meer tips over het opbouwen van een robuust professioneel netwerk.",
-      "More focus on real-world case studies and industry best practices would be very helpful.",
-      "[] mentoruren met experts uit de praktijk in te plannen."
+      "Graag meer praktijkgerichte workshops over het schrijven van academische en professionele documentatie."
+    ],
+    "frequency": 1
+  },
+  "Content and Organisation": {
+    "frequency": 3,
+    "summary": "Students find the content depth and academic rigor highly valuable, often praising the clarity of complex explanations and the insightful perspectives provided. However, there is a consistent concern regarding the organization, delivery format, and overall consistency of the learning environment.",
+    "sentiments": [
+      {
+        "sentiment": "Positive",
+        "point": "Students appreciate the rigor and depth of the content, especially when complex topics are explained accessibly."
+      },
+      {
+        "sentiment": "Critical",
+        "point": "Multiple users reported issues with organizational chaos, confusing guidelines, and inconsistent communication across learning resources."
+      },
+      {
+        "sentiment": "Neutral",
+        "point": "Feedback suggested improvements are needed in balancing content focus with professional presentation and addressing workload management."
+      }
+    ],
+    "subthemes": [
+      "Organization and Structure",
+      "Workload/Pacing",
+      "Communication Consistency",
+      "Relevance of Material",
+      "Accessibility of Complexity"
+    ],
+    "quotes": [
+      "I wish the course material and teacher explanations were presented in a more organized and digestible manner.",
+      "When are we supposed to focus on content versus presentation? The guidelines are confusing.",
+      "[] is interessant, [] [] structuur."
     ]
   },
   "Teachers": {
-    "frequency": 5,
-    "summary": "Students express a strong desire for increased consistency, stability, and availability from teachers. Key areas of feedback include the need for better individualized connection, clearer communication of strengths, and more predictable guidance.",
+    "frequency": 16,
+    "summary": "While students highly value the teachers' expertise and ability to teach complex material effectively, there is a strong consensus that the logistical aspects of accessing teachers outside of class and improving communication need significant attention.",
     "sentiments": [
       {
-        "sentiment": "Critical",
-        "point": "Students frequently express frustration regarding inconsistency and frequent changes in staff, disrupting the learning experience."
+        "sentiment": "Positive",
+        "point": "Students praise the teachers' skill in making difficult subjects engaging and explaining complex topics accessibly."
       },
       {
         "sentiment": "Neutral",
-        "point": "There is a stated need for more dedicated, structured time for one-on-one consultation and informal discussions."
+        "point": "Students are requesting general improvements to the structure and clarity of communication regarding academic policies and availability."
       },
       {
-        "sentiment": "Positive",
-        "point": "The feedback implies a desire for teachers to recognize and share their individual strengths with the students."
+        "sentiment": "Critical",
+        "point": "Multiple students feel that the current systems and availability of teachers outside of class are restrictive, inconsistent, and a major area for improvement."
       }
     ],
     "subthemes": [
-      "Staff Stability/Change",
-      "Consistency in Guidance",
-      "Individual Connection/Approachability",
-      "Curriculum Alignment",
-      "One-on-One Support"
+      "Accessibility/Availability outside class",
+      "Clarity of guidelines and communication",
+      "Teaching quality/Expertise",
+      "Consistency of administrative support"
     ],
     "quotes": [
-      "I wish the department would provide more context regarding the teachers' individual strengths.",
-      "De docenten [] voelen, altijd met [] welzijn.",
-      "I wish the teachers could be more approachable and available for informal discussions."
+      "De docenten [], [] met [] overzichtsvragen [].",
+      "[] we de docenten [] we vragen hebben.",
+      "De docenten lijken [] wijzigingen, []."
     ]
   },
   "Support / Mentoring": {
-    "frequency": 5,
-    "summary": "Students generally appreciate the existing support but feel the program lacks structure, depth, and consistent guidance.",
+    "frequency": 45,
+    "summary": "Students generally find the project guidance positive and beneficial for skill development, but there is a clear consensus regarding a need for more structured, immediate, and consistent support across multiple areas.",
     "sentiments": [
       {
         "sentiment": "Positive",
-        "point": "Students value the genuine help and appreciation of the current peer mentors."
-      },
-      {
-        "sentiment": "Neutral",
-        "point": "Students are seeking more tailored, specialized, or advanced academic help beyond general support."
+        "point": "Project guidance and general support are highly praised for being beneficial and challenging at the right level."
       },
       {
         "sentiment": "Critical",
-        "point": "Multiple respondents require clearer guidelines, more structured training, and standardization for the mentors."
+        "point": "Multiple students criticize the lack of consistency, structure, and timeliness in technical support, feedback, and general assistance."
+      },
+      {
+        "sentiment": "Neutral",
+        "point": "Students are requesting more specific, defined resources, such as extra reading materials or dedicated workshop time, rather than just general support."
       }
     ],
     "subthemes": [
-      "Structured training for mentors",
-      "Need for clearer guidelines",
-      "Personalized/Advanced support",
-      "Need for quick response mechanism (helpdesk)"
+      "Structured/Immediate Support",
+      "Technical Reliability/Tools",
+      "Feedback/Grading Speed",
+      "Curriculum/Skills Gap",
+      "Availability/Access to Instructors"
     ],
     "quotes": [
-      "[] mentor []? [] hulp nodig met mijn project.",
-      "A bit more guidance from faculty would help standardize the mentoring experience.",
-      "I wish there was a more supportive, smaller-scale mentoring structure available."
+      "De begeleiding bij projecten is fantastisch en heeft [] geholpen bij mijn vaardigheden.",
+      "Ik denk dat de begeleiding op het gebied [] is.",
+      "[]? We hebben meer directe ondersteuning nodig bij moeilijkheden."
     ]
   },
   "Examination & Assessment": {
     "frequency": 1,
-    "summary": "Students find the current assessment process challenging due to slow feedback and a perceived lack of personalization. Improvements are desired concerning the timeliness, direction, and applicability of academic feedback.",
+    "summary": "The consensus indicates a desire for greater clarity regarding grading expectations and assessment structures, alongside tangible improvements to the logistical support provided during the academic process.",
     "sentiments": [
       {
         "sentiment": "Critical",
-        "point": "The response delay (vertraging) negatively impacts learning progress and study continuity."
-      },
-      {
-        "sentiment": "Critical",
-        "point": "The feedback process is criticized for needing to be more tailored and direct to individual needs."
+        "point": "There is strong criticism regarding the lack of transparency in assessment criteria and the time taken for grading."
       },
       {
         "sentiment": "Neutral",
-        "point": "There is mention of improving initiatives and discussion opportunities."
+        "point": "Students are suggesting general resource enhancements, such as more allocated time for problem-solving and study."
+      },
+      {
+        "sentiment": "Positive",
+        "point": "The responses implicitly acknowledge the value of structured assessments by suggesting improvements to their existing forms."
       }
     ],
     "subthemes": [
-      "Feedback process",
-      "Response delay/Timeliness",
-      "Personalization/Tailoring",
-      "Learning progress"
+      "Assessment Clarity/Criteria",
+      "Grading Efficiency/Time",
+      "Technical Tool Reliability",
+      "Study/Review Time Allocation"
     ],
     "quotes": [
-      "De vertraging in het antwoord bemoeilijkt het leren en de voortgang van mijn studie.",
-      "The feedback process needs to be more direct and tailored to individual student needs.",
-      "[]-initiatieven en discussies."
+      "It would help greatly if the criteria were documented better, especially for the essays.",
+      "It would help if the grading criteria were explicitly outlined at the start.",
+      "Could we get a more detailed breakdown of the assessment? [NAME] is."
     ]
   },
   "Engagement & Contact": {
-    "frequency": 4,
-    "summary": "Overall, students feel highly valued by mentors and appreciate proactive support, but there is a clear consensus that communication protocols and instructor availability need significant structural improvement.",
+    "frequency": 3,
+    "summary": "Students feel a strong need for increased, varied, and immediate contact points with instructors and peers. While the material's quality and the instructors' passion are appreciated, the primary concern revolves around limited dedicated time for interaction and feedback.",
     "sentiments": [
       {
         "sentiment": "Positive",
-        "point": "Students highly value the proactive and tailored support received from mentors and connections made with employers."
+        "point": "Students highly value interactive sessions and the instructors' subject expertise."
       },
       {
         "sentiment": "Neutral",
-        "point": "Students acknowledge the existence of support structures but desire more formalized and streamlined communication processes."
+        "point": "Students request more varied communication channels beyond just email."
       },
       {
         "sentiment": "Critical",
-        "point": "The key frustration centers on slow, unclear, or non-existent communication, prompt feedback, and consistent mentor/instructor availability."
+        "point": "The most common concern is the limited availability of contact hours and immediate feedback."
       }
     ],
     "subthemes": [
-      "Mentor Availability/Timeliness",
-      "Instructor Approachability",
-      "Feedback/Guidance Clarity",
-      "Proactive Communication",
-      "Helpdesk Need"
+      "Need for more interaction/engagement",
+      "Feedback timeliness/availability",
+      "Instructor accessibility/Consultation time",
+      "Variety of communication channels",
+      "Length/Depth of contact hours"
     ],
     "quotes": [
-      "[]-initiatieven en discussies.",
-      "[] contact met ervaren [].",
-      "We really need a clearer commitment on mentor availability and timely feedback process."
+      "We really need easier ways to connect with our instructors when we have specific questions.",
+      "De contacturen zijn te [] diepgaand begrijpen [] vakgebied.",
+      "I really appreciate the interactive sessions, it keeps the material engaging and memorable."
     ]
   },
   "Special Circumstances": {
     "frequency": 0,
-    "summary": "Not enough highly relevant responses found.",
-    "sentiments": []
+    "summary": "The student responses provide no data regarding 'Special Circumstances'.",
+    "sentiments": [
+      {
+        "sentiment": "Positive",
+        "point": "No positive feedback was provided to evaluate."
+      },
+      {
+        "sentiment": "Neutral",
+        "point": "No neutral points were provided to evaluate."
+      },
+      {
+        "sentiment": "Critical",
+        "point": "No critical feedback was provided to evaluate."
+      }
+    ],
+    "subthemes": [],
+    "quotes": [
+      "[], [] concrete voorbeelden."
+    ]
   }
 }

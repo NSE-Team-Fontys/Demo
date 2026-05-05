@@ -37,7 +37,7 @@ def build_vector_db(csv_path="data/anonymized_output.csv", db_path="./survey_vec
 
     # 3. Embed
     print(f"Generating embeddings for {len(df_combined)} rows...")
-    model = SentenceTransformer(EMBEDDING_MODEL)
+    model = SentenceTransformer(EMBEDDING_MODEL, model_kwargs={'use_safetensors': True})
     embeddings = model.encode(
         df_combined['answer'].tolist(), 
         batch_size=BATCH_SIZE, 
@@ -119,7 +119,7 @@ def build_vector_db_stream(csv_path="data/anonymized_survey.csv", db_path="./sur
 
         # Load model
         yield json.dumps({"status": "progress", "message": f"Loading {EMBEDDING_MODEL} embedding model...", "progress": 25}) + "\n"
-        model = SentenceTransformer(EMBEDDING_MODEL)
+        model = SentenceTransformer(EMBEDDING_MODEL, model_kwargs={'use_safetensors': True})
         
         total_docs = len(df_combined)
         yield json.dumps({"status": "progress", "message": f"Found {total_docs} documents to embed. Starting encoding...", "progress": 40}) + "\n"
