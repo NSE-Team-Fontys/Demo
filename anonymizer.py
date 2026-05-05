@@ -3,6 +3,8 @@ from presidio_analyzer import AnalyzerEngine
 from transformers import pipeline
 
 import json
+import os
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 def process_file_with_layers(input_path: str, output_path: str, columns_to_anonymize: list, layers: list, sep: str = ';'):
     df = pd.read_csv(input_path, sep=sep)

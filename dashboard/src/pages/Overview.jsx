@@ -66,7 +66,7 @@ export default function Overview() {
   });
 
   useEffect(() => {
-    fetch('http://localhost:5000/api/filter-options')
+    fetch('http://localhost:5001/api/filter-options')
       .then(r => r.json())
       .then(data => {
         if (data.status === 'success') setFilterOptions(data.options);
@@ -97,7 +97,7 @@ export default function Overview() {
     if (filters.studievorm !== 'All') params.append('study_mode', filters.studievorm);
     if (filters.cohort !== 'All') params.append('cohort', filters.cohort);
 
-    fetch(`http://localhost:5000/api/themes-overview?${params}`)
+    fetch(`http://localhost:5001/api/themes-overview?${params}`)
       .then(r => r.json())
       .then(data => setDynamicThemesData(data))
       .catch(e => console.error(e))

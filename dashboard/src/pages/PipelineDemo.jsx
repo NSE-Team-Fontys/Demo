@@ -13,7 +13,7 @@ export default function PipelineDemo() {
   useEffect(() => {
     const checkStatus = async () => {
       try {
-        const res = await fetch('http://localhost:5000/api/status');
+        const res = await fetch('http://localhost:5001/api/status');
         const data = await res.json();
         if (data.status === 'success') {
           setIsAnonymized(Boolean(data.anonymized_exists));
@@ -46,7 +46,7 @@ export default function PipelineDemo() {
       
       try {
         const { THEMES } = await import('../data/themes.js');
-        const res = await fetch('http://localhost:5000/api/precompute-insights', {
+        const res = await fetch('http://localhost:5001/api/precompute-insights', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ themes: THEMES })
