@@ -52,6 +52,17 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
     { label: 'Deep', layers: ['presidio', 'eu-pii', 'openai-privacy-filter'], hint: 'All available layers' },
   ];
 
+  const isQuestionnaireColumn = (col) => {
+    const name = String(col).trim();
+    const lower = name.toLowerCase();
+    return (
+      name.includes('?') ||
+      lower.startsWith('wil jij') ||
+      lower.startsWith('waarom') ||
+      lower.startsWith('wat voor soort')
+    );
+  };
+
   const handleFileUpload = async (e) => {
     const uploadedFile = e.target.files[0];
     if (!uploadedFile) return;
@@ -75,8 +86,8 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
         setColumns(data.columns);
         setPreview(data.preview);
         setStep(2);
-        const textCols = data.columns.filter(col => !['ID', 'Institution', 'academic_year', 'location', 'programme', 'study_mode', 'cohort'].includes(col));
-        setSelectedColumns(textCols);
+        const questionnaireColumns = data.columns.filter(isQuestionnaireColumn);
+        setSelectedColumns(questionnaireColumns);
       } else {
         setResult({ error: data.error });
       }

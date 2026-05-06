@@ -186,6 +186,22 @@ def collect_layer2_spans_batch(texts: list, config: Optional[dict], layers: list
     return merged
 
 
+def validate_selected_layers(layers: list[str]) -> None:
+    """Fail fast when a selected layer is unavailable instead of silently skipping it."""
+    if "presidio" in layers:
+        from .layer1_presidio import ensure_presidio_available
+
+        ensure_presidio_available()
+    if "eu-pii" in layers:
+        from .layer2_eu_pii import ensure_eu_pii_available
+
+        ensure_eu_pii_available()
+    if "openai-privacy-filter" in layers:
+        from .layer2_openai_privacy_filter import ensure_openai_privacy_filter_available
+
+        ensure_openai_privacy_filter_available()
+
+
 def process_chunk_sync(batch: list[str], config: Optional[dict], layers: list[str]) -> list[str]:
     """
     Anonymize a batch of strings using the same span-merge rules as privacy_officer.

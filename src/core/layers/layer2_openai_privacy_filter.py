@@ -29,9 +29,22 @@ try:
     if _device == 0 and _use_fp16:
         kwargs["model_kwargs"] = {"torch_dtype": torch.float16}
     _ner = hf_pipeline(**kwargs)
+    _load_error = None
 except Exception as e:
     _ner = None
+    _load_error = e
     logger.warning(f"{_MODEL_ID} failed to load: {e}. Layer will be skipped.")
+
+
+def ensure_openai_privacy_filter_available() -> None:
+    """Raise a clear error if the selected OpenAI Privacy Filter layer is unavailable."""
+    if _ner is None:
+        detail = f" ({_load_error})" if _load_error else ""
+        raise RuntimeError(
+            f"{_MODEL_ID} is selected but the model could not be loaded. "
+            "Remove this experimental layer or update/install a Transformers version that supports it."
+            + detail
+        )
 
 
 def _strip_prefix(label: str) -> str:
@@ -78,7 +91,8 @@ def _spans_tuple_for_text(text: str, entities: list, config: Optional[dict]) -> 
 
 def openai_privacy_filter_collect_batch(texts: list, config: Optional[dict] = None) -> list:
     """Batch collect (start, end, tag) per text — same shape as eu_pii_collect_batch."""
-    if _ner is None or not texts:
+    ensure_openai_privacy_filter_available()
+    if not texts:
         return [[] for _ in texts]
     try:
         texts_for_ner = [normalize_for_ner(t) if isinstance(t, str) else "" for t in texts]
@@ -91,7 +105,8 @@ def openai_privacy_filter_collect_batch(texts: list, config: Optional[dict] = No
 
 
 def openai_privacy_filter_collect_spans(text: str, config: Optional[dict] = None) -> list[Span]:
-    if _ner is None or not text or not text.strip():
+    ensure_openai_privacy_filter_available()
+    if not text or not text.strip():
         return []
     try:
         entities = _ner(normalize_for_ner(text))

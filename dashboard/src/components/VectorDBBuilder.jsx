@@ -91,6 +91,7 @@ export default function VectorDBBuilder({ onSuccess }) {
   const [columns, setColumns] = useState([]);
   const [selectedColumns, setSelectedColumns] = useState([]);
   const [selectedModel, setSelectedModel] = useState('BAAI/bge-m3');
+  const [allowModelDownload, setAllowModelDownload] = useState(true);
   const [rowCount, setRowCount] = useState(0);
   const [configLoaded, setConfigLoaded] = useState(false);
   const [configError, setConfigError] = useState(null);
@@ -139,7 +140,8 @@ export default function VectorDBBuilder({ onSuccess }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           embedding_model: selectedModel,
-          selected_columns: selectedColumns
+          selected_columns: selectedColumns,
+          allow_model_download: allowModelDownload
         })
       });
       
@@ -290,6 +292,21 @@ export default function VectorDBBuilder({ onSuccess }) {
               <p className="text-[11px] text-gray-400">Benchmarked on 1000 survey responses using HDBSCAN clustering</p>
             </div>
           </div>
+
+          <label className="flex items-start gap-3 p-4 bg-white border border-gray-100 rounded-xl shadow-sm cursor-pointer">
+            <input
+              type="checkbox"
+              checked={allowModelDownload}
+              onChange={(e) => setAllowModelDownload(e.target.checked)}
+              className="mt-1"
+            />
+            <div>
+              <p className="text-sm font-bold text-gray-800">Download model if missing</p>
+              <p className="text-xs text-gray-500 mt-1">
+                When disabled, the build only uses locally cached models and fails before changing ChromaDB if the selected model is unavailable.
+              </p>
+            </div>
+          </label>
 
           {/* Summary + Launch */}
           <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-100">

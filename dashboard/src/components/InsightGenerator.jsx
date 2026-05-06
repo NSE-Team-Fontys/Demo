@@ -70,6 +70,7 @@ export default function InsightGenerator({ onComplete }) {
   const [customPrompt, setCustomPrompt] = useState(DEFAULT_PROMPT);
   const [showPromptEditor, setShowPromptEditor] = useState(false);
   const [clearCache, setClearCache] = useState(false);
+  const [allowModelDownload, setAllowModelDownload] = useState(false);
 
   const logRef = useRef(null);
 
@@ -104,7 +105,8 @@ export default function InsightGenerator({ onComplete }) {
         body: JSON.stringify({
           themes: THEMES,
           ollama_model: selectedModel,
-          custom_prompt: customPrompt !== DEFAULT_PROMPT ? customPrompt : ''
+          custom_prompt: customPrompt !== DEFAULT_PROMPT ? customPrompt : '',
+          allow_model_download: allowModelDownload
         })
       });
       
@@ -261,6 +263,22 @@ export default function InsightGenerator({ onComplete }) {
                     <p className="text-xs text-gray-500">Force regeneration of all summaries, even if cached results exist.</p>
                   </div>
                 </label>
+
+                <label className={`flex items-center p-3 rounded-xl border-2 cursor-pointer transition-all duration-200 ${allowModelDownload ? 'border-violet-500 bg-violet-50/50' : 'border-gray-100 hover:border-gray-200 bg-white'}`}>
+                  <input
+                    type="checkbox"
+                    checked={allowModelDownload}
+                    onChange={(e) => setAllowModelDownload(e.target.checked)}
+                    className="sr-only"
+                  />
+                  <div className={`flex items-center justify-center w-5 h-5 rounded flex-shrink-0 mr-3 transition-colors ${allowModelDownload ? 'bg-violet-500' : 'border border-gray-300'}`}>
+                    {allowModelDownload && <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>}
+                  </div>
+                  <div>
+                    <p className={`text-sm font-medium ${allowModelDownload ? 'text-violet-900' : 'text-gray-700'}`}>Pull Ollama model if missing</p>
+                    <p className="text-xs text-gray-500">When disabled, generation fails before running if the selected Ollama model is not installed.</p>
+                  </div>
+                </label>
               </div>
             </div>
           </div>
@@ -275,6 +293,12 @@ export default function InsightGenerator({ onComplete }) {
                 <>
                   <span className="text-gray-300">•</span>
                   <span className="text-amber-600 font-medium text-xs">Cache will be cleared</span>
+                </>
+              )}
+              {allowModelDownload && (
+                <>
+                  <span className="text-gray-300">•</span>
+                  <span className="text-violet-600 font-medium text-xs">May pull model</span>
                 </>
               )}
               {customPrompt !== DEFAULT_PROMPT && (
