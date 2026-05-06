@@ -35,6 +35,7 @@ export default function ThemeCard({ theme, isActive, onClick, size }) {
           )}
           <Link
             to={`/thema/${theme.id}`}
+            state={{ theme }}
             onClick={(e) => { e.stopPropagation(); window.scrollTo(0, 0) }}
             className="text-xs font-semibold text-primary/70 hover:text-primary mt-2 inline-block"
           >
@@ -61,6 +62,7 @@ export default function ThemeCard({ theme, isActive, onClick, size }) {
         <h3 className="text-base md:text-lg font-bold font-headline text-primary mt-2">{theme.name}</h3>
         <Link
           to={`/thema/${theme.id}`}
+          state={{ theme }}
           onClick={(e) => { e.stopPropagation(); window.scrollTo(0, 0) }}
           className="text-xs font-semibold text-primary/70 hover:text-primary mt-1 inline-block"
         >
@@ -91,6 +93,7 @@ export default function ThemeCard({ theme, isActive, onClick, size }) {
       )}
       <Link
         to={`/thema/${theme.id}`}
+        state={{ theme }}
         onClick={(e) => { e.stopPropagation(); window.scrollTo(0, 0) }}
         className="text-[10px] font-semibold text-primary/70 hover:text-primary mt-1 inline-block"
       >

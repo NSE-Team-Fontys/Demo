@@ -1,13 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useRef } from 'react'
+import { useThemeSummary } from '../hooks/useThemeSummary'
 
 // Removed static DonutChart as per user request
 
 export default function DetailDrawer({ theme, onClose }) {
   const drawerRef = useRef(null)
-
-  const [liveData, setLiveData] = useState(null)
-  const [loadingLive, setLoadingLive] = useState(false)
+  const { liveData, loadingLive } = useThemeSummary(theme)
 
   useEffect(() => {
     if (drawerRef.current) {
@@ -25,40 +23,6 @@ export default function DetailDrawer({ theme, onClose }) {
       })
     }
   }, [theme?.id])
-
-  useEffect(() => {
-    if (!theme) return
-    let isMounted = true
-
-    const fetchLiveSummary = async () => {
-      setLoadingLive(true)
-      setLiveData(null)
-      try {
-        const res = await fetch('http://localhost:5001/api/theme-summary', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ theme: theme.name, query: theme.name })
-        })
-        const data = await res.json()
-        if (isMounted) {
-          if (data.status === 'success') {
-            setLiveData(data)
-          } else {
-            setLiveData({ error: data.error || 'Failed to generate summary' })
-          }
-        }
-      } catch (e) {
-        console.error("Failed to fetch Gemma 4 summary:", e)
-        if (isMounted) setLiveData({ error: 'Failed to connect to backend server.' })
-      } finally {
-        if (isMounted) setLoadingLive(false)
-      }
-    }
-
-    fetchLiveSummary()
-
-    return () => { isMounted = false }
-  }, [theme?.id, theme?.name])
 
   if (!theme) return null
 
