@@ -638,11 +638,10 @@ def theme_summary():
         if not theme_query:
             return jsonify({"status": "error", "error": "No query provided"}), 400
 
-        print(f"[GEMMA4] Processing theme summary for: {theme_name}")
-        ensure_ollama_model_available(ollama_model, allow_pull=allow_model_download)
-
+        # ── Check cache FIRST — no Ollama round-trip needed for cached themes ──
         cache = load_cache()
         if theme_name in cache:
+            print(f"[GEMMA4] Returning cached summary for: {theme_name}")
             cached_data = cache[theme_name]
             has_view_more_fields = (
                 "positive_comments" in cached_data
@@ -655,6 +654,9 @@ def theme_summary():
                 cached_data["status"] = "success"
                 return jsonify(cached_data)
             print(f"[GEMMA4] Cached summary for {theme_name} is missing ViewMore fields; regenerating.")
+
+        print(f"[GEMMA4] Cache miss — generating summary for: {theme_name}")
+        ensure_ollama_model_available(ollama_model, allow_pull=allow_model_download)
 
         client = chromadb.PersistentClient(path=str(VECTOR_DB_PATH))
         collection = client.get_collection("survey_responses")
