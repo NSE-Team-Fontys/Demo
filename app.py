@@ -36,6 +36,19 @@ VECTOR_DB_PATH = Path("./survey_vector_db")
 TEMP_DIR = Path("./temp")
 ANONYMIZED_CSV_PATH = Path("./data/anonymized_survey.csv")
 SEP_FILE = Path("./data/detected_sep.txt")
+THEME_EMBEDDING_MODEL = "BAAI/bge-m3"
+THEMES_LIST = [
+    "Content and Organisation",
+    "Professional Practice",
+    "Teachers",
+    "Support / Mentoring",
+    "Examination & Assessment",
+    "Engagement & Contact",
+    "Special Circumstances",
+]
+_theme_overview_cache = {}
+_theme_embedding_model = None
+_theme_query_embeddings = None
 METADATA_COLS = {
     "ID",
     "Institution",
@@ -82,6 +95,34 @@ def filter_condition(canonical_key: str, value: str):
     if len(conditions) == 1:
         return conditions[0]
     return {"$or": conditions}
+
+
+def clear_runtime_caches():
+    _theme_overview_cache.clear()
+
+
+def theme_overview_cache_key(filters: dict) -> tuple:
+    return tuple(sorted(filters.items()))
+
+
+def get_theme_embedding_model():
+    global _theme_embedding_model
+    if _theme_embedding_model is None:
+        _theme_embedding_model = SentenceTransformer(
+            THEME_EMBEDDING_MODEL, model_kwargs={"use_safetensors": True}
+        )
+    return _theme_embedding_model
+
+
+def get_theme_query_embeddings():
+    global _theme_query_embeddings
+    if _theme_query_embeddings is None:
+        model = get_theme_embedding_model()
+        _theme_query_embeddings = {
+            theme: model.encode(theme, normalize_embeddings=True).tolist()
+            for theme in THEMES_LIST
+        }
+    return _theme_query_embeddings
 
 
 def is_questionnaire_column(col: str) -> bool:
@@ -257,6 +298,7 @@ def build_vectors():
         )
 
         # Clear the old AI insights cache so we generate fresh insights for the new data
+        clear_runtime_caches()
         if CACHE_FILE.exists():
             try:
                 CACHE_FILE.unlink()
@@ -664,6 +706,7 @@ Responses:
 def clear_cache():
     """Delete the gemma_cache.json file so insights are regenerated fresh."""
     try:
+        clear_runtime_caches()
         if CACHE_FILE.exists():
             CACHE_FILE.unlink()
         return jsonify({"status": "success", "message": "Cache cleared"})
@@ -903,6 +946,10 @@ def get_themes_overview():
 
     # We have filters, dynamically calculate frequencies
     try:
+        cache_key = theme_overview_cache_key(filters)
+        if cache_key in _theme_overview_cache:
+            return jsonify(_theme_overview_cache[cache_key])
+
         client = chromadb.PersistentClient(path=str(VECTOR_DB_PATH))
         collection = client.get_collection("survey_responses")
 
@@ -926,31 +973,17 @@ def get_themes_overview():
         if total_docs == 0:
             for theme in new_cache:
                 new_cache[theme]["frequency"] = 0
+            _theme_overview_cache[cache_key] = new_cache
             return jsonify(new_cache)
 
-        from sentence_transformers import SentenceTransformer
+        theme_embeddings = get_theme_query_embeddings()
 
-        model = SentenceTransformer(
-            "BAAI/bge-m3", model_kwargs={"use_safetensors": True}
-        )
-
-        themes_list = [
-            "Content and Organisation",
-            "Professional Practice",
-            "Teachers",
-            "Support / Mentoring",
-            "Examination & Assessment",
-            "Engagement & Contact",
-            "Special Circumstances",
-        ]
-
-        for theme_name in themes_list:
+        for theme_name in THEMES_LIST:
             if theme_name not in new_cache:
                 continue
 
-            query_embedding = model.encode(theme_name, normalize_embeddings=True)
             results = collection.query(
-                query_embeddings=[query_embedding.tolist()],
+                query_embeddings=[theme_embeddings[theme_name]],
                 n_results=total_docs,
                 where=where_clause,
                 include=["documents", "distances"],
@@ -968,6 +1001,7 @@ def get_themes_overview():
                 (len(relevant_docs) / total_docs) * 100
             )
 
+        _theme_overview_cache[cache_key] = new_cache
         return jsonify(new_cache)
 
     except Exception as e:
