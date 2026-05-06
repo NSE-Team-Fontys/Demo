@@ -22,10 +22,9 @@ import re
 
 import chromadb
 import requests
-from sentence_transformers import SentenceTransformer
 
 from anonymizer import process_file_with_layers
-from src.core.model_device import describe_model_device, get_model_device
+from src.core.embedding_models import describe_embedding_runtime, load_embedding_model
 from vector_builder import build_vector_db_stream
 
 app = Flask(__name__)
@@ -48,8 +47,8 @@ THEMES_LIST = [
     "Special Circumstances",
 ]
 _theme_overview_cache = {}
-_theme_embedding_model = None
-_theme_query_embeddings = None
+_theme_embedding_models = {}
+_theme_query_embeddings = {}
 METADATA_COLS = {
     "ID",
     "Institution",
@@ -106,28 +105,31 @@ def theme_overview_cache_key(filters: dict) -> tuple:
     return tuple(sorted(filters.items()))
 
 
-def get_theme_embedding_model():
-    global _theme_embedding_model
-    if _theme_embedding_model is None:
-        device = get_model_device()
-        print(f"[EMBEDDINGS] Loading {THEME_EMBEDDING_MODEL} on {describe_model_device(device)}")
-        _theme_embedding_model = SentenceTransformer(
-            THEME_EMBEDDING_MODEL,
-            model_kwargs={"use_safetensors": True},
-            device=device,
+def collection_embedding_model(collection) -> str:
+    metadata = getattr(collection, "metadata", None) or {}
+    return metadata.get("embedding_model") or THEME_EMBEDDING_MODEL
+
+
+def get_theme_embedding_model(model_id: str | None = None):
+    selected_model = model_id or THEME_EMBEDDING_MODEL
+    if selected_model not in _theme_embedding_models:
+        print(
+            f"[EMBEDDINGS] Loading {selected_model} via "
+            f"{describe_embedding_runtime(selected_model)}"
         )
-    return _theme_embedding_model
+        _theme_embedding_models[selected_model] = load_embedding_model(selected_model)
+    return _theme_embedding_models[selected_model]
 
 
-def get_theme_query_embeddings():
-    global _theme_query_embeddings
-    if _theme_query_embeddings is None:
-        model = get_theme_embedding_model()
-        _theme_query_embeddings = {
+def get_theme_query_embeddings(model_id: str | None = None):
+    selected_model = model_id or THEME_EMBEDDING_MODEL
+    if selected_model not in _theme_query_embeddings:
+        model = get_theme_embedding_model(selected_model)
+        _theme_query_embeddings[selected_model] = {
             theme: model.encode(theme, normalize_embeddings=True).tolist()
             for theme in THEMES_LIST
         }
-    return _theme_query_embeddings
+    return _theme_query_embeddings[selected_model]
 
 
 def is_questionnaire_column(col: str) -> bool:
@@ -448,7 +450,8 @@ def query_vectors():
                 }
             ), 400
 
-        model = get_theme_embedding_model()
+        embedding_model = collection_embedding_model(collection)
+        model = get_theme_embedding_model(embedding_model)
         query_embedding = model.encode(query_text, normalize_embeddings=True)
 
         # Build where filter - support multiple conditions and metadata aliases.
@@ -656,7 +659,8 @@ def theme_summary():
         client = chromadb.PersistentClient(path=str(VECTOR_DB_PATH))
         collection = client.get_collection("survey_responses")
 
-        model = get_theme_embedding_model()
+        embedding_model = collection_embedding_model(collection)
+        model = get_theme_embedding_model(embedding_model)
         query_embedding = model.encode(theme_query, normalize_embeddings=True)
 
         results = collection.query(
@@ -843,7 +847,8 @@ def precompute_insights():
                     + "\n"
                 )
 
-                model = get_theme_embedding_model()
+                embedding_model = collection_embedding_model(collection)
+                model = get_theme_embedding_model(embedding_model)
                 query_embedding = model.encode(query, normalize_embeddings=True)
 
                 results = collection.query(
@@ -1069,7 +1074,8 @@ def get_themes_overview():
             _theme_overview_cache[cache_key] = new_cache
             return jsonify(new_cache)
 
-        theme_embeddings = get_theme_query_embeddings()
+        embedding_model = collection_embedding_model(collection)
+        theme_embeddings = get_theme_query_embeddings(embedding_model)
 
         for theme_name in THEMES_LIST:
             if theme_name not in new_cache:

@@ -1,11 +1,11 @@
 import pandas as pd
 import chromadb
-from sentence_transformers import SentenceTransformer
 import os
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 import json
 import csv
 
+from src.core.embedding_models import describe_embedding_runtime, load_embedding_model
 from src.core.model_device import describe_model_device, get_model_device
 
 
@@ -139,29 +139,6 @@ def build_metadata(row) -> dict:
     return meta
 
 
-def load_embedding_model(model_id: str, allow_download: bool = True) -> SentenceTransformer:
-    """
-    Load the embedding model before touching ChromaDB.
-    If allow_download=False, only already-cached/local models are accepted.
-    """
-    device = get_model_device()
-    try:
-        return SentenceTransformer(
-            model_id,
-            model_kwargs={'use_safetensors': True},
-            local_files_only=not allow_download,
-            device=device,
-        )
-    except TypeError:
-        # Older sentence-transformers versions may not support local_files_only.
-        if not allow_download:
-            raise RuntimeError(
-                "Cannot verify local-only model availability with this sentence-transformers version. "
-                "Enable model downloads or update sentence-transformers."
-            )
-        return SentenceTransformer(model_id, model_kwargs={'use_safetensors': True}, device=device)
-
-
 def build_vector_db(csv_path="data/anonymized_output.csv", db_path="./survey_vector_db"):
     if not os.path.exists(csv_path):
         raise Exception(f"Input file {csv_path} not found. Please anonymize first.")
@@ -196,11 +173,7 @@ def build_vector_db(csv_path="data/anonymized_output.csv", db_path="./survey_vec
     print(f"Generating embeddings for {len(df_combined)} rows...")
     device = get_model_device()
     print(f"Loading embedding model on {describe_model_device(device)}...")
-    model = SentenceTransformer(
-        EMBEDDING_MODEL,
-        model_kwargs={'use_safetensors': True},
-        device=device,
-    )
+    model = load_embedding_model(EMBEDDING_MODEL)
     embeddings = model.encode(
         df_combined['answer'].tolist(), 
         batch_size=BATCH_SIZE, 
@@ -217,7 +190,10 @@ def build_vector_db(csv_path="data/anonymized_output.csv", db_path="./survey_vec
     except:
         pass
 
-    collection = client.create_collection(name=COLLECTION, metadata={"hnsw:space": "cosine"})
+    collection = client.create_collection(
+        name=COLLECTION,
+        metadata={"hnsw:space": "cosine", "embedding_model": EMBEDDING_MODEL},
+    )
 
     # Insert in batches
     for start in range(0, len(df_combined), BATCH_SIZE):
@@ -281,8 +257,7 @@ def build_vector_db_stream(
 
         # Load/validate the model before touching ChromaDB, so failures do not
         # destroy the old vector database.
-        device = get_model_device()
-        yield json.dumps({"status": "progress", "message": f"Loading {EMBEDDING_MODEL} embedding model on {describe_model_device(device)}...", "progress": 25}) + "\n"
+        yield json.dumps({"status": "progress", "message": f"Loading {EMBEDDING_MODEL} embedding model via {describe_embedding_runtime(EMBEDDING_MODEL)}...", "progress": 25}) + "\n"
         try:
             model = load_embedding_model(EMBEDDING_MODEL, allow_download=allow_model_download)
         except Exception as e:
@@ -303,7 +278,10 @@ def build_vector_db_stream(
         except:
             pass
 
-        collection = client.create_collection(COLLECTION, metadata={"hnsw:space": "cosine"})
+        collection = client.create_collection(
+            COLLECTION,
+            metadata={"hnsw:space": "cosine", "embedding_model": EMBEDDING_MODEL},
+        )
         
         total_docs = len(df_combined)
         yield json.dumps({"status": "progress", "message": f"Found {total_docs} documents to embed. Starting encoding...", "progress": 40}) + "\n"
