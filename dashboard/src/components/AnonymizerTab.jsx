@@ -16,10 +16,10 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
   const [currentPreview, setCurrentPreview] = useState('');
 
   const MASKING_INFO = [
-    { tag: '[NAME]',     meaning: 'Names / persons' },
+    { tag: '[NAME]', meaning: 'Names / persons' },
     { tag: '[LOCATION]', meaning: 'Addresses / locations' },
-    { tag: '[PII]',      meaning: 'Identifiers (email, phone, BSN, student nr, usernames, etc.)' },
-    { tag: '[TITLE]',    meaning: 'Titles (Meneer/Mevrouw, etc.)' },
+    { tag: '[PII]', meaning: 'Identifiers (email, phone, BSN, student nr, usernames, etc.)' },
+    { tag: '[TITLE]', meaning: 'Titles (Meneer/Mevrouw, etc.)' },
   ];
 
   const LAYER_OPTIONS = [
