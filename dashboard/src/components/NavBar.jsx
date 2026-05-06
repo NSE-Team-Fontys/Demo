@@ -14,6 +14,9 @@ export default function NavBar() {
         <Link to="/presentatie" className="hover:underline font-bold">
           🎯 Presentation
         </Link>
+        <Link to="/presentatie/nse-deck" className="hover:underline font-bold">
+          📑 NSE Deck
+        </Link>
       </div>
     </nav>
   )

@@ -32,9 +32,22 @@ try:
         logger.info("LAYER2_FP16 enabled for eu-pii-safeguard.")
     _ner = hf_pipeline(**pipeline_kwargs)
     logger.info("eu-pii-safeguard loaded successfully.")
+    _load_error = None
 except Exception as e:
     _ner = None
+    _load_error = e
     logger.warning(f"eu-pii-safeguard failed to load: {e}. Layer will be skipped.")
+
+
+def ensure_eu_pii_available() -> None:
+    """Raise a clear error if the selected EU-PII layer is unavailable."""
+    if _ner is None:
+        detail = f" ({_load_error})" if _load_error else ""
+        raise RuntimeError(
+            "EU-PII-Safeguard is selected but the model could not be loaded. "
+            "Check your internet/HF_TOKEN for first download, or remove this layer."
+            + detail
+        )
 
 
 def _eu_pii_tag(entity_group: str) -> str:
@@ -90,7 +103,8 @@ def eu_pii_collect_batch(texts: list, config: Optional[dict] = None) -> list:
     Run eu-pii-safeguard on normalized texts; return [(start,end,tag), …] per text.
     Same contract as privacy_officer (late masking).
     """
-    if _ner is None or not texts:
+    ensure_eu_pii_available()
+    if not texts:
         return [[] for _ in texts]
     try:
         texts_for_ner = [normalize_for_ner(t) if isinstance(t, str) else "" for t in texts]
@@ -119,7 +133,8 @@ def eu_pii_collect_batch(texts: list, config: Optional[dict] = None) -> list:
 
 def eu_pii_safeguard_anonymize(text: str, config: Optional[dict] = None) -> str:
     """Layer 2 masking (no span plumbing): returns text with tags."""
-    if _ner is None or not isinstance(text, str) or not text.strip():
+    ensure_eu_pii_available()
+    if not isinstance(text, str) or not text.strip():
         return text
     try:
         entities = _ner(normalize_for_ner(text))
@@ -134,7 +149,8 @@ def eu_pii_safeguard_anonymize_batch(texts: list, config: Optional[dict] = None)
     Run eu-pii-safeguard on a list of texts in one pipeline call.
     Kept aligned with privacy_officer for callers that want direct batch masking.
     """
-    if _ner is None or not texts:
+    ensure_eu_pii_available()
+    if not texts:
         return texts
     try:
         batch_entities = _ner(texts, batch_size=len(texts))

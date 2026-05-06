@@ -5,6 +5,7 @@ import PipelineDemo from './pages/PipelineDemo';
 import ThemeDetail from './pages/ThemeDetail';
 import Vergelijken from './pages/Vergelijken';
 import Presentatie from './pages/Presentatie';
+import NSEDeck from './pages/NSEDeck';
 import { VectorDBProvider } from './context/VectorDBContext';
 
 function App() {
@@ -18,6 +19,7 @@ function App() {
           <Route path="/theme/:id" element={<ThemeDetail />} />
           <Route path="/vergelijken" element={<Vergelijken />} />
           <Route path="/presentatie" element={<Presentatie />} />
+          <Route path="/presentatie/nse-deck" element={<NSEDeck />} />
         </Routes>
       </Router>
     </VectorDBProvider>

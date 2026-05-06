@@ -283,6 +283,17 @@ def build_presidio_operators(config: Optional[dict] = None) -> dict:
     return ops
 
 
+def ensure_presidio_available() -> None:
+    """Raise if Presidio/spaCy cannot be initialized for the selected layer."""
+    try:
+        _get_analyzer()
+    except Exception as e:
+        raise RuntimeError(
+            "Presidio is selected but its spaCy NLP engine could not be loaded. "
+            "Check the nl_core_news_lg/en_core_web_lg installation or allow the model auto-install."
+        ) from e
+
+
 def collect_presidio_spans(text: str, config: Optional[dict] = None) -> list[tuple[int, int, str]]:
     """
     Run Presidio analysis on length-preserving normalized text and return (start, end, tag).
