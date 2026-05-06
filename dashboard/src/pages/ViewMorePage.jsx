@@ -3,24 +3,6 @@ import { Link, NavLink, useLocation, useParams } from 'react-router-dom'
 import { getFilteredThemes } from '../data/themes'
 import { useThemeSummary } from '../hooks/useThemeSummary'
 
-const BADGE = {
-  positive: 'bg-tertiary-container text-white',
-  neutral: 'bg-orange-200 text-orange-900',
-  critical: 'bg-error-container text-on-error-container',
-}
-
-const BADGE_LABEL = {
-  positive: 'Positive',
-  neutral: 'Neutral',
-  critical: 'Critical',
-}
-
-function sentimentBadgeClass(sentiment) {
-  if (sentiment === 'Positive') return 'bg-green-100 text-green-700'
-  if (sentiment === 'Critical') return 'bg-red-100 text-red-700'
-  return 'bg-yellow-100 text-yellow-700'
-}
-
 function StatTile({ icon, label, value, helper }) {
   return (
     <div className="bg-surface-container-lowest rounded-xl p-4 border border-outline-variant/10 shadow-sm">
@@ -32,6 +14,126 @@ function StatTile({ icon, label, value, helper }) {
       </div>
       <p className="text-2xl font-extrabold font-headline text-primary mt-3">{value}</p>
       {helper && <p className="text-xs text-on-surface-variant mt-1">{helper}</p>}
+    </div>
+  )
+}
+
+function normaliseComment(comment) {
+  return String(comment || '').replace(/^"+|"+$/g, '')
+}
+
+function subthemeTokens(subtheme) {
+  const stopwords = new Set(['and', 'the', 'for', 'with', 'from', 'that', 'this', 'over', 'into'])
+  return String(subtheme || '')
+    .toLowerCase()
+    .match(/[a-z0-9]+/g)
+    ?.filter((token) => token.length > 3 && !stopwords.has(token)) ?? []
+}
+
+function buildSubthemeRows(subthemes, apiRows, sourceComments) {
+  if (apiRows?.length > 0) {
+    return apiRows.map((row) => {
+      const percentage = Number(row.percentage)
+      const mentions = Number(row.mentions)
+
+      return {
+        subtheme: row.subtheme,
+        percentage: Number.isFinite(percentage) ? percentage : 0,
+        mentions: Number.isFinite(mentions) ? mentions : 0,
+      }
+    })
+  }
+
+  const comments = sourceComments.map((comment) => String(comment).toLowerCase()).filter(Boolean)
+  return subthemes.map((subtheme) => {
+    const tokens = subthemeTokens(subtheme)
+    const mentions = comments.filter((comment) =>
+      tokens.some((token) => comment.includes(token) || comment.includes(token.slice(0, 6))),
+    ).length
+
+    return {
+      subtheme,
+      mentions,
+      percentage: comments.length > 0 ? Math.round((mentions / comments.length) * 100) : 0,
+    }
+  })
+}
+
+function CommentColumn({ title, icon, tone, comments }) {
+  const toneClass = {
+    positive: 'border-tertiary-container bg-green-50 text-green-950',
+    critical: 'border-error bg-red-50 text-red-950',
+  }[tone]
+
+  const iconClass = {
+    positive: 'text-tertiary-container',
+    critical: 'text-error',
+  }[tone]
+
+  return (
+    <div className="bg-surface-container-lowest rounded-2xl p-4 md:p-5 shadow-ambient border border-outline-variant/10">
+      <div className="flex items-center gap-2 mb-4">
+        <span className={`material-symbols-outlined text-xl ${iconClass}`}>{icon}</span>
+        <h2 className="text-base font-bold font-headline text-primary">{title}</h2>
+      </div>
+      <div className="space-y-3">
+        {comments.length > 0 ? (
+          comments.slice(0, 3).map((comment, i) => (
+            <blockquote
+              key={i}
+              className={`p-4 rounded-xl border-l-4 italic text-sm leading-relaxed ${toneClass}`}
+            >
+              {normaliseComment(comment)}
+            </blockquote>
+          ))
+        ) : (
+          <p className="text-sm text-on-surface-variant bg-surface p-4 rounded-xl">
+            No comments returned for this group yet.
+          </p>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function SubthemeMentionChart({ rows }) {
+  const hasRows = rows.length > 0
+
+  return (
+    <div className="bg-surface-container-lowest rounded-2xl p-4 md:p-6 shadow-ambient border border-outline-variant/10">
+      <div className="flex items-center justify-between gap-3 mb-4">
+        <h2 className="text-xs font-bold uppercase tracking-wider text-on-surface-variant">
+          Key Sub-themes Detected
+        </h2>
+        <span className="material-symbols-outlined text-outline text-xl">monitoring</span>
+      </div>
+
+      {hasRows ? (
+        <div className="space-y-4">
+          {rows.map((row) => (
+            <div key={row.subtheme} className="space-y-1.5">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm font-semibold text-on-surface truncate">{row.subtheme}</span>
+                <span className="text-xs font-bold text-primary shrink-0">{row.percentage}%</span>
+              </div>
+              <div className="h-2 rounded-full bg-surface-container overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-primary transition-all duration-500"
+                  style={{ width: `${row.percentage > 0 ? Math.max(2, Math.min(100, row.percentage)) : 0}%` }}
+                />
+              </div>
+              <p className="text-[10px] text-on-surface-variant">
+                Mentioned in {row.mentions} retrieved comment{row.mentions === 1 ? '' : 's'}
+              </p>
+            </div>
+          ))}
+          <p className="text-[10px] text-on-surface-variant/60">
+            Percentages are based on retrieved comments for this theme, not sentiment scoring.
+          </p>
+        </div>
+      ) : (
+        <p className="text-sm text-on-surface-variant">No subthemes returned yet.</p>
+      )}
     </div>
   )
 }
@@ -57,7 +159,13 @@ export default function ViewMorePage() {
   const comments = liveData?.quotes?.length > 0 ? liveData.quotes : theme?.quotes ?? []
   const subthemes = liveData?.subthemes?.length > 0 ? liveData.subthemes : theme?.subthemes ?? []
   const summary = liveData?.summary || theme?.aiSummary
-  const sentiments = liveData?.sentiments ?? []
+  const positiveComments = liveData?.positive_comments?.length > 0 ? liveData.positive_comments : []
+  const criticalComments = liveData?.critical_comments?.length > 0 ? liveData.critical_comments : []
+  const chartRows = buildSubthemeRows(
+    subthemes,
+    liveData?.subtheme_mentions,
+    [...comments, ...positiveComments, ...criticalComments],
+  )
 
   if (!theme) {
     return (
@@ -101,9 +209,6 @@ export default function ViewMorePage() {
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
-                <span className={`text-xs font-bold px-3 py-1 rounded-full ${BADGE[theme.sentiment]}`}>
-                  {BADGE_LABEL[theme.sentiment]}
-                </span>
                 {loadingLive && (
                   <span className="flex items-center gap-1.5 text-xs font-semibold text-white/80">
                     <span className="w-2 h-2 rounded-full bg-white/80 animate-pulse" />
@@ -141,93 +246,55 @@ export default function ViewMorePage() {
                 </p>
               )}
 
-              {sentiments.length > 0 && (
-                <div className="mt-5">
-                  <h3 className="text-[10px] font-bold uppercase tracking-wider text-blue-700/70 mb-3">
-                    Top Sentiments Detected
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {sentiments.map((sentiment, idx) => (
-                      <div key={idx} className="bg-white/70 rounded-xl p-3 border border-blue-100/60 flex gap-3 items-start">
-                        <span className={`text-[10px] font-bold px-2 py-1 rounded uppercase mt-0.5 ${sentimentBadgeClass(sentiment.sentiment)}`}>
-                          {sentiment.sentiment}
-                        </span>
-                        <p className="text-sm text-blue-950 leading-snug">{sentiment.point}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
 
-            <div className="bg-surface-container-lowest rounded-2xl p-4 md:p-6 shadow-ambient border border-outline-variant/10">
-              <div className="flex items-center justify-between gap-3 mb-4">
-                <h2 className="text-base md:text-lg font-bold font-headline text-primary">Student Comments</h2>
-                <span className="material-symbols-outlined text-outline text-xl">format_quote</span>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {comments.map((comment, i) => (
-                  <blockquote
-                    key={i}
-                    className="bg-surface p-4 rounded-xl border-l-4 border-blue-500 italic text-sm text-on-surface-variant leading-relaxed shadow-sm"
-                  >
-                    {comment}
-                  </blockquote>
-                ))}
-              </div>
-              <p className="text-[10px] text-on-surface-variant/50 italic mt-4">
-                Actual verbatim quotes retrieved from the database when VectorDB is available.
-              </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <CommentColumn
+                title="Top 3 Positive Comments"
+                icon="thumb_up"
+                tone="positive"
+                comments={positiveComments}
+              />
+              <CommentColumn
+                title="Top 3 Critical Comments"
+                icon="priority_high"
+                tone="critical"
+                comments={criticalComments}
+              />
             </div>
+
+            {comments.length > 0 && (
+              <div className="bg-surface-container-lowest rounded-2xl p-4 md:p-6 shadow-ambient border border-outline-variant/10">
+                <div className="flex items-center justify-between gap-3 mb-4">
+                  <h2 className="text-base md:text-lg font-bold font-headline text-primary">Retrieved Student Comments</h2>
+                  <span className="material-symbols-outlined text-outline text-xl">format_quote</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {comments.map((comment, i) => (
+                    <blockquote
+                      key={i}
+                      className="bg-surface p-4 rounded-xl border-l-4 border-blue-500 italic text-sm text-on-surface-variant leading-relaxed shadow-sm"
+                    >
+                      {normaliseComment(comment)}
+                    </blockquote>
+                  ))}
+                </div>
+                <p className="text-[10px] text-on-surface-variant/50 italic mt-4">
+                  Actual verbatim quotes retrieved from the database when VectorDB is available.
+                </p>
+              </div>
+            )}
           </div>
 
           <aside className="lg:col-span-4 space-y-5">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-4">
-              <StatTile
-                icon="bar_chart"
-                label="Relevant responses"
-                value={`${theme.percentage}%`}
-                helper="Share of responses associated with this theme."
-              />
-              <StatTile
-                icon="speed"
-                label="Sentiment score"
-                value={`${theme.sentimentScore}%`}
-                helper={theme.sentimentLabel}
-              />
-            </div>
+            <StatTile
+              icon="bar_chart"
+              label="Relevant responses"
+              value={`${theme.percentage}%`}
+              helper="Share of responses associated with this theme."
+            />
 
-            <div className="bg-surface-container-lowest rounded-2xl p-4 md:p-6 shadow-ambient border border-outline-variant/10">
-              <h2 className="text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-4">
-                Sentiment Breakdown
-              </h2>
-              <div className="flex rounded-full overflow-hidden h-2 gap-px">
-                <div className="h-full bg-tertiary-container" style={{ width: `${theme.sentimentBreakdown.positive}%` }} />
-                <div className="h-full bg-orange-500" style={{ width: `${theme.sentimentBreakdown.neutral}%` }} />
-                <div className="h-full bg-error" style={{ width: `${theme.sentimentBreakdown.negative}%` }} />
-              </div>
-              <div className="grid grid-cols-3 gap-2 text-[10px] text-on-surface-variant mt-3">
-                <span>Positive {theme.sentimentBreakdown.positive}%</span>
-                <span className="text-center">Neutral {theme.sentimentBreakdown.neutral}%</span>
-                <span className="text-right">Critical {theme.sentimentBreakdown.negative}%</span>
-              </div>
-            </div>
-
-            <div className="bg-surface-container-lowest rounded-2xl p-4 md:p-6 shadow-ambient border border-outline-variant/10">
-              <h2 className="text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-4">
-                Key Sub-themes Detected
-              </h2>
-              <div className="flex flex-wrap gap-2">
-                {subthemes.map((subtheme, i) => (
-                  <span
-                    key={i}
-                    className="px-3 py-1 bg-surface-container rounded-full text-xs font-semibold text-on-surface-variant border border-outline/10 shadow-sm"
-                  >
-                    {subtheme}
-                  </span>
-                ))}
-              </div>
-            </div>
+            <SubthemeMentionChart rows={chartRows} />
 
             <Link
               to="/"
