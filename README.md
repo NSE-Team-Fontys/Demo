@@ -182,6 +182,8 @@ Main file: `vector_builder.py`
 - Uses selected questionnaire columns.
 - Stores documents, embeddings, and metadata in ChromaDB.
 - Loads the embedding model before deleting/recreating the Chroma collection.
+- Supports Hugging Face/SentenceTransformer models such as `Qwen/Qwen3-Embedding-8B`.
+- Stores the selected embedding model in Chroma metadata so queries and theme summaries use the same vector dimensions later.
 - Supports `allow_model_download` from the frontend:
   - enabled: download model if missing.
   - disabled: only use locally cached models and fail before changing ChromaDB if unavailable.
@@ -295,6 +297,7 @@ Check Ollama:
 ```powershell
 ollama list
 ollama pull gemma4:e4b
+ollama pull gemma4:26b
 ```
 
 Or enable `Pull Ollama model if missing` in the UI.

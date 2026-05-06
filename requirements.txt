@@ -12,5 +12,6 @@ spacy
 # spaCy large language models (NL + EN) for Presidio NER
 https://github.com/explosion/spacy-models/releases/download/nl_core_news_lg-3.8.0/nl_core_news_lg-3.8.0-py3-none-any.whl
 https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.8.0/en_core_web_lg-3.8.0-py3-none-any.whl
---extra-index-url https://download.pytorch.org/whl/cu126
+# Default PyTorch wheels include Apple Silicon MPS support on macOS.
+# For NVIDIA CUDA Linux machines, install the matching CUDA wheel separately if needed.
 torch

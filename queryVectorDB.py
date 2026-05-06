@@ -1,5 +1,6 @@
 import chromadb
-from sentence_transformers import SentenceTransformer
+
+from src.core.embedding_models import describe_embedding_runtime, load_embedding_model
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
@@ -19,7 +20,11 @@ total      = collection.count()
 print(f"  {total} responses loaded")
 
 print("\nLoading embedding model...")
-model = SentenceTransformer(EMBEDDING_MODEL, model_kwargs={'use_safetensors': True})
+collection_metadata = getattr(collection, "metadata", None) or {}
+EMBEDDING_MODEL = collection_metadata.get("embedding_model") or EMBEDDING_MODEL
+print(f"  Model: {EMBEDDING_MODEL}")
+print(f"  Runtime: {describe_embedding_runtime(EMBEDDING_MODEL)}")
+model = load_embedding_model(EMBEDDING_MODEL)
 print("  Ready\n")
 
 # ── Helper ────────────────────────────────────────────────────────────────────

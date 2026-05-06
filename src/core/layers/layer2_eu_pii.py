@@ -8,17 +8,20 @@ from typing import Optional
 import torch
 from transformers import pipeline as hf_pipeline
 
+from src.core.model_device import describe_model_device, get_model_device, get_pipeline_device
+
 from .layer2_text_norm import normalize_for_ner
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-_device = 0 if torch.cuda.is_available() else -1
+_torch_device = get_model_device()
+_device = get_pipeline_device(_torch_device)
 _use_fp16 = os.environ.get("LAYER2_FP16", "").lower() in {"1", "true", "yes"}
 
 logger.info(
     "Loading tabularisai/eu-pii-safeguard model on %s (downloads on first run)...",
-    "GPU (cuda:0)" if _device == 0 else "CPU",
+    describe_model_device(_torch_device),
 )
 try:
     pipeline_kwargs = {
@@ -27,7 +30,7 @@ try:
         "aggregation_strategy": "simple",
         "device": _device,
     }
-    if _device == 0 and _use_fp16:
+    if _torch_device != "cpu" and _use_fp16:
         pipeline_kwargs["model_kwargs"] = {"torch_dtype": torch.float16}
         logger.info("LAYER2_FP16 enabled for eu-pii-safeguard.")
     _ner = hf_pipeline(**pipeline_kwargs)
@@ -166,4 +169,3 @@ def eu_pii_masking_spec() -> dict:
         "[LOCATION]": ["*ADDRESS*", "*CITY*", "*ZIPCODE*", "*LOCATION*"],
         "[PII]": ["(everything else: email/phone/iban/ids/etc.)"],
     }
-

@@ -46,6 +46,17 @@ const AVAILABLE_MODELS = [
     recommended: false
   },
   {
+    id: 'Qwen/Qwen3-Embedding-8B',
+    name: 'Qwen3 Embedding 8B',
+    provider: 'Alibaba / Qwen',
+    description: 'Large Hugging Face Qwen3 embedding model. Same SentenceTransformer loading path as the other embedding models.',
+    silhouette: null,
+    daviesBouldin: null,
+    embedTime: 'Slow',
+    languages: 'Multilingual',
+    recommended: false
+  },
+  {
     id: 'paraphrase-multilingual-MiniLM-L12-v2',
     name: 'Multilingual MiniLM-L12',
     provider: 'Microsoft',
@@ -274,12 +285,18 @@ export default function VectorDBBuilder({ onSuccess }) {
                           </div>
                           <p className="text-xs text-gray-500 mt-1">{model.description}</p>
                           <div className="flex flex-wrap gap-2 mt-2">
-                            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${model.silhouette >= 0.92 ? 'bg-emerald-100 text-emerald-700' : model.silhouette >= 0.90 ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
-                              Silhouette: {model.silhouette.toFixed(2)}
-                            </span>
-                            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${model.daviesBouldin <= 0.20 ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}>
-                              DB: {model.daviesBouldin.toFixed(2)}
-                            </span>
+                            {typeof model.silhouette === 'number' ? (
+                              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${model.silhouette >= 0.92 ? 'bg-emerald-100 text-emerald-700' : model.silhouette >= 0.90 ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
+                                Silhouette: {model.silhouette.toFixed(2)}
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">Not benchmarked</span>
+                            )}
+                            {typeof model.daviesBouldin === 'number' && (
+                              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${model.daviesBouldin <= 0.20 ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}>
+                                DB: {model.daviesBouldin.toFixed(2)}
+                              </span>
+                            )}
                             <span className="text-[10px] font-semibold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">⚡ {model.embedTime}</span>
                             <span className="text-[10px] text-gray-400 bg-gray-50 px-1.5 py-0.5 rounded">🌍 {model.languages}</span>
                           </div>

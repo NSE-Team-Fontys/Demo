@@ -22,9 +22,9 @@ import re
 
 import chromadb
 import requests
-from sentence_transformers import SentenceTransformer
 
 from anonymizer import process_file_with_layers
+from src.core.embedding_models import describe_embedding_runtime, load_embedding_model
 from vector_builder import build_vector_db_stream
 
 app = Flask(__name__)
@@ -47,8 +47,8 @@ THEMES_LIST = [
     "Special Circumstances",
 ]
 _theme_overview_cache = {}
-_theme_embedding_model = None
-_theme_query_embeddings = None
+_theme_embedding_models = {}
+_theme_query_embeddings = {}
 METADATA_COLS = {
     "ID",
     "Institution",
@@ -105,24 +105,31 @@ def theme_overview_cache_key(filters: dict) -> tuple:
     return tuple(sorted(filters.items()))
 
 
-def get_theme_embedding_model():
-    global _theme_embedding_model
-    if _theme_embedding_model is None:
-        _theme_embedding_model = SentenceTransformer(
-            THEME_EMBEDDING_MODEL, model_kwargs={"use_safetensors": True}
+def collection_embedding_model(collection) -> str:
+    metadata = getattr(collection, "metadata", None) or {}
+    return metadata.get("embedding_model") or THEME_EMBEDDING_MODEL
+
+
+def get_theme_embedding_model(model_id: str | None = None):
+    selected_model = model_id or THEME_EMBEDDING_MODEL
+    if selected_model not in _theme_embedding_models:
+        print(
+            f"[EMBEDDINGS] Loading {selected_model} via "
+            f"{describe_embedding_runtime(selected_model)}"
         )
-    return _theme_embedding_model
+        _theme_embedding_models[selected_model] = load_embedding_model(selected_model)
+    return _theme_embedding_models[selected_model]
 
 
-def get_theme_query_embeddings():
-    global _theme_query_embeddings
-    if _theme_query_embeddings is None:
-        model = get_theme_embedding_model()
-        _theme_query_embeddings = {
+def get_theme_query_embeddings(model_id: str | None = None):
+    selected_model = model_id or THEME_EMBEDDING_MODEL
+    if selected_model not in _theme_query_embeddings:
+        model = get_theme_embedding_model(selected_model)
+        _theme_query_embeddings[selected_model] = {
             theme: model.encode(theme, normalize_embeddings=True).tolist()
             for theme in THEMES_LIST
         }
-    return _theme_query_embeddings
+    return _theme_query_embeddings[selected_model]
 
 
 def is_questionnaire_column(col: str) -> bool:
@@ -443,9 +450,8 @@ def query_vectors():
                 }
             ), 400
 
-        model = SentenceTransformer(
-            "BAAI/bge-m3", model_kwargs={"use_safetensors": True}
-        )
+        embedding_model = collection_embedding_model(collection)
+        model = get_theme_embedding_model(embedding_model)
         query_embedding = model.encode(query_text, normalize_embeddings=True)
 
         # Build where filter - support multiple conditions and metadata aliases.
@@ -517,6 +523,65 @@ def save_cache(cache_data):
         json.dump(cache_data, f, indent=2)
 
 
+def subtheme_mention_rows(subthemes: list, docs: list) -> list:
+    """Approximate how often extracted subthemes are mentioned in retrieved responses."""
+    if not subthemes or not docs:
+        return []
+
+    stopwords = {
+        "and",
+        "the",
+        "for",
+        "with",
+        "from",
+        "that",
+        "this",
+        "over",
+        "into",
+        "aan",
+        "een",
+        "het",
+        "van",
+        "voor",
+        "met",
+        "naar",
+    }
+    normalized_docs = [str(doc).lower() for doc in docs]
+    rows = []
+
+    for subtheme in subthemes:
+        label = str(subtheme).strip()
+        if not label:
+            continue
+
+        label_norm = label.lower()
+        tokens = [
+            token
+            for token in re.findall(r"[a-zA-ZÀ-ÿ0-9]+", label_norm)
+            if len(token) > 3 and token not in stopwords
+        ]
+        token_roots = {token[:6] for token in tokens if len(token) > 6}
+
+        mentions = 0
+        for doc in normalized_docs:
+            if (
+                label_norm in doc
+                or any(token in doc for token in tokens)
+                or any(root in doc for root in token_roots)
+            ):
+                mentions += 1
+
+        rows.append(
+            {
+                "subtheme": label,
+                "mentions": mentions,
+                "percentage": int(round((mentions / len(docs)) * 100)),
+            }
+        )
+
+    return rows
+
+
 def ensure_ollama_model_available(model_name: str, allow_pull: bool = False) -> None:
     """Verify Ollama is running and the requested local model exists."""
     try:
@@ -576,10 +641,19 @@ def theme_summary():
         # ── Check cache FIRST — no Ollama round-trip needed for cached themes ──
         cache = load_cache()
         if theme_name in cache:
-            print(f"[GEMMA4] Returning cached summary for: {theme_name} (instant)")
+            print(f"[GEMMA4] Returning cached summary for: {theme_name}")
             cached_data = cache[theme_name]
-            cached_data["status"] = "success"
-            return jsonify(cached_data)
+            has_view_more_fields = (
+                "positive_comments" in cached_data
+                and "critical_comments" in cached_data
+                and "student_suggestions" in cached_data
+                and "subtheme_mentions" in cached_data
+            )
+            if has_view_more_fields:
+                print(f"[GEMMA4] Returning cached summary for: {theme_name}")
+                cached_data["status"] = "success"
+                return jsonify(cached_data)
+            print(f"[GEMMA4] Cached summary for {theme_name} is missing ViewMore fields; regenerating.")
 
         print(f"[GEMMA4] Cache miss — generating summary for: {theme_name}")
         ensure_ollama_model_available(ollama_model, allow_pull=allow_model_download)
@@ -587,9 +661,8 @@ def theme_summary():
         client = chromadb.PersistentClient(path=str(VECTOR_DB_PATH))
         collection = client.get_collection("survey_responses")
 
-        model = SentenceTransformer(
-            "BAAI/bge-m3", model_kwargs={"use_safetensors": True}
-        )
+        embedding_model = collection_embedding_model(collection)
+        model = get_theme_embedding_model(embedding_model)
         query_embedding = model.encode(theme_query, normalize_embeddings=True)
 
         results = collection.query(
@@ -611,6 +684,8 @@ def theme_summary():
 
         prompt = f"""You are an expert data analyst. Read the following student survey responses about '{theme_name}'.
 Summarize the general consensus in 2 sentences. Extract 3 key sentiments (Positive, Neutral, or Critical) and provide a 1-sentence point for each.
+Select up to 3 exact positive student comments and up to 3 exact critical student comments from the responses. Use verbatim text only; do not invent comments.
+Select up to 3 exact student suggestions where students propose a solution, improvement, or concrete next step instead of only complaining. Use verbatim text only; return an empty array if no clear suggestions exist.
 Also extract 3 to 5 short sub-themes or topics mentioned (e.g. "Lecture Pacing", "Teacher Availability").
 Respond EXACTLY in this JSON format:
 {{
@@ -618,6 +693,9 @@ Respond EXACTLY in this JSON format:
   "sentiments": [
     {{"sentiment": "Positive", "point": "..."}}
   ],
+  "positive_comments": ["..."],
+  "critical_comments": ["..."],
+  "student_suggestions": ["..."],
   "subthemes": ["...", "..."]
 }}
 
@@ -661,6 +739,9 @@ Responses:
 
                 summary = parsed.get("summary", "Summary could not be parsed.")
                 sentiments = parsed.get("sentiments", [])
+                positive_comments = parsed.get("positive_comments", [])
+                critical_comments = parsed.get("critical_comments", [])
+                student_suggestions = parsed.get("student_suggestions", [])
                 subthemes = parsed.get("subthemes", [])
             else:
                 error_body = response.text
@@ -686,7 +767,11 @@ Responses:
             "document_count": len(relevant_docs),
             "summary": summary,
             "sentiments": sentiments,
+            "positive_comments": positive_comments[:3],
+            "critical_comments": critical_comments[:3],
+            "student_suggestions": student_suggestions[:3],
             "subthemes": subthemes,
+            "subtheme_mentions": subtheme_mention_rows(subthemes, relevant_docs),
             "quotes": real_quotes,
         }
 
@@ -764,11 +849,8 @@ def precompute_insights():
                     + "\n"
                 )
 
-                from sentence_transformers import SentenceTransformer
-
-                model = SentenceTransformer(
-                    "BAAI/bge-m3", model_kwargs={"use_safetensors": True}
-                )
+                embedding_model = collection_embedding_model(collection)
+                model = get_theme_embedding_model(embedding_model)
                 query_embedding = model.encode(query, normalize_embeddings=True)
 
                 results = collection.query(
@@ -843,6 +925,8 @@ def precompute_insights():
                 else:
                     prompt = f"""You are an expert data analyst. Read the following student survey responses about '{theme_name}'.
 Summarize the general consensus in 2 sentences. Extract 3 key sentiments (Positive, Neutral, or Critical) and provide a 1-sentence point for each.
+Select up to 3 exact positive student comments and up to 3 exact critical student comments from the responses. Use verbatim text only; do not invent comments.
+Select up to 3 exact student suggestions where students propose a solution, improvement, or concrete next step instead of only complaining. Use verbatim text only; return an empty array if no clear suggestions exist.
 Also extract 3 to 5 short sub-themes or topics mentioned.
 Respond EXACTLY in this JSON format:
 {{
@@ -850,6 +934,9 @@ Respond EXACTLY in this JSON format:
   "sentiments": [
     {{"sentiment": "Positive", "point": "..."}}
   ],
+  "positive_comments": ["..."],
+  "critical_comments": ["..."],
+  "student_suggestions": ["..."],
   "subthemes": ["...", "..."]
 }}
 
@@ -886,7 +973,19 @@ Responses:
                                 "summary", "Summary could not be parsed."
                             ),
                             "sentiments": parsed.get("sentiments", []),
+                            "positive_comments": parsed.get(
+                                "positive_comments", []
+                            )[:3],
+                            "critical_comments": parsed.get(
+                                "critical_comments", []
+                            )[:3],
+                            "student_suggestions": parsed.get(
+                                "student_suggestions", []
+                            )[:3],
                             "subthemes": parsed.get("subthemes", []),
+                            "subtheme_mentions": subtheme_mention_rows(
+                                parsed.get("subthemes", []), relevant_docs
+                            ),
                             "quotes": real_quotes,
                         }
                     else:
@@ -977,7 +1076,8 @@ def get_themes_overview():
             _theme_overview_cache[cache_key] = new_cache
             return jsonify(new_cache)
 
-        theme_embeddings = get_theme_query_embeddings()
+        embedding_model = collection_embedding_model(collection)
+        theme_embeddings = get_theme_query_embeddings(embedding_model)
 
         for theme_name in THEMES_LIST:
             if theme_name not in new_cache:

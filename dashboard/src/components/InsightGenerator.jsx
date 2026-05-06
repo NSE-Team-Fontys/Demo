@@ -23,6 +23,15 @@ const AVAILABLE_MODELS = [
     recommended: true
   },
   {
+    id: 'gemma4:26b',
+    name: 'Gemma 4 26B',
+    provider: 'Google',
+    description: 'Larger Gemma 4 option for higher-quality local analysis when your machine has enough memory.',
+    size: 'Large',
+    speed: 'Slow',
+    recommended: false
+  },
+  {
     id: 'gemma3:4b',
     name: 'Gemma 3 4B',
     provider: 'Google',
