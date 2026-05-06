@@ -1,6 +1,8 @@
 import chromadb
 from sentence_transformers import SentenceTransformer
 
+from src.core.model_device import describe_model_device, get_model_device
+
 # ── Config ────────────────────────────────────────────────────────────────────
 
 DB_PATH         = './survey_vector_db'
@@ -19,7 +21,13 @@ total      = collection.count()
 print(f"  {total} responses loaded")
 
 print("\nLoading embedding model...")
-model = SentenceTransformer(EMBEDDING_MODEL, model_kwargs={'use_safetensors': True})
+device = get_model_device()
+print(f"  Device: {describe_model_device(device)}")
+model = SentenceTransformer(
+    EMBEDDING_MODEL,
+    model_kwargs={'use_safetensors': True},
+    device=device,
+)
 print("  Ready\n")
 
 # ── Helper ────────────────────────────────────────────────────────────────────

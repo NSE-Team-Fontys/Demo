@@ -63,11 +63,13 @@ function CommentColumn({ title, icon, tone, comments }) {
   const toneClass = {
     positive: 'border-tertiary-container bg-green-50 text-green-950',
     critical: 'border-error bg-red-50 text-red-950',
+    suggestion: 'border-secondary bg-blue-50 text-blue-950',
   }[tone]
 
   const iconClass = {
     positive: 'text-tertiary-container',
     critical: 'text-error',
+    suggestion: 'text-secondary',
   }[tone]
 
   return (
@@ -92,6 +94,39 @@ function CommentColumn({ title, icon, tone, comments }) {
           </p>
         )}
       </div>
+    </div>
+  )
+}
+
+function SuggestionSection({ suggestions }) {
+  return (
+    <div className="bg-surface-container-lowest rounded-2xl p-4 md:p-6 shadow-ambient border border-outline-variant/10">
+      <div className="flex items-center justify-between gap-3 mb-4">
+        <div className="flex items-center gap-2">
+          <span className="material-symbols-outlined text-secondary text-xl">lightbulb</span>
+          <h2 className="text-base md:text-lg font-bold font-headline text-primary">Student Suggestions</h2>
+        </div>
+        <span className="text-[10px] uppercase tracking-wider font-bold text-on-surface-variant">
+          Solution-oriented
+        </span>
+      </div>
+
+      {suggestions.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {suggestions.slice(0, 3).map((suggestion, i) => (
+            <blockquote
+              key={i}
+              className="bg-blue-50 p-4 rounded-xl border-l-4 border-secondary italic text-sm text-blue-950 leading-relaxed"
+            >
+              {normaliseComment(suggestion)}
+            </blockquote>
+          ))}
+        </div>
+      ) : (
+        <p className="text-sm text-on-surface-variant bg-surface p-4 rounded-xl">
+          No clear solution-oriented student suggestions were returned for this theme yet.
+        </p>
+      )}
     </div>
   )
 }
@@ -161,10 +196,11 @@ export default function ViewMorePage() {
   const summary = liveData?.summary || theme?.aiSummary
   const positiveComments = liveData?.positive_comments?.length > 0 ? liveData.positive_comments : []
   const criticalComments = liveData?.critical_comments?.length > 0 ? liveData.critical_comments : []
+  const studentSuggestions = liveData?.student_suggestions?.length > 0 ? liveData.student_suggestions : []
   const chartRows = buildSubthemeRows(
     subthemes,
     liveData?.subtheme_mentions,
-    [...comments, ...positiveComments, ...criticalComments],
+    [...comments, ...positiveComments, ...criticalComments, ...studentSuggestions],
   )
 
   if (!theme) {
@@ -262,6 +298,8 @@ export default function ViewMorePage() {
                 comments={criticalComments}
               />
             </div>
+
+            <SuggestionSection suggestions={studentSuggestions} />
 
             {comments.length > 0 && (
               <div className="bg-surface-container-lowest rounded-2xl p-4 md:p-6 shadow-ambient border border-outline-variant/10">

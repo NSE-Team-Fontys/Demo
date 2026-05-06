@@ -7,13 +7,16 @@ from typing import Optional
 import torch
 from transformers import pipeline as hf_pipeline
 
+from src.core.model_device import get_model_device, get_pipeline_device
+
 from .layer2_text_norm import normalize_for_ner
 from .layer_utils import Span
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-_device = 0 if torch.cuda.is_available() else -1
+_torch_device = get_model_device()
+_device = get_pipeline_device(_torch_device)
 _use_fp16 = os.environ.get("LAYER2_FP16", "").lower() in {"1", "true", "yes"}
 
 # Optional model: only works if available in your environment.
@@ -26,7 +29,7 @@ try:
         "aggregation_strategy": "simple",
         "device": _device,
     }
-    if _device == 0 and _use_fp16:
+    if _torch_device != "cpu" and _use_fp16:
         kwargs["model_kwargs"] = {"torch_dtype": torch.float16}
     _ner = hf_pipeline(**kwargs)
     _load_error = None
@@ -116,4 +119,3 @@ def openai_privacy_filter_collect_spans(text: str, config: Optional[dict] = None
 
     tuples = _spans_tuple_for_text(text, entities, config)
     return [Span(start=s, end=e, tag=t) for s, e, t in tuples]
-

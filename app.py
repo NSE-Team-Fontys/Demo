@@ -25,6 +25,7 @@ import requests
 from sentence_transformers import SentenceTransformer
 
 from anonymizer import process_file_with_layers
+from src.core.model_device import describe_model_device, get_model_device
 from vector_builder import build_vector_db_stream
 
 app = Flask(__name__)
@@ -108,8 +109,12 @@ def theme_overview_cache_key(filters: dict) -> tuple:
 def get_theme_embedding_model():
     global _theme_embedding_model
     if _theme_embedding_model is None:
+        device = get_model_device()
+        print(f"[EMBEDDINGS] Loading {THEME_EMBEDDING_MODEL} on {describe_model_device(device)}")
         _theme_embedding_model = SentenceTransformer(
-            THEME_EMBEDDING_MODEL, model_kwargs={"use_safetensors": True}
+            THEME_EMBEDDING_MODEL,
+            model_kwargs={"use_safetensors": True},
+            device=device,
         )
     return _theme_embedding_model
 
@@ -443,9 +448,7 @@ def query_vectors():
                 }
             ), 400
 
-        model = SentenceTransformer(
-            "BAAI/bge-m3", model_kwargs={"use_safetensors": True}
-        )
+        model = get_theme_embedding_model()
         query_embedding = model.encode(query_text, normalize_embeddings=True)
 
         # Build where filter - support multiple conditions and metadata aliases.
@@ -641,6 +644,7 @@ def theme_summary():
             has_view_more_fields = (
                 "positive_comments" in cached_data
                 and "critical_comments" in cached_data
+                and "student_suggestions" in cached_data
                 and "subtheme_mentions" in cached_data
             )
             if has_view_more_fields:
@@ -652,9 +656,7 @@ def theme_summary():
         client = chromadb.PersistentClient(path=str(VECTOR_DB_PATH))
         collection = client.get_collection("survey_responses")
 
-        model = SentenceTransformer(
-            "BAAI/bge-m3", model_kwargs={"use_safetensors": True}
-        )
+        model = get_theme_embedding_model()
         query_embedding = model.encode(theme_query, normalize_embeddings=True)
 
         results = collection.query(
@@ -677,6 +679,7 @@ def theme_summary():
         prompt = f"""You are an expert data analyst. Read the following student survey responses about '{theme_name}'.
 Summarize the general consensus in 2 sentences. Extract 3 key sentiments (Positive, Neutral, or Critical) and provide a 1-sentence point for each.
 Select up to 3 exact positive student comments and up to 3 exact critical student comments from the responses. Use verbatim text only; do not invent comments.
+Select up to 3 exact student suggestions where students propose a solution, improvement, or concrete next step instead of only complaining. Use verbatim text only; return an empty array if no clear suggestions exist.
 Also extract 3 to 5 short sub-themes or topics mentioned (e.g. "Lecture Pacing", "Teacher Availability").
 Respond EXACTLY in this JSON format:
 {{
@@ -686,6 +689,7 @@ Respond EXACTLY in this JSON format:
   ],
   "positive_comments": ["..."],
   "critical_comments": ["..."],
+  "student_suggestions": ["..."],
   "subthemes": ["...", "..."]
 }}
 
@@ -731,6 +735,7 @@ Responses:
                 sentiments = parsed.get("sentiments", [])
                 positive_comments = parsed.get("positive_comments", [])
                 critical_comments = parsed.get("critical_comments", [])
+                student_suggestions = parsed.get("student_suggestions", [])
                 subthemes = parsed.get("subthemes", [])
             else:
                 error_body = response.text
@@ -758,6 +763,7 @@ Responses:
             "sentiments": sentiments,
             "positive_comments": positive_comments[:3],
             "critical_comments": critical_comments[:3],
+            "student_suggestions": student_suggestions[:3],
             "subthemes": subthemes,
             "subtheme_mentions": subtheme_mention_rows(subthemes, relevant_docs),
             "quotes": real_quotes,
@@ -837,11 +843,7 @@ def precompute_insights():
                     + "\n"
                 )
 
-                from sentence_transformers import SentenceTransformer
-
-                model = SentenceTransformer(
-                    "BAAI/bge-m3", model_kwargs={"use_safetensors": True}
-                )
+                model = get_theme_embedding_model()
                 query_embedding = model.encode(query, normalize_embeddings=True)
 
                 results = collection.query(
@@ -917,6 +919,7 @@ def precompute_insights():
                     prompt = f"""You are an expert data analyst. Read the following student survey responses about '{theme_name}'.
 Summarize the general consensus in 2 sentences. Extract 3 key sentiments (Positive, Neutral, or Critical) and provide a 1-sentence point for each.
 Select up to 3 exact positive student comments and up to 3 exact critical student comments from the responses. Use verbatim text only; do not invent comments.
+Select up to 3 exact student suggestions where students propose a solution, improvement, or concrete next step instead of only complaining. Use verbatim text only; return an empty array if no clear suggestions exist.
 Also extract 3 to 5 short sub-themes or topics mentioned.
 Respond EXACTLY in this JSON format:
 {{
@@ -926,6 +929,7 @@ Respond EXACTLY in this JSON format:
   ],
   "positive_comments": ["..."],
   "critical_comments": ["..."],
+  "student_suggestions": ["..."],
   "subthemes": ["...", "..."]
 }}
 
@@ -967,6 +971,9 @@ Responses:
                             )[:3],
                             "critical_comments": parsed.get(
                                 "critical_comments", []
+                            )[:3],
+                            "student_suggestions": parsed.get(
+                                "student_suggestions", []
                             )[:3],
                             "subthemes": parsed.get("subthemes", []),
                             "subtheme_mentions": subtheme_mention_rows(
