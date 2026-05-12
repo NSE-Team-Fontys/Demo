@@ -24,7 +24,11 @@ import chromadb
 import requests
 
 from anonymizer import process_file_with_layers
-from src.core.embedding_models import describe_embedding_runtime, load_embedding_model
+from src.core.embedding_models import (
+    DEFAULT_EMBEDDING_MODEL,
+    describe_embedding_runtime,
+    load_embedding_model,
+)
 from vector_builder import build_vector_db_stream
 
 app = Flask(__name__)
@@ -36,7 +40,7 @@ VECTOR_DB_PATH = Path("./survey_vector_db")
 TEMP_DIR = Path("./temp")
 ANONYMIZED_CSV_PATH = Path("./data/anonymized_survey.csv")
 SEP_FILE = Path("./data/detected_sep.txt")
-THEME_EMBEDDING_MODEL = "BAAI/bge-m3"
+THEME_EMBEDDING_MODEL = DEFAULT_EMBEDDING_MODEL
 THEMES_LIST = [
     "Content and Organisation",
     "Professional Practice",
@@ -295,7 +299,7 @@ def build_vectors():
             ), 400
 
         data = request.json or {}
-        embedding_model = data.get("embedding_model", "BAAI/bge-m3")
+        embedding_model = str(data.get("embedding_model") or DEFAULT_EMBEDDING_MODEL).strip()
         selected_columns = data.get("selected_columns", None)
         allow_model_download = bool(data.get("allow_model_download", True))
 

@@ -7,6 +7,15 @@ from sentence_transformers import SentenceTransformer
 
 from src.core.model_device import describe_model_device, get_model_device
 
+DEFAULT_EMBEDDING_MODEL = "Octen/Octen-Embedding-0.6B"
+
+AVAILABLE_EMBEDDING_MODELS = (
+    "Octen/Octen-Embedding-0.6B",
+    "Octen/Octen-Embedding-4B",
+    "Octen/Octen-Embedding-8B",
+    "BAAI/bge-m3",
+)
+
 
 def _trust_remote_code_enabled() -> bool:
     return os.environ.get("EMBEDDING_TRUST_REMOTE_CODE", "").strip().lower() in {

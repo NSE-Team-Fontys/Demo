@@ -115,7 +115,7 @@ flowchart LR
     l2b["Optional Layer\nOpenAI Privacy Filter"]
     merge["Collect spans\nfilter overlaps\napply masks once"]
     csv["anonymized_survey.csv"]
-    embed["Embedding model\nBAAI/bge-m3 or selected model"]
+    embed["Embedding model\nOcten 0.6B default or selected model"]
     db["ChromaDB collection\nsurvey_responses"]
     insights["Ollama insights\ncached summaries"]
     dashboard["Dashboard filters\nquery + theme cards"]
@@ -182,7 +182,7 @@ Main file: `vector_builder.py`
 - Uses selected questionnaire columns.
 - Stores documents, embeddings, and metadata in ChromaDB.
 - Loads the embedding model before deleting/recreating the Chroma collection.
-- Supports Hugging Face/SentenceTransformer models such as `Qwen/Qwen3-Embedding-8B`.
+- Supports the configured Hugging Face/SentenceTransformer embedding models: `Octen/Octen-Embedding-0.6B` by default, `Octen/Octen-Embedding-4B`, `Octen/Octen-Embedding-8B`, and `BAAI/bge-m3`.
 - Stores the selected embedding model in Chroma metadata so queries and theme summaries use the same vector dimensions later.
 - Supports `allow_model_download` from the frontend:
   - enabled: download model if missing.

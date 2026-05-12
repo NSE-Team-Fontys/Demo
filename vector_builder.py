@@ -5,7 +5,12 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 import json
 import csv
 
-from src.core.embedding_models import describe_embedding_runtime, load_embedding_model
+from src.core.embedding_models import (
+    AVAILABLE_EMBEDDING_MODELS,
+    DEFAULT_EMBEDDING_MODEL,
+    describe_embedding_runtime,
+    load_embedding_model,
+)
 from src.core.model_device import describe_model_device, get_model_device
 
 
@@ -148,8 +153,10 @@ def build_vector_db(csv_path="data/anonymized_output.csv", db_path="./survey_vec
     df_temp = pd.read_csv(csv_path, sep=CSV_SEP, nrows=1, encoding='utf-8-sig')
     ANSWER_COLS = [col for col in df_temp.columns if is_questionnaire_column(col)]
     COLLECTION = 'survey_responses'
-    EMBEDDING_MODEL = 'BAAI/bge-m3'
+    EMBEDDING_MODEL = DEFAULT_EMBEDDING_MODEL
     BATCH_SIZE = 64
+    if EMBEDDING_MODEL not in AVAILABLE_EMBEDDING_MODELS:
+        raise Exception(f"Unsupported embedding model: {EMBEDDING_MODEL}")
 
     # 2. Load
     print(f"Loading CSV from {csv_path}...")
@@ -223,8 +230,15 @@ def build_vector_db_stream(
     try:
         CSV_SEP = detect_sep(csv_path)
         COLLECTION = 'survey_responses'
-        EMBEDDING_MODEL = embedding_model or 'BAAI/bge-m3'
+        EMBEDDING_MODEL = str(embedding_model or DEFAULT_EMBEDDING_MODEL).strip()
         BATCH_SIZE = 50
+        if EMBEDDING_MODEL not in AVAILABLE_EMBEDDING_MODELS:
+            supported = ", ".join(AVAILABLE_EMBEDDING_MODELS)
+            yield json.dumps({
+                "status": "error",
+                "error": f"Unsupported embedding model '{EMBEDDING_MODEL}'. Choose one of: {supported}.",
+            }) + "\n"
+            return
 
         # Load CSV
         yield json.dumps({"status": "progress", "message": f"Loading CSV from {csv_path}...", "progress": 10}) + "\n"
