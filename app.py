@@ -29,6 +29,12 @@ from src.core.embedding_models import (
     describe_embedding_runtime,
     load_embedding_model,
 )
+from src.core.reranker_models import (
+    describe_reranker_runtime,
+    load_reranker_model,
+    reranker_enabled,
+    selected_reranker_model,
+)
 from vector_builder import build_vector_db_stream
 
 app = Flask(__name__)
@@ -41,6 +47,11 @@ TEMP_DIR = Path("./temp")
 ANONYMIZED_CSV_PATH = Path("./data/anonymized_survey.csv")
 SEP_FILE = Path("./data/detected_sep.txt")
 THEME_EMBEDDING_MODEL = DEFAULT_EMBEDDING_MODEL
+RERANKER_CANDIDATE_MULTIPLIER = int(
+    os.environ.get("RERANKER_CANDIDATE_MULTIPLIER", "5")
+)
+RERANKER_MAX_CANDIDATES = int(os.environ.get("RERANKER_MAX_CANDIDATES", "100"))
+LLM_CONTEXT_DOCUMENTS = int(os.environ.get("LLM_CONTEXT_DOCUMENTS", "15"))
 THEMES_LIST = [
     "Content and Organisation",
     "Professional Practice",
@@ -134,6 +145,58 @@ def get_theme_query_embeddings(model_id: str | None = None):
             for theme in THEMES_LIST
         }
     return _theme_query_embeddings[selected_model]
+
+
+def rerank_documents(
+    query: str,
+    documents: list[str],
+    *,
+    metadatas: list[dict] | None = None,
+    distances: list[float] | None = None,
+    top_n: int | None = None,
+    allow_model_download: bool = True,
+) -> list[dict]:
+    if not documents:
+        return []
+
+    if not reranker_enabled():
+        ranked = []
+        for i, doc in enumerate(documents):
+            distance = distances[i] if distances and i < len(distances) else None
+            similarity = max(0, 1 - distance) if distance is not None else None
+            ranked.append(
+                {
+                    "document": doc,
+                    "metadata": metadatas[i] if metadatas and i < len(metadatas) else {},
+                    "distance": distance,
+                    "similarity": similarity,
+                    "reranker_score": None,
+                }
+            )
+        return ranked[:top_n] if top_n else ranked
+
+    model_id = selected_reranker_model()
+    print(f"[RERANKER] Loading {model_id} via {describe_reranker_runtime(model_id)}")
+    model = load_reranker_model(model_id, allow_download=allow_model_download)
+    pairs = [(query, doc) for doc in documents]
+    scores = model.predict(pairs)
+
+    ranked = []
+    for i, (doc, score) in enumerate(zip(documents, scores)):
+        distance = distances[i] if distances and i < len(distances) else None
+        similarity = max(0, 1 - distance) if distance is not None else None
+        ranked.append(
+            {
+                "document": doc,
+                "metadata": metadatas[i] if metadatas and i < len(metadatas) else {},
+                "distance": distance,
+                "similarity": similarity,
+                "reranker_score": float(score),
+            }
+        )
+
+    ranked.sort(key=lambda item: item["reranker_score"], reverse=True)
+    return ranked[:top_n] if top_n else ranked
 
 
 def is_questionnaire_column(col: str) -> bool:
@@ -467,9 +530,15 @@ def query_vectors():
             else:
                 where_filter = conditions[0]
 
+        retrieval_k = min(
+            max(top_k * RERANKER_CANDIDATE_MULTIPLIER, top_k),
+            max(collection.count(), 1),
+            RERANKER_MAX_CANDIDATES,
+        )
+
         results = collection.query(
             query_embeddings=[query_embedding.tolist()],
-            n_results=top_k,
+            n_results=retrieval_k,
             where=where_filter,
             include=["documents", "metadatas", "distances"],
         )
@@ -477,9 +546,16 @@ def query_vectors():
         # Format results
         formatted = []
         if results["documents"] and len(results["documents"]) > 0:
-            for i, doc in enumerate(results["documents"][0]):
-                distance = results["distances"][0][i]
-                similarity = max(0, 1 - distance)
+            ranked_results = rerank_documents(
+                query_text,
+                results["documents"][0],
+                metadatas=results["metadatas"][0] if results["metadatas"] else None,
+                distances=results["distances"][0] if results["distances"] else None,
+                top_n=top_k,
+            )
+            for i, ranked in enumerate(ranked_results):
+                doc = ranked["document"]
+                similarity = ranked["similarity"] if ranked["similarity"] is not None else 0
 
                 result_item = {
                     "id": i + 1,
@@ -487,10 +563,11 @@ def query_vectors():
                     "preview": doc[:300] + "..." if len(doc) > 300 else doc,
                     "similarity": round(similarity, 3),
                     "percentage": round(similarity * 100, 1),
+                    "reranker_score": ranked["reranker_score"],
                 }
 
-                if results["metadatas"] and i < len(results["metadatas"][0]):
-                    result_item["metadata"] = results["metadatas"][0][i]
+                if ranked["metadata"]:
+                    result_item["metadata"] = ranked["metadata"]
 
                 formatted.append(result_item)
 
@@ -499,6 +576,10 @@ def query_vectors():
                 "status": "success",
                 "results": formatted,
                 "count": len(formatted),
+                "candidate_count": len(results["documents"][0])
+                if results["documents"]
+                else 0,
+                "reranker": selected_reranker_model() if reranker_enabled() else None,
                 "query": query_text,
                 "filters_applied": filters,
             }
@@ -653,11 +734,19 @@ def theme_summary():
                 and "student_suggestions" in cached_data
                 and "subtheme_mentions" in cached_data
             )
-            if has_view_more_fields:
+            has_reranker_fields = (
+                "vector_relevant_count" in cached_data
+                and "llm_document_count" in cached_data
+                and "reranker" in cached_data
+            )
+            if has_view_more_fields and has_reranker_fields:
                 print(f"[GEMMA4] Returning cached summary for: {theme_name}")
                 cached_data["status"] = "success"
                 return jsonify(cached_data)
-            print(f"[GEMMA4] Cached summary for {theme_name} is missing ViewMore fields; regenerating.")
+            print(
+                f"[GEMMA4] Cached summary for {theme_name} is missing current "
+                "dashboard fields; regenerating."
+            )
 
         print(f"[GEMMA4] Cache miss — generating summary for: {theme_name}")
         ensure_ollama_model_available(ollama_model, allow_pull=allow_model_download)
@@ -668,21 +757,40 @@ def theme_summary():
         embedding_model = collection_embedding_model(collection)
         model = get_theme_embedding_model(embedding_model)
         query_embedding = model.encode(theme_query, normalize_embeddings=True)
+        total_docs = collection.count()
+        retrieval_k = min(
+            max(20 * RERANKER_CANDIDATE_MULTIPLIER, 20),
+            max(total_docs, 1),
+            RERANKER_MAX_CANDIDATES,
+        )
 
         results = collection.query(
             query_embeddings=[query_embedding.tolist()],
-            n_results=20,
+            n_results=retrieval_k,
             include=["documents", "distances"],
         )
 
-        # Filter for relevance > 0.6
+        # Filter for first-stage vector relevance before reranking.
         relevant_docs = []
+        relevant_distances = []
         if results["documents"] and len(results["documents"]) > 0:
             for i, doc in enumerate(results["documents"][0]):
                 distance = results["distances"][0][i]
                 similarity = max(0, 1 - distance)
                 if similarity >= 0.5:
                     relevant_docs.append(doc)
+                    relevant_distances.append(distance)
+
+        vector_relevant_count = len(relevant_docs)
+        ranked_docs = rerank_documents(
+            theme_query,
+            relevant_docs[:RERANKER_MAX_CANDIDATES],
+            distances=relevant_distances[:RERANKER_MAX_CANDIDATES],
+            top_n=RERANKER_MAX_CANDIDATES,
+            allow_model_download=allow_model_download,
+        )
+        relevant_docs = [item["document"] for item in ranked_docs]
+        llm_docs = relevant_docs[:LLM_CONTEXT_DOCUMENTS]
 
         # Real Gemma Call via Ollama
 
@@ -705,14 +813,15 @@ Respond EXACTLY in this JSON format:
 
 Responses:
 """
-        for doc in relevant_docs[:15]:
+        for doc in llm_docs:
             prompt += f"- {doc}\n"
 
         real_quotes = relevant_docs[:3] if len(relevant_docs) >= 3 else relevant_docs
 
         try:
             print(
-                f"[GEMMA] Sending {len(relevant_docs)} docs to local Ollama (gemma model)..."
+                f"[GEMMA] Reranked {vector_relevant_count} relevant docs; "
+                f"sending {len(llm_docs)} docs to local Ollama (gemma model)..."
             )
             response = requests.post(
                 "http://localhost:11434/api/generate",
@@ -769,6 +878,9 @@ Responses:
             "status": "success",
             "theme": theme_name,
             "document_count": len(relevant_docs),
+            "vector_relevant_count": vector_relevant_count,
+            "llm_document_count": len(llm_docs),
+            "reranker": selected_reranker_model() if reranker_enabled() else None,
             "summary": summary,
             "sentiments": sentiments,
             "positive_comments": positive_comments[:3],
@@ -864,27 +976,54 @@ def precompute_insights():
                 )
 
                 relevant_docs = []
+                relevant_distances = []
                 if results["documents"] and len(results["documents"]) > 0:
                     for j, doc in enumerate(results["documents"][0]):
                         distance = results["distances"][0][j]
                         similarity = max(0, 1 - distance)
                         if similarity >= 0.5:
                             relevant_docs.append(doc)
+                            relevant_distances.append(distance)
+
+                vector_relevant_count = len(relevant_docs)
+                ranked_docs = rerank_documents(
+                    query,
+                    relevant_docs[:RERANKER_MAX_CANDIDATES],
+                    distances=relevant_distances[:RERANKER_MAX_CANDIDATES],
+                    top_n=RERANKER_MAX_CANDIDATES,
+                    allow_model_download=allow_model_download,
+                )
+                relevant_docs = [item["document"] for item in ranked_docs]
+                llm_docs = relevant_docs[:LLM_CONTEXT_DOCUMENTS]
 
                 frequency = (
-                    int((len(relevant_docs) / max(total_docs, 1)) * 100)
+                    int((vector_relevant_count / max(total_docs, 1)) * 100)
                     if total_docs > 0
                     else 0
                 )
 
                 # Check cache for summary
+                cached_theme = cache.get(theme_name, {})
+                cache_has_current_reranker = (
+                    "llm_document_count" in cached_theme
+                    and cached_theme.get("reranker")
+                    == (selected_reranker_model() if reranker_enabled() else None)
+                )
                 if (
                     theme_name in cache
                     and "summary" in cache[theme_name]
                     and cache[theme_name].get("sentiments")
+                    and cache_has_current_reranker
                 ):
                     # Update frequency but keep summary
                     cache[theme_name]["frequency"] = frequency
+                    cache[theme_name]["vector_relevant_count"] = vector_relevant_count
+                    cache[theme_name]["llm_document_count"] = min(
+                        len(relevant_docs), LLM_CONTEXT_DOCUMENTS
+                    )
+                    cache[theme_name]["reranker"] = (
+                        selected_reranker_model() if reranker_enabled() else None
+                    )
                     save_cache(cache)
                     yield (
                         json.dumps(
@@ -905,7 +1044,10 @@ def precompute_insights():
                             "status": "progress",
                             "theme": theme_name,
                             "progress": int(((i + 0.5) / len(themes)) * 100),
-                            "message": f" {ollama_model} is generating summary for {theme_name}...",
+                            "message": (
+                                f"{ollama_model} is generating summary for "
+                                f"{theme_name} with {len(llm_docs)} answers..."
+                            ),
                         }
                     )
                     + "\n"
@@ -914,6 +1056,11 @@ def precompute_insights():
                 if not relevant_docs:
                     cache[theme_name] = {
                         "frequency": frequency,
+                        "vector_relevant_count": vector_relevant_count,
+                        "llm_document_count": 0,
+                        "reranker": selected_reranker_model()
+                        if reranker_enabled()
+                        else None,
                         "summary": "Not enough highly relevant responses found.",
                         "sentiments": [],
                     }
@@ -946,7 +1093,7 @@ Respond EXACTLY in this JSON format:
 
 Responses:
 """
-                for doc in relevant_docs[:15]:
+                for doc in llm_docs:
                     prompt += f"- {doc}\n"
 
                 real_quotes = (
@@ -973,6 +1120,11 @@ Responses:
 
                         cache[theme_name] = {
                             "frequency": frequency,
+                            "vector_relevant_count": vector_relevant_count,
+                            "llm_document_count": len(llm_docs),
+                            "reranker": selected_reranker_model()
+                            if reranker_enabled()
+                            else None,
                             "summary": parsed.get(
                                 "summary", "Summary could not be parsed."
                             ),

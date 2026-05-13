@@ -213,6 +213,9 @@ Behavior:
 
 - Ollama availability and selected model are checked before generation.
 - If the model is missing, generation fails unless `Pull Ollama model if missing` is enabled in the UI.
+- Chroma retrieves broad first-stage matches, then `zeroentropy/zerank-2-reranker` reranks the strongest candidates before the prompt is built.
+- The dashboard sends up to 15 reranked answers to the LLM by default (`LLM_CONTEXT_DOCUMENTS=15`).
+- Insight cache entries include `vector_relevant_count` and `llm_document_count` so you can see how many answers matched the theme and how many answers the LLM actually received.
 - Successful summaries are cached in `gemma_cache.json`.
 - Failed generations are not cached as successful insights.
 
