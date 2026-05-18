@@ -30,42 +30,6 @@ const AVAILABLE_MODELS = [
     size: 'Large',
     speed: 'Slow',
     recommended: false
-  },
-  {
-    id: 'gemma3:4b',
-    name: 'Gemma 3 4B',
-    provider: 'Google',
-    description: 'Previous generation Gemma. Reliable and well-tested for summary tasks.',
-    size: '~3 GB',
-    speed: 'Fast',
-    recommended: false
-  },
-  {
-    id: 'llama3.2:3b',
-    name: 'Llama 3.2 3B',
-    provider: 'Meta',
-    description: 'Compact but capable model from Meta. Good general-purpose summarization.',
-    size: '~2 GB',
-    speed: 'Very Fast',
-    recommended: false
-  },
-  {
-    id: 'mistral:7b',
-    name: 'Mistral 7B',
-    provider: 'Mistral AI',
-    description: 'Powerful 7B parameter model. Higher quality output but slower inference.',
-    size: '~4.1 GB',
-    speed: 'Moderate',
-    recommended: false
-  },
-  {
-    id: 'phi4-mini:latest',
-    name: 'Phi-4 Mini',
-    provider: 'Microsoft',
-    description: 'Microsoft\'s efficient small model. Strong reasoning capabilities.',
-    size: '~2.5 GB',
-    speed: 'Fast',
-    recommended: false
   }
 ];
 

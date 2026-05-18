@@ -6,6 +6,7 @@ const AVAILABLE_MODELS = [
     name: 'Octen Embedding 0.6B',
     provider: 'Octen',
     description: 'Default compact Octen embedding model. Best starting point for local iteration before moving to larger Octen variants.',
+    role: 'Compact',
     silhouette: null,
     daviesBouldin: null,
     embedTime: 'Fastest Octen',
@@ -17,6 +18,7 @@ const AVAILABLE_MODELS = [
     name: 'Octen Embedding 4B',
     provider: 'Octen',
     description: 'Medium Octen embedding model for better retrieval quality when you can spend more memory and inference time.',
+    role: 'Balanced',
     silhouette: null,
     daviesBouldin: null,
     embedTime: 'Moderate',
@@ -28,21 +30,11 @@ const AVAILABLE_MODELS = [
     name: 'Octen Embedding 8B',
     provider: 'Octen',
     description: 'Largest Octen embedding option for maximum semantic retrieval quality on capable hardware.',
+    role: 'High capacity',
     silhouette: null,
     daviesBouldin: null,
     embedTime: 'Slow',
     languages: 'Multilingual',
-    recommended: false
-  },
-  {
-    id: 'BAAI/bge-m3',
-    name: 'BGE-M3',
-    provider: 'BAAI',
-    description: 'Strong multilingual baseline kept for comparison with the Octen embedding models.',
-    silhouette: 0.93,
-    daviesBouldin: 0.34,
-    embedTime: '42s',
-    languages: '100+ languages',
     recommended: false
   }
 ];
@@ -246,7 +238,7 @@ export default function VectorDBBuilder({ onSuccess }) {
                                 Silhouette: {model.silhouette.toFixed(2)}
                               </span>
                             ) : (
-                              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">Not benchmarked</span>
+                              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-fuchsia-100 text-fuchsia-700">{model.role}</span>
                             )}
                             {typeof model.daviesBouldin === 'number' && (
                               <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${model.daviesBouldin <= 0.20 ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}>
@@ -262,7 +254,7 @@ export default function VectorDBBuilder({ onSuccess }) {
                   );
                 })}
               </div>
-              <p className="text-[11px] text-gray-400">Benchmarked on 1000 survey responses using HDBSCAN clustering</p>
+              <p className="text-[11px] text-gray-400">Choose between compact, balanced, and high-capacity Octen embeddings</p>
             </div>
           </div>
 

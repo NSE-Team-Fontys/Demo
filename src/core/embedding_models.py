@@ -13,7 +13,6 @@ AVAILABLE_EMBEDDING_MODELS = (
     "Octen/Octen-Embedding-0.6B",
     "Octen/Octen-Embedding-4B",
     "Octen/Octen-Embedding-8B",
-    "BAAI/bge-m3",
 )
 
 
