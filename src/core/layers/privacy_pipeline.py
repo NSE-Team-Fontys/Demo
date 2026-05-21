@@ -11,6 +11,7 @@ import re
 from typing import Optional, Set
 
 from .layer1_presidio import collect_presidio_spans
+from .layer_utils import extend_name_spans_for_tussenvoegsels
 
 _NEVER_MASK_WORDS: Set[str] = {"meneer", "mevrouw"}
 _HONORIFIC_WORDS: Set[str] = {
@@ -23,7 +24,10 @@ _HONORIFIC_WORDS: Set[str] = {
 
 # Align with layer2_text_norm (ASCII apostrophe + Unicode right single quotation mark).
 _POSSESSIVE_RE = re.compile(r"['\u2019][sS]\b")
-_NAME_TOKEN_RE = re.compile(r"^[A-Z][a-z]+(?:\s+(?:de|den|der|van|von|of|[A-Z][a-z]+))*$")
+_NAME_TOKEN_RE = re.compile(
+    r"^[A-Z\u00C0-\u024F][A-Za-z\u00C0-\u024F]+"
+    r"(?:\s+(?:de|den|der|van|von|of|[A-Z\u00C0-\u024F][A-Za-z\u00C0-\u024F]+))*$"
+)
 _NAME_CARRY_STOPWORDS: Set[str] = {
     "a",
     "an",
@@ -226,6 +230,7 @@ def process_chunk_sync(batch: list[str], config: Optional[dict], layers: list[st
         return list(batch)
 
     combined = [a + b for a, b in zip(layer1_spans, layer2_spans)]
+    combined = [extend_name_spans_for_tussenvoegsels(t, s) for t, s in zip(batch, combined)]
     combined = [_filter_spans(t, s, config) for t, s in zip(batch, combined)]
     carryforward = _build_carryforward_spans(batch, combined)
 

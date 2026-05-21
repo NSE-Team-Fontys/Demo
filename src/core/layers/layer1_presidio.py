@@ -14,6 +14,7 @@ from langdetect import detect
 from langdetect.lang_detect_exception import LangDetectException
 
 from .layer2_text_norm import normalize_for_ner
+from .layer_utils import extend_name_spans_for_tussenvoegsels
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -82,7 +83,7 @@ PRESIDIO_PATTERN_DEFINITIONS = [
             ),
             Pattern(
                 name="name_after_teacher_context",
-                regex=r"\b(?:[Dd]ocent|[Tt]eacher|[Pp]rofessor|[Mm]entor)\s+[A-Z][a-z]+(?:['’]s)?\b",
+                regex=r"(?:(?<=[Dd]ocent )|(?<=[Tt]eacher )|(?<=[Pp]rofessor )|(?<=[Mm]entor ))[A-Z\u00C0-\u024F][A-Za-z\u00C0-\u024F]+(?:\s+[A-Z\u00C0-\u024F][A-Za-z\u00C0-\u024F]+)*(?:[‘’]s)?",
                 score=0.9,
             ),
         ],
@@ -318,7 +319,7 @@ def collect_presidio_spans(text: str, config: Optional[dict] = None) -> list[tup
             if op and op.operator_name == "replace":
                 tag = op.params.get("new_value", "[PII]")
                 spans.append((result.start, result.end, tag))
-        return spans
+        return extend_name_spans_for_tussenvoegsels(text, spans)
     except Exception as e:
         logger.error("Presidio collect error on %r…: %s", str(text)[:30], e)
         return []
