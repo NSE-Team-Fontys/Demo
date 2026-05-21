@@ -556,11 +556,13 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
                     { tag: '[PII]',      key: 'PII',      label: 'Email, phone, BSN, student nr, etc.',  color: 'purple' },
                     { tag: '[TITLE]',    key: 'TITLE',    label: 'Titles (Meneer, Mevrouw, etc.)',        color: 'rose'   },
                   ].map(({ tag, key, label, color }) => {
-                    const removed = result.stats.tag_counts[key] ?? 0;
-                    const missed  = result.stats.missed_counts?.[key] ?? 0;
-                    const samples = result.stats.missed_samples?.[key] ?? [];
-                    const clean   = missed === 0;
-                    const isOpen  = expandedCategory === key;
+                    const removed        = result.stats.tag_counts[key] ?? 0;
+                    const missed         = result.stats.missed_counts?.[key] ?? 0;
+                    const missedSamples  = result.stats.missed_samples?.[key] ?? [];
+                    const removedSamples = result.stats.removed_samples?.[key] ?? [];
+                    const clean          = missed === 0;
+                    const removedOpen    = expandedCategory === `${key}-removed`;
+                    const missedOpen     = expandedCategory === `${key}-missed`;
 
                     return (
                       <div key={key} className={`rounded-xl border-2 overflow-hidden transition-colors ${
@@ -568,15 +570,12 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
                         : removed > 0 ? `border-${color}-100`
                         :               'border-gray-100'
                       }`}>
-                        <button
-                          type="button"
-                          onClick={() => missed > 0 && setExpandedCategory(isOpen ? null : key)}
-                          className={`w-full flex items-center justify-between p-4 text-left transition-colors ${
-                            !clean        ? 'bg-amber-50/40 hover:bg-amber-50'
-                            : removed > 0 ? `bg-${color}-50/40`
-                            :               'bg-gray-50'
-                          } ${missed > 0 ? 'cursor-pointer' : 'cursor-default'}`}
-                        >
+                        {/* Main row */}
+                        <div className={`w-full flex items-center justify-between p-4 ${
+                          !clean        ? 'bg-amber-50/40'
+                          : removed > 0 ? `bg-${color}-50/40`
+                          :               'bg-gray-50'
+                        }`}>
                           <div className="flex items-center gap-3">
                             <span className={`font-mono text-xs font-black px-2 py-1 rounded-md ${
                               !clean        ? 'bg-amber-100 text-amber-700'
@@ -591,33 +590,67 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
                           </div>
 
                           <div className="flex items-center gap-3 shrink-0 text-sm">
-                            {removed > 0 && (
-                              <span className={`font-medium text-${color}-700`}>{removed} removed</span>
-                            )}
-                            {!clean ? (
-                              <span className="flex items-center gap-1.5 font-bold text-amber-700">
-                                <span className="flex items-center justify-center w-6 h-6 bg-amber-400 rounded-full text-white text-xs">!</span>
-                                {missed} possibly missed
-                                <svg className={`w-4 h-4 text-amber-500 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            {removed > 0 ? (
+                              <button
+                                type="button"
+                                onClick={() => setExpandedCategory(removedOpen ? null : `${key}-removed`)}
+                                className={`flex items-center gap-1.5 font-medium text-${color}-700 hover:underline cursor-pointer`}
+                              >
+                                {removed} removed
+                                <svg className={`w-4 h-4 transition-transform ${removedOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
                                 </svg>
-                              </span>
+                              </button>
+                            ) : null}
+                            {!clean ? (
+                              <button
+                                type="button"
+                                onClick={() => setExpandedCategory(missedOpen ? null : `${key}-missed`)}
+                                className="flex items-center gap-1.5 font-bold text-amber-700 hover:underline cursor-pointer"
+                              >
+                                <span className="flex items-center justify-center w-6 h-6 bg-amber-400 rounded-full text-white text-xs">!</span>
+                                {missed} possibly missed
+                                <svg className={`w-4 h-4 text-amber-500 transition-transform ${missedOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                                </svg>
+                              </button>
                             ) : removed > 0 ? (
                               <span className="flex items-center justify-center w-6 h-6 bg-emerald-500 rounded-full text-white text-xs font-bold">✓</span>
                             ) : (
                               <span className="text-xs text-gray-400 italic">None detected</span>
                             )}
                           </div>
-                        </button>
+                        </div>
 
-                        {isOpen && (
+                        {/* Removed samples panel */}
+                        {removedOpen && (
+                          <div className={`border-t border-${color}-100 bg-white px-4 py-3 space-y-2`}>
+                            <p className={`text-xs font-bold text-${color}-700 uppercase tracking-wider mb-2`}>
+                              Removed — {removedSamples.length} unique
+                            </p>
+                            {removedSamples.length > 0 ? (
+                              <div className="flex flex-wrap gap-2">
+                                {removedSamples.map((sample, i) => (
+                                  <span key={i} className={`inline-block px-3 py-1 bg-${color}-50 border border-${color}-200 text-${color}-800 text-sm font-mono rounded-lg`}>
+                                    {sample}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-xs text-gray-400 italic">No sample data — restart the backend and re-run anonymization.</p>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Missed samples panel */}
+                        {missedOpen && (
                           <div className="border-t border-amber-200 bg-white px-4 py-3 space-y-2">
                             <p className="text-xs font-bold text-amber-700 uppercase tracking-wider mb-2">
-                              Possibly missed — up to 20 shown
+                              Possibly missed — {missedSamples.length} unique
                             </p>
-                            {samples.length > 0 ? (
+                            {missedSamples.length > 0 ? (
                               <div className="flex flex-wrap gap-2">
-                                {samples.map((sample, i) => (
+                                {missedSamples.map((sample, i) => (
                                   <span key={i} className="inline-block px-3 py-1 bg-amber-50 border border-amber-200 text-amber-800 text-sm font-mono rounded-lg">
                                     {sample}
                                   </span>

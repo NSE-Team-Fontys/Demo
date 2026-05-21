@@ -239,7 +239,7 @@ def process_file_with_layers(
     layer_config = {"names": True, "locations": True, "pii": True, "titles": True}
     missed_counts = {"NAME": 0, "PII": 0, "LOCATION": 0, "TITLE": 0}
     missed_samples = {"NAME": [], "PII": [], "LOCATION": [], "TITLE": []}
-    _MAX_SAMPLES = 20
+    removed_samples = {"NAME": [], "PII": [], "LOCATION": [], "TITLE": []}
 
     for col in columns_to_anonymize:
         if col not in df.columns:
@@ -259,11 +259,13 @@ def process_file_with_layers(
                 if key not in missed_counts:
                     continue
                 entity_text = original_val[start:end]
-                # Only flag if this entity is still visible in the anonymized output
                 if isinstance(anonymized_val, str) and entity_text.lower() in anonymized_val.lower():
                     missed_counts[key] += 1
-                    if len(missed_samples[key]) < _MAX_SAMPLES and entity_text not in missed_samples[key]:
+                    if entity_text not in missed_samples[key]:
                         missed_samples[key].append(entity_text)
+                else:
+                    if entity_text not in removed_samples[key]:
+                        removed_samples[key].append(entity_text)
 
     yield (
         json.dumps(
@@ -280,6 +282,7 @@ def process_file_with_layers(
                     "tag_counts": tag_counts,
                     "missed_counts": missed_counts,
                     "missed_samples": missed_samples,
+                    "removed_samples": removed_samples,
                 },
             }
         )
