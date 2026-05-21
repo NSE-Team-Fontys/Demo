@@ -1,6 +1,7 @@
 import csv
 import json
 import os
+import re
 
 import pandas as pd
 
@@ -73,6 +74,12 @@ def process_file_with_layers(
         sep = detect_sep(input_path)
     df = pd.read_csv(input_path, sep=sep, encoding="utf-8-sig")
 
+    # Save original texts before any modification so verification can detect on clean text
+    original_texts = {
+        col: df[col].copy()
+        for col in columns_to_anonymize
+        if col in df.columns
+    }
     yield (
         json.dumps({"status": "progress", "message": "Initializing...", "progress": 5})
         + "\n"
@@ -198,7 +205,68 @@ def process_file_with_layers(
                 + "\n"
             )
 
+    # --- Count what was masked (tags inserted into output) ---
+    _TAG_RE = re.compile(r'\[(NAME|PII|LOCATION|TITLE)\]')
+    total_cells = 0
+    affected_cells = 0
+    total_entities = 0
+    tag_counts = {"NAME": 0, "PII": 0, "LOCATION": 0, "TITLE": 0}
+
+    for col in columns_to_anonymize:
+        if col in df.columns:
+            for val in df[col]:
+                if pd.isna(val) or not isinstance(val, str) or not val.strip():
+                    continue
+                total_cells += 1
+                matches = _TAG_RE.findall(val)
+                if matches:
+                    affected_cells += 1
+                    total_entities += len(matches)
+                    for tag in matches:
+                        tag_counts[tag] += 1
+
     df.to_csv(output_path, sep=sep, index=False)
+
+    # --- Verification: detect entities in ORIGINAL text, check if they survived in output ---
+    yield (
+        json.dumps({"status": "progress", "message": "Verifying output...", "progress": 98})
+        + "\n"
+    )
+
+    from src.core.layers.layer1_presidio import collect_presidio_spans
+    from src.core.layers.privacy_pipeline import _filter_spans
+
+    layer_config = {"names": True, "locations": True, "pii": True, "titles": True}
+    missed_counts = {"NAME": 0, "PII": 0, "LOCATION": 0, "TITLE": 0}
+    missed_samples = {"NAME": [], "PII": [], "LOCATION": [], "TITLE": []}
+    removed_samples = {"NAME": [], "PII": [], "LOCATION": [], "TITLE": []}
+
+    for col in columns_to_anonymize:
+        if col not in df.columns:
+            continue
+        for idx in range(len(df)):
+            original_val = original_texts.get(col, pd.Series(dtype=str)).iloc[idx] if col in original_texts else None
+            anonymized_val = df[col].iloc[idx]
+
+            if pd.isna(original_val) or not isinstance(original_val, str) or not original_val.strip():
+                continue
+
+            # Detect on clean original text, then apply the same filters as the main pipeline
+            raw_spans = collect_presidio_spans(original_val, layer_config)
+            filtered_spans = _filter_spans(original_val, raw_spans, layer_config)
+            for start, end, tag in filtered_spans:
+                key = tag.strip("[]")
+                if key not in missed_counts:
+                    continue
+                entity_text = original_val[start:end]
+                if isinstance(anonymized_val, str) and entity_text.lower() in anonymized_val.lower():
+                    missed_counts[key] += 1
+                    if entity_text not in missed_samples[key]:
+                        missed_samples[key].append(entity_text)
+                else:
+                    if entity_text not in removed_samples[key]:
+                        removed_samples[key].append(entity_text)
+
     yield (
         json.dumps(
             {
@@ -207,6 +275,15 @@ def process_file_with_layers(
                 "rows_processed": total_rows,
                 "columns_anonymized": columns_to_anonymize,
                 "progress": 100,
+                "stats": {
+                    "total_cells": total_cells,
+                    "affected_cells": affected_cells,
+                    "total_entities": total_entities,
+                    "tag_counts": tag_counts,
+                    "missed_counts": missed_counts,
+                    "missed_samples": missed_samples,
+                    "removed_samples": removed_samples,
+                },
             }
         )
         + "\n"
