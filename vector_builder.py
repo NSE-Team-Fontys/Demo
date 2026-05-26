@@ -4,9 +4,52 @@ import os
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 import json
 import csv
+from pathlib import Path
 
 from src.core.embedding_models import describe_embedding_runtime, load_embedding_model
 from src.core.model_device import describe_model_device, get_model_device
+
+VECTOR_CHECKPOINT = Path("data/vector_checkpoint.json")
+
+
+def _load_vector_checkpoint(csv_path: str, embedding_model: str, selected_columns: list, db_path: str) -> int:
+    """Return processed_count if a valid checkpoint exists for the same run, else 0."""
+    if not VECTOR_CHECKPOINT.exists():
+        return 0
+    try:
+        stat = os.stat(csv_path)
+        meta = json.loads(VECTOR_CHECKPOINT.read_text(encoding="utf-8"))
+        if meta.get("csv_size") != stat.st_size:
+            return 0
+        if abs(meta.get("csv_mtime", 0) - stat.st_mtime) > 2:
+            return 0
+        if meta.get("embedding_model") != embedding_model:
+            return 0
+        if meta.get("selected_columns") != selected_columns:
+            return 0
+        # Verify the ChromaDB collection still exists.
+        try:
+            chromadb.PersistentClient(path=str(db_path)).get_collection("survey_responses")
+        except Exception:
+            return 0
+        return meta.get("processed_count", 0)
+    except Exception:
+        return 0
+
+
+def _save_vector_checkpoint(meta: dict):
+    try:
+        VECTOR_CHECKPOINT.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception as e:
+        print(f"[VECTOR CHECKPOINT] Warning: could not save: {e}")
+
+
+def _clear_vector_checkpoint():
+    try:
+        if VECTOR_CHECKPOINT.exists():
+            VECTOR_CHECKPOINT.unlink()
+    except Exception:
+        pass
 
 
 METADATA_COLS = {
@@ -230,13 +273,12 @@ def build_vector_db_stream(
         yield json.dumps({"status": "progress", "message": f"Loading CSV from {csv_path}...", "progress": 10}) + "\n"
         df = pd.read_csv(csv_path, sep=CSV_SEP, encoding='utf-8-sig')
 
-        # Use selected columns if provided, otherwise auto-detect questionnaire columns
         if selected_columns and len(selected_columns) > 0:
             ANSWER_COLS = [col for col in selected_columns if col in df.columns]
             yield json.dumps({"status": "progress", "message": f"Using {len(ANSWER_COLS)} selected columns: {', '.join(ANSWER_COLS)}", "progress": 12}) + "\n"
         else:
             ANSWER_COLS = [col for col in df.columns if is_questionnaire_column(col)]
-        
+
         if not ANSWER_COLS:
             yield json.dumps({"status": "error", "error": "No matching columns found in the dataset."}) + "\n"
             return
@@ -248,15 +290,26 @@ def build_vector_db_stream(
                 temp_df['question'] = question_col
                 temp_df['answer'] = temp_df[question_col]
                 all_records.append(temp_df)
-        
+
         if not all_records:
             yield json.dumps({"status": "error", "error": "No matching answer columns found in the dataset."}) + "\n"
             return
-            
-        df_combined = pd.concat(all_records, ignore_index=True)
 
-        # Load/validate the model before touching ChromaDB, so failures do not
-        # destroy the old vector database.
+        df_combined = pd.concat(all_records, ignore_index=True)
+        total_docs = len(df_combined)
+
+        # Check for a resumable checkpoint.
+        resume_from = _load_vector_checkpoint(csv_path, EMBEDDING_MODEL, ANSWER_COLS, db_path)
+        is_resuming = resume_from > 0
+
+        if is_resuming:
+            yield json.dumps({
+                "status": "progress",
+                "message": f"Resuming from checkpoint — {resume_from}/{total_docs} documents already indexed...",
+                "progress": 15,
+            }) + "\n"
+
+        # Load/validate the model before touching ChromaDB.
         yield json.dumps({"status": "progress", "message": f"Loading {EMBEDDING_MODEL} embedding model via {describe_embedding_runtime(EMBEDDING_MODEL)}...", "progress": 25}) + "\n"
         try:
             model = load_embedding_model(EMBEDDING_MODEL, allow_download=allow_model_download)
@@ -269,64 +322,83 @@ def build_vector_db_stream(
             yield json.dumps({"status": "error", "error": f"Embedding model could not be loaded: {e}.{download_hint}"}) + "\n"
             return
 
-        # Initialize client only after model preflight succeeds.
         yield json.dumps({"status": "progress", "message": "Connecting to ChromaDB...", "progress": 30}) + "\n"
         client = chromadb.PersistentClient(path=str(db_path))
 
-        try:
-            client.delete_collection(COLLECTION)
-        except:
-            pass
+        if is_resuming:
+            # Reuse the existing collection — do not delete it.
+            collection = client.get_or_create_collection(
+                COLLECTION,
+                metadata={"hnsw:space": "cosine", "embedding_model": EMBEDDING_MODEL},
+            )
+        else:
+            try:
+                client.delete_collection(COLLECTION)
+            except Exception:
+                pass
+            collection = client.create_collection(
+                COLLECTION,
+                metadata={"hnsw:space": "cosine", "embedding_model": EMBEDDING_MODEL},
+            )
 
-        collection = client.create_collection(
-            COLLECTION,
-            metadata={"hnsw:space": "cosine", "embedding_model": EMBEDDING_MODEL},
-        )
-        
-        total_docs = len(df_combined)
         yield json.dumps({"status": "progress", "message": f"Found {total_docs} documents to embed. Starting encoding...", "progress": 40}) + "\n"
-        
-        processed_count = 0
-        
-        import uuid
+
+        stat = os.stat(csv_path)
+        checkpoint_meta = {
+            "csv_size": stat.st_size,
+            "csv_mtime": stat.st_mtime,
+            "embedding_model": EMBEDDING_MODEL,
+            "selected_columns": ANSWER_COLS,
+            "total_docs": total_docs,
+            "processed_count": resume_from,
+        }
+
+        processed_count = resume_from
 
         for start in range(0, total_docs, BATCH_SIZE):
             end = min(start + BATCH_SIZE, total_docs)
+
+            if end <= resume_from:
+                # Already in ChromaDB — skip without re-encoding.
+                continue
+
             batch = df_combined.iloc[start:end]
-            
             batch_docs = batch['answer'].tolist()
-            batch_ids = [str(uuid.uuid4()) for _ in range(len(batch))]
-            
+            # Deterministic IDs so resume can safely skip already-indexed batches.
+            batch_ids = [f"doc_{start + j}" for j in range(len(batch))]
             batch_meta = [build_metadata(row) for _, row in batch.iterrows()]
-            
-            # Encode batch
+
             batch_embeddings = model.encode(batch_docs, normalize_embeddings=True)
-            
-            # Add to collection
+
             collection.add(
                 ids=batch_ids,
                 documents=batch_docs,
                 metadatas=batch_meta,
                 embeddings=batch_embeddings.tolist()
             )
-            
+
             processed_count += len(batch_ids)
+            checkpoint_meta["processed_count"] = processed_count
+            _save_vector_checkpoint(checkpoint_meta)
+
             progress = 40 + int(55 * (processed_count / total_docs))
-            
             yield json.dumps({
-                "status": "progress", 
+                "status": "progress",
                 "message": f"Embedded and indexed {processed_count}/{total_docs} documents...",
                 "progress": progress,
-                "current_doc": str(batch_docs[-1])[:100] + "..." if batch_docs else ""
+                "current_doc": str(batch_docs[-1])[:100] + "..." if batch_docs else "",
+                "checkpoint_saved": True,
             }) + "\n"
 
+        _clear_vector_checkpoint()
+
         yield json.dumps({
-            "status": "success", 
+            "status": "success",
             "message": "Vector DB built successfully",
             "document_count": total_docs,
             "vectors_created": total_docs,
             "progress": 100
         }) + "\n"
-        
+
     except Exception as e:
         yield json.dumps({"status": "error", "error": str(e)}) + "\n"

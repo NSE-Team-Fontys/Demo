@@ -328,6 +328,24 @@ def build_vectors():
         return jsonify({"status": "error", "error": str(e)}), 500
 
 
+@app.route("/api/vector-checkpoint-status", methods=["GET"])
+def vector_checkpoint_status():
+    from vector_builder import VECTOR_CHECKPOINT
+    if not VECTOR_CHECKPOINT.exists():
+        return jsonify({"has_checkpoint": False})
+    try:
+        meta = json.loads(VECTOR_CHECKPOINT.read_text(encoding="utf-8"))
+        return jsonify({
+            "has_checkpoint": True,
+            "processed_count": meta.get("processed_count", 0),
+            "total_docs": meta.get("total_docs", 0),
+            "embedding_model": meta.get("embedding_model"),
+            "selected_columns": meta.get("selected_columns", []),
+        })
+    except Exception:
+        return jsonify({"has_checkpoint": False})
+
+
 @app.route("/api/checkpoint-status", methods=["GET"])
 def checkpoint_status():
     from anonymizer import CHECKPOINT_META
@@ -738,7 +756,7 @@ Responses:
                     "stream": False,
                     "format": "json",
                 },
-                timeout=300,
+                timeout=600,
             )
 
             if response.status_code == 200:
@@ -978,7 +996,7 @@ Responses:
                             "stream": False,
                             "format": "json",
                         },
-                        timeout=300,
+                        timeout=600,
                     )
 
                     if response.status_code == 200:

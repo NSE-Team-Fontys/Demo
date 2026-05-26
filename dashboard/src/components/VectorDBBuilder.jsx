@@ -106,8 +106,9 @@ export default function VectorDBBuilder({ onSuccess }) {
   const [rowCount, setRowCount] = useState(0);
   const [configLoaded, setConfigLoaded] = useState(false);
   const [configError, setConfigError] = useState(null);
+  const [vectorCheckpoint, setVectorCheckpoint] = useState(null);
 
-  // Load columns from anonymized CSV on mount
+  // Load columns and checkpoint status on mount
   useEffect(() => {
     const fetchColumns = async () => {
       try {
@@ -125,7 +126,15 @@ export default function VectorDBBuilder({ onSuccess }) {
         setConfigError('Could not connect to the backend. Is the Flask server running?');
       }
     };
+    const fetchCheckpoint = async () => {
+      try {
+        const res = await fetch('http://localhost:5001/api/vector-checkpoint-status');
+        const data = await res.json();
+        if (data.has_checkpoint) setVectorCheckpoint(data);
+      } catch (e) {}
+    };
     fetchColumns();
+    fetchCheckpoint();
   }, []);
 
   const toggleColumn = (col) => {
@@ -136,22 +145,25 @@ export default function VectorDBBuilder({ onSuccess }) {
     );
   };
 
-  const handleBuild = async () => {
-    if (selectedColumns.length === 0) return;
+  const handleBuild = async (overrideModel = null, overrideCols = null) => {
+    const model = overrideModel ?? selectedModel;
+    const cols = overrideCols ?? selectedColumns;
+    if (cols.length === 0) return;
 
     setLoading(true);
     setProgress(0);
     setCurrentStage('Initializing Connection...');
     setCurrentDoc('');
     setResult(null);
-    
+    setVectorCheckpoint(null);
+
     try {
       const response = await fetch('http://localhost:5001/api/build-vectors', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          embedding_model: selectedModel,
-          selected_columns: selectedColumns,
+          embedding_model: model,
+          selected_columns: cols,
           allow_model_download: allowModelDownload
         })
       });
@@ -219,6 +231,40 @@ export default function VectorDBBuilder({ onSuccess }) {
       {/* --- CONFIGURATION PANEL --- */}
       {!loading && !result && (
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
+
+          {vectorCheckpoint && (
+            <div className="p-5 bg-amber-50 border-2 border-amber-300 rounded-2xl shadow-md">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <div className="p-2 bg-amber-100 rounded-xl shrink-0">
+                    <svg className="w-5 h-5 text-amber-600" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" /></svg>
+                  </div>
+                  <div>
+                    <p className="font-bold text-amber-900">Onderbroken vector build gevonden</p>
+                    <p className="text-sm text-amber-700 mt-1">
+                      <span className="font-semibold">{vectorCheckpoint.processed_count.toLocaleString()} van {vectorCheckpoint.total_docs.toLocaleString()}</span> documenten al geïndexeerd
+                      {vectorCheckpoint.embedding_model && <span className="ml-1">— model: <span className="font-mono">{vectorCheckpoint.embedding_model.split('/').pop()}</span></span>}
+                    </p>
+                    <p className="text-xs text-amber-600 mt-1">Je kunt verdergaan zonder opnieuw te beginnen.</p>
+                  </div>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <button
+                    onClick={() => setVectorCheckpoint(null)}
+                    className="px-3 py-2 bg-white text-amber-700 text-xs font-bold rounded-lg shadow-sm hover:shadow-md transition-all ring-1 ring-amber-300"
+                  >
+                    Negeren
+                  </button>
+                  <button
+                    onClick={() => handleBuild(vectorCheckpoint.embedding_model, vectorCheckpoint.selected_columns)}
+                    className="px-5 py-2 bg-amber-500 text-white text-sm font-bold rounded-lg shadow-sm hover:bg-amber-600 transition-all"
+                  >
+                    Verdergaan
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {configError && (
             <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-sm flex items-start gap-3">
@@ -331,7 +377,7 @@ export default function VectorDBBuilder({ onSuccess }) {
               <span className="font-semibold text-gray-800">{selectedColumns.length}</span> column{selectedColumns.length !== 1 ? 's' : ''} × <span className="font-semibold text-gray-800">{rowCount}</span> rows → <span className="font-semibold text-fuchsia-700">{activeModel?.name || selectedModel}</span>
             </div>
             <button
-              onClick={handleBuild}
+              onClick={() => handleBuild()}
               disabled={loading || selectedColumns.length === 0}
               className="px-8 py-3 bg-gradient-to-r from-fuchsia-600 to-rose-600 text-white rounded-xl font-bold shadow-lg shadow-fuchsia-200 disabled:opacity-50 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300"
             >
