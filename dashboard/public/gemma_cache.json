@@ -1,0 +1,447 @@
+{
+  "Content and Organisation": {
+    "frequency": 3,
+    "summary": "Students generally find the core academic content to be strong, professionally relevant, and up-to-date. However, feedback consistently highlights concerns regarding the lack of cohesion between modules, the need for more varied teaching methods, and inconsistencies in instructional execution.",
+    "sentiments": [
+      {
+        "sentiment": "Positive",
+        "point": "Students are highly satisfied with the quality and professional relevance of the course content."
+      },
+      {
+        "sentiment": "Critical",
+        "point": "There are structural issues noted, specifically concerning the lack of cohesion between different program blocks."
+      },
+      {
+        "sentiment": "Neutral",
+        "point": "The overall program structure is acknowledged as logical, though the delivery quality varies between different lecturers."
+      }
+    ],
+    "positive_comments": [
+      "The content for me as student [PII] is challenging and professionally relevant.",
+      "Student [PII] is very satisfied with the content quality this academic year.",
+      "Ik, [NAME], ben blij dat er een vast aanspreekpunt is op de opleiding voor organisatorische vragen."
+    ],
+    "critical_comments": [
+      "As student [PII] I find the content strong but the cohesion between blocks is often missing.",
+      "The content is up-to-date for me, [NAME], but teaching methods could be more varied.",
+      "De inhoud is voor mij, [NAME], up-to-date maar de werkvormen mogen gevarieerder."
+    ],
+    "student_suggestions": [
+      "teaching methods could be more varied.",
+      "De inhoud is voor mij, [NAME], up-to-date maar de werkvormen mogen gevarieerder."
+    ],
+    "subthemes": [
+      "Content Relevance",
+      "Teaching Methodology",
+      "Program Cohesion/Structure",
+      "Organizational Support (Aanspreekpunt)",
+      "Governance (OC)"
+    ],
+    "subtheme_mentions": [
+      {
+        "subtheme": "Content Relevance",
+        "mentions": 5,
+        "percentage": 7
+      },
+      {
+        "subtheme": "Teaching Methodology",
+        "mentions": 1,
+        "percentage": 1
+      },
+      {
+        "subtheme": "Program Cohesion/Structure",
+        "mentions": 3,
+        "percentage": 4
+      },
+      {
+        "subtheme": "Organizational Support (Aanspreekpunt)",
+        "mentions": 12,
+        "percentage": 16
+      },
+      {
+        "subtheme": "Governance (OC)",
+        "mentions": 0,
+        "percentage": 0
+      }
+    ],
+    "quotes": [
+      "The content for me as student [PII] is challenging and professionally relevant.",
+      "The content is up-to-date for me, [NAME], but teaching methods could be more varied.",
+      "De inhoud is voor mij, [NAME], up-to-date maar de werkvormen mogen gevarieerder."
+    ]
+  },
+  "Professional Practice": {
+    "frequency": 0,
+    "summary": "The general consensus is highly positive regarding the strength of the professional practice, particularly citing the superior instruction provided by practical lecturers and the strong connection to professional fields via guest lectures. However, students have identified a clear need for supplementary peer support to complement the existing professional guidance.",
+    "sentiments": [
+      {
+        "sentiment": "Positive",
+        "point": "Students strongly appreciate the practical application and pedagogical methods used by specialized lecturers."
+      },
+      {
+        "sentiment": "Neutral",
+        "point": "The curriculum is being evaluated based on the perceived effectiveness and quality difference between theoretical and practical instruction."
+      },
+      {
+        "sentiment": "Critical",
+        "point": "There is a recognized gap in current support systems, leading students to request additional peer networking opportunities."
+      }
+    ],
+    "positive_comments": [
+      "I, [NAME], find the approach of the practical lecturers far superior to the theory lecturers.",
+      "Ik, [NAME], vind de aanpak van de praktijkdocenten veel beter dan die van de theoriedocenten.",
+      "Als student [PII] merk ik dat de aansluiting op de beroepspraktijk sterk is dankzij de gastlessen."
+    ],
+    "critical_comments": [],
+    "student_suggestions": [
+      "Student [PII] vraagt om een peer-support netwerk aanvullend op de professionele begeleiding."
+    ],
+    "subthemes": [
+      "Practical vs. Theoretical Instruction",
+      "Industry/Career Connection",
+      "Professional Guidance",
+      "Peer Support"
+    ],
+    "subtheme_mentions": [
+      {
+        "subtheme": "Practical vs. Theoretical Instruction",
+        "mentions": 1,
+        "percentage": 6
+      },
+      {
+        "subtheme": "Industry/Career Connection",
+        "mentions": 0,
+        "percentage": 0
+      },
+      {
+        "subtheme": "Professional Guidance",
+        "mentions": 8,
+        "percentage": 47
+      },
+      {
+        "subtheme": "Peer Support",
+        "mentions": 6,
+        "percentage": 35
+      }
+    ],
+    "quotes": [
+      "I, [NAME], find the approach of the practical lecturers far superior to the theory lecturers.",
+      "Ik, [NAME], vind de aanpak van de praktijkdocenten veel beter dan die van de theoriedocenten.",
+      "Ik, [NAME], vind de aanpak van de praktijkdocenten veel beter dan die van de theoriedocenten."
+    ]
+  },
+  "Teachers": {
+    "frequency": 9,
+    "summary": "The general feedback on teachers is mixed, with students expressing appreciation for the willingness of some lecturers to provide extra educational material. However, there is a strong critical consensus that some staff struggle with inclusive teaching practices, prompting requests for institutional improvements.",
+    "sentiments": [
+      {
+        "sentiment": "Positive",
+        "point": "Students are grateful that teachers frequently offer supplementary educational resources."
+      },
+      {
+        "sentiment": "Critical",
+        "point": "A key concern is that some lecturers currently lack the skills needed to maintain an inclusive classroom environment."
+      },
+      {
+        "sentiment": "Neutral",
+        "point": "Students are actively proposing structural solutions, such as mandatory training and peer assessments."
+      }
+    ],
+    "positive_comments": [
+      "Als [NAME] ben ik blij dat er altijd docenten zijn die extra materiaal willen aanreiken.",
+      "Als [NAME] ben ik blij dat er altijd docenten zijn die extra materiaal willen aanreiken.",
+      "Als [NAME] ben ik blij dat er altijd docenten zijn die extra materiaal willen aanreiken."
+    ],
+    "critical_comments": [
+      "Als [NAME] I notice that some lecturers struggle to create an inclusive classroom environment.",
+      "Als [NAME] merk ik dat sommige docenten moeite hebben met inclusief lesgeven.",
+      "Als [NAME] merk ik dat sommige docenten moeite hebben met inclusief lesgeven."
+    ],
+    "student_suggestions": [
+      "Student [PII] requests mandatory pedagogical training for all newly hired lecturers.",
+      "Ik, [NAME], zou graag peer-assessments zien als aanvulling op de beoordeling door docenten."
+    ],
+    "subthemes": [
+      "Inclusive Pedagogy",
+      "Supplementary Resources",
+      "Professional Training Needs",
+      "Assessment Methods"
+    ],
+    "subtheme_mentions": [
+      {
+        "subtheme": "Inclusive Pedagogy",
+        "mentions": 6,
+        "percentage": 3
+      },
+      {
+        "subtheme": "Supplementary Resources",
+        "mentions": 0,
+        "percentage": 0
+      },
+      {
+        "subtheme": "Professional Training Needs",
+        "mentions": 12,
+        "percentage": 6
+      },
+      {
+        "subtheme": "Assessment Methods",
+        "mentions": 5,
+        "percentage": 3
+      }
+    ],
+    "quotes": [
+      "Student [PII] requests mandatory pedagogical training for all newly hired lecturers.",
+      "As [NAME] I notice that some lecturers struggle to create an inclusive classroom environment.",
+      "Als [NAME] merk ik dat sommige docenten moeite hebben met inclusief lesgeven."
+    ]
+  },
+  "Support / Mentoring": {
+    "frequency": 63,
+    "summary": "The general consensus indicates a strong demand for increased guidance, particularly concerning reflection assignments and the establishment of peer support networks. While most feedback points to unmet needs, there is some positive feedback acknowledging satisfaction with existing advisor support for planning.",
+    "sentiments": [
+      {
+        "sentiment": "Critical",
+        "point": "Students feel a significant lack of guidance specifically related to reflection assignments."
+      },
+      {
+        "sentiment": "Positive",
+        "point": "Some students are satisfied with the current level of support provided by their advisors regarding planning and progression."
+      },
+      {
+        "sentiment": "Neutral",
+        "point": "There is a clear request for structural improvements, namely the introduction of peer-support systems."
+      }
+    ],
+    "positive_comments": [
+      "I, [NAME], am satisfied with how my advisor supports my planning and progression."
+    ],
+    "critical_comments": [
+      "Via [PII] heb ik gevraagd om meer begeleiding bij reflectieopdrachten."
+    ],
+    "student_suggestions": [
+      "Student [PII] vraagt om een peer-support netwerk aanvullend op de professionele begeleiding."
+    ],
+    "subthemes": [
+      "Reflection assignment guidance",
+      "Peer support network",
+      "Advisor support",
+      "Planning and progression"
+    ],
+    "subtheme_mentions": [
+      {
+        "subtheme": "Reflection assignment guidance",
+        "mentions": 66,
+        "percentage": 5
+      },
+      {
+        "subtheme": "Peer support network",
+        "mentions": 32,
+        "percentage": 2
+      },
+      {
+        "subtheme": "Advisor support",
+        "mentions": 23,
+        "percentage": 2
+      },
+      {
+        "subtheme": "Planning and progression",
+        "mentions": 20,
+        "percentage": 1
+      }
+    ],
+    "quotes": [
+      "Via [PII] heb ik gevraagd om meer begeleiding bij reflectieopdrachten.",
+      "Via [PII] heb ik gevraagd om meer begeleiding bij reflectieopdrachten.",
+      "Via [PII] heb ik gevraagd om meer begeleiding bij reflectieopdrachten."
+    ]
+  },
+  "Examination & Assessment": {
+    "frequency": 0,
+    "summary": "Students generally value the practice of lecturers verbally explaining grades after examinations. However, there is significant concern regarding the vagueness and subjectivity of assessment criteria, which leads to inconsistent grading interpretations.",
+    "sentiments": [
+      {
+        "sentiment": "Positive",
+        "point": "The verbal explanation of grading by lecturers is a highly appreciated aspect of the examination process."
+      },
+      {
+        "sentiment": "Critical",
+        "point": "A major issue is the lack of clear and consistent evaluation criteria, resulting in subjective or varied interpretations of rubrics."
+      },
+      {
+        "sentiment": "Neutral",
+        "point": "There is a clear desire among students to introduce and integrate peer-assessments into the existing evaluation methods."
+      }
+    ],
+    "positive_comments": [
+      "Ik, [NAME], waardeer dat de docent de beoordeling mondeling toelicht na elk tentamen.",
+      "Learning goals are clear to me as student [PII] and assessments are aligned to them.",
+      "As [NAME] I have had positive experiences with the assessment procedure for my internship assignment."
+    ],
+    "critical_comments": [
+      "As student [PII] I find presentation assessments too subjective without clear evaluation criteria.",
+      "My name is [NAME] and I find the assessment criteria vague \u2014 each lecturer interprets the rubric differently."
+    ],
+    "student_suggestions": [
+      "Ik, [NAME], zou graag peer-assessments zien als aanvulling op de beoordeling door docenten."
+    ],
+    "subthemes": [
+      "Assessment Criteria Clarity",
+      "Verbal Feedback Mechanism",
+      "Subjectivity in Grading",
+      "Peer Assessment Integration",
+      "Alignment of Goals"
+    ],
+    "subtheme_mentions": [
+      {
+        "subtheme": "Assessment Criteria Clarity",
+        "mentions": 8,
+        "percentage": 62
+      },
+      {
+        "subtheme": "Verbal Feedback Mechanism",
+        "mentions": 1,
+        "percentage": 8
+      },
+      {
+        "subtheme": "Subjectivity in Grading",
+        "mentions": 2,
+        "percentage": 15
+      },
+      {
+        "subtheme": "Peer Assessment Integration",
+        "mentions": 8,
+        "percentage": 62
+      },
+      {
+        "subtheme": "Alignment of Goals",
+        "mentions": 1,
+        "percentage": 8
+      }
+    ],
+    "quotes": [
+      "Ik, [NAME], waardeer dat de docent de beoordeling mondeling toelicht na elk tentamen.",
+      "Ik, [NAME], waardeer dat de docent de beoordeling mondeling toelicht na elk tentamen.",
+      "Ik, [NAME], waardeer dat de docent de beoordeling mondeling toelicht na elk tentamen."
+    ]
+  },
+  "Engagement & Contact": {
+    "frequency": 11,
+    "summary": "Students appreciate the existence of a fixed contact point for organizational questions, indicating satisfaction with formal support structures. However, there is a strong demand for more informal interaction and specific curriculum topics, compounded by negative experiences regarding unanswered contact requests.",
+    "sentiments": [
+      {
+        "sentiment": "Positive",
+        "point": "Students are satisfied that a designated contact point is available for organizational matters."
+      },
+      {
+        "sentiment": "Critical",
+        "point": "The lack of response when students request contact outside of regular lessons is a significant frustration."
+      },
+      {
+        "sentiment": "Neutral",
+        "point": "There is a clear desire for more opportunities for informal and specialized academic engagement."
+      }
+    ],
+    "positive_comments": [
+      "Ik, [NAME], ben blij dat er een vast aanspreekpunt is op de opleiding voor organisatorische vragen."
+    ],
+    "critical_comments": [
+      "Via [PII] heb ik gevraagd om meer contactmomenten buiten reguliere lessen \u2014 geen reactie.",
+      "Als [NAME] wil ik meer informele contactmomenten buiten de formele lessen om."
+    ],
+    "student_suggestions": [
+      "Als [NAME] wil ik meer informele contactmomenten buiten de formele lessen om.",
+      "Ik, [NAME], wil graag meer aandacht voor interculturele communicatie als verplicht onderdeel."
+    ],
+    "subthemes": [
+      "Fixed contact points",
+      "Informal interaction needs",
+      "Curriculum content gaps",
+      "Communication responsiveness"
+    ],
+    "subtheme_mentions": [
+      {
+        "subtheme": "Fixed contact points",
+        "mentions": 81,
+        "percentage": 33
+      },
+      {
+        "subtheme": "Informal interaction needs",
+        "mentions": 12,
+        "percentage": 5
+      },
+      {
+        "subtheme": "Curriculum content gaps",
+        "mentions": 10,
+        "percentage": 4
+      },
+      {
+        "subtheme": "Communication responsiveness",
+        "mentions": 16,
+        "percentage": 7
+      }
+    ],
+    "quotes": [
+      "Ik, [NAME], ben blij dat er een vast aanspreekpunt is op de opleiding voor organisatorische vragen.",
+      "Ik, [NAME], ben blij dat er een vast aanspreekpunt is op de opleiding voor organisatorische vragen.",
+      "Ik, [NAME], ben blij dat er een vast aanspreekpunt is op de opleiding voor organisatorische vragen."
+    ]
+  },
+  "Special Circumstances": {
+    "frequency": 0,
+    "summary": "Students report highly positive experiences regarding the support provided by their study coaches during the special circumstances application process. However, a significant recurring theme indicates a need for greater administrative flexibility, specifically concerning submission deadlines for students facing these exceptional circumstances.",
+    "sentiments": [
+      {
+        "sentiment": "Positive",
+        "point": "Study coaches are highly effective in assisting students with the application process."
+      },
+      {
+        "sentiment": "Neutral",
+        "point": "Students are actively requesting more flexibility in deadlines for special circumstances."
+      },
+      {
+        "sentiment": "Critical",
+        "point": "No critical sentiments were identified in the provided responses."
+      }
+    ],
+    "positive_comments": [
+      "Mijn studiecoach heeft mij, [NAME], goed geholpen bij het aanvragen van bijzondere omstandigheden.",
+      "Mijn studiecoach heeft mij, [NAME], goed geholpen bij het aanvragen van bijzondere omstandigheden.",
+      "My study coach has helped me, [NAME], navigate the exceptional circumstances process."
+    ],
+    "critical_comments": [],
+    "student_suggestions": [],
+    "subthemes": [
+      "Study Coach Support",
+      "Deadline Flexibility",
+      "Exceptional Circumstances Process",
+      "Application Navigation"
+    ],
+    "subtheme_mentions": [
+      {
+        "subtheme": "Study Coach Support",
+        "mentions": 5,
+        "percentage": 38
+      },
+      {
+        "subtheme": "Deadline Flexibility",
+        "mentions": 8,
+        "percentage": 62
+      },
+      {
+        "subtheme": "Exceptional Circumstances Process",
+        "mentions": 3,
+        "percentage": 23
+      },
+      {
+        "subtheme": "Application Navigation",
+        "mentions": 1,
+        "percentage": 8
+      }
+    ],
+    "quotes": [
+      "Mijn studiecoach heeft mij, [NAME], goed geholpen bij het aanvragen van bijzondere omstandigheden.",
+      "Mijn studiecoach heeft mij, [NAME], goed geholpen bij het aanvragen van bijzondere omstandigheden.",
+      "Mijn studiecoach heeft mij, [NAME], goed geholpen bij het aanvragen van bijzondere omstandigheden."
+    ]
+  }
+}
