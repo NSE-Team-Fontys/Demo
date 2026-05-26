@@ -31,8 +31,14 @@ export function useThemeSummary(theme) {
           setLiveData({ error: data.error || 'Failed to generate summary' })
         }
       } catch (e) {
-        console.error('Failed to fetch Gemma 4 summary:', e)
-        if (isMounted) setLiveData({ error: 'Failed to connect to backend server.' })
+        try {
+          const cacheRes = await fetch('/gemma_cache.json')
+          const cacheData = await cacheRes.json()
+          const cached = cacheData[theme.name]
+          if (isMounted) setLiveData(cached ? { ...cached, status: 'success' } : { error: 'No cached data for this theme.' })
+        } catch {
+          if (isMounted) setLiveData({ error: 'Failed to connect to backend server.' })
+        }
       } finally {
         if (isMounted) setLoadingLive(false)
       }

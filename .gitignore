@@ -47,7 +47,6 @@ htmlcov/
 *.cache
 *.pyc
 gemma_cache.json
-
 # Chroma / vector DB storage
 chroma/
 **/chroma/
@@ -72,4 +71,3 @@ survey_vector_db/
 
 # Local data files
 data/
-
