@@ -2,6 +2,7 @@ import csv
 import json
 import os
 import re
+from pathlib import Path
 
 import pandas as pd
 
@@ -12,6 +13,43 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 # Chunk size for span collection + masking (Layer 2 HF batching).
 # Default 512 for betere throughput; override via ANONYMIZE_BATCH_SIZE indien nodig.
 _ANON_BATCH = int(os.environ.get("ANONYMIZE_BATCH_SIZE", "512"))
+
+CHECKPOINT_CSV = Path("data/anon_checkpoint.csv")
+CHECKPOINT_META = Path("data/anon_checkpoint_meta.json")
+
+
+def _load_checkpoint(input_path: str, sep: str):
+    """Return (df, meta) if a valid checkpoint exists for the given input file, else (None, None)."""
+    if not CHECKPOINT_CSV.exists() or not CHECKPOINT_META.exists():
+        return None, None
+    try:
+        stat = os.stat(input_path)
+        meta = json.loads(CHECKPOINT_META.read_text(encoding="utf-8"))
+        if meta.get("input_size") != stat.st_size:
+            return None, None
+        if abs(meta.get("input_mtime", 0) - stat.st_mtime) > 2:
+            return None, None
+        df = pd.read_csv(str(CHECKPOINT_CSV), sep=sep, encoding="utf-8-sig")
+        return df, meta
+    except Exception:
+        return None, None
+
+
+def _save_checkpoint(df: pd.DataFrame, meta: dict, sep: str):
+    try:
+        df.to_csv(str(CHECKPOINT_CSV), sep=sep, index=False)
+        CHECKPOINT_META.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception as e:
+        print(f"[CHECKPOINT] Warning: could not save: {e}")
+
+
+def _clear_checkpoint():
+    for p in (CHECKPOINT_CSV, CHECKPOINT_META):
+        try:
+            if p.exists():
+                p.unlink()
+        except Exception:
+            pass
 
 
 def detect_sep(path: str) -> str:
@@ -72,18 +110,52 @@ def process_file_with_layers(
 ):
     if sep is None:
         sep = detect_sep(input_path)
-    df = pd.read_csv(input_path, sep=sep, encoding="utf-8-sig")
 
-    # Save original texts before any modification so verification can detect on clean text
+    # Always read original texts from source for end-of-run verification.
+    df_original = pd.read_csv(input_path, sep=sep, encoding="utf-8-sig")
     original_texts = {
-        col: df[col].copy()
+        col: df_original[col].copy()
         for col in columns_to_anonymize
-        if col in df.columns
+        if col in df_original.columns
     }
-    yield (
-        json.dumps({"status": "progress", "message": "Initializing...", "progress": 5})
-        + "\n"
-    )
+
+    # Check for a resumable checkpoint.
+    checkpoint_df, checkpoint_meta = _load_checkpoint(input_path, sep)
+    if checkpoint_df is not None:
+        df = checkpoint_df
+        completed_columns = set(checkpoint_meta.get("completed_columns", []))
+        checkpoint_col = checkpoint_meta.get("current_col")
+        checkpoint_batch_end = checkpoint_meta.get("current_batch_end", 0)
+        yield (
+            json.dumps({
+                "status": "progress",
+                "message": f"Resuming from checkpoint ({len(completed_columns)} column(s) already done)...",
+                "progress": 5,
+            }) + "\n"
+        )
+    else:
+        df = df_original.copy()
+        completed_columns = set()
+        checkpoint_col = None
+        checkpoint_batch_end = 0
+        yield (
+            json.dumps({"status": "progress", "message": "Initializing...", "progress": 5})
+            + "\n"
+        )
+
+    stat = os.stat(input_path)
+    meta = {
+        "input_size": stat.st_size,
+        "input_mtime": stat.st_mtime,
+        "sep": sep,
+        "selected_columns": columns_to_anonymize,
+        "selected_layers": layers,
+        "completed_columns": list(completed_columns),
+    }
+
+    # Save immediately so a resume banner appears even if the very first batch crashes.
+    if checkpoint_df is None:
+        _save_checkpoint(df, meta, sep)
 
     try:
         validate_selected_layers(layers)
@@ -142,68 +214,103 @@ def process_file_with_layers(
     total_rows = len(df)
 
     for col_idx, col in enumerate(columns_to_anonymize):
-        if col in df.columns:
+        if col not in df.columns:
             yield (
                 json.dumps(
                     {
                         "status": "progress",
-                        "message": f"Anonymizing column: {col}...",
-                        "progress": 20 + int(70 * (col_idx / total_cols)),
-                    }
-                )
-                + "\n"
-            )
-
-            col_series = df[col]
-            batch_starts = list(range(0, total_rows, _ANON_BATCH))
-            for batch_start in batch_starts:
-                batch_end = min(batch_start + _ANON_BATCH, total_rows)
-                chunk_texts = []
-                chunk_indices = []
-                for i in range(batch_start, batch_end):
-                    text = col_series.at[i]
-                    if pd.isna(text) or not isinstance(text, str) or not text.strip():
-                        continue
-                    chunk_texts.append(text)
-                    chunk_indices.append(i)
-
-                if chunk_texts:
-                    masked = process_chunk_sync(chunk_texts, layer_config, layers)
-                    for row_i, new_val in zip(chunk_indices, masked):
-                        df.at[row_i, col] = new_val
-
-                last_i = batch_end
-                base_progress = 20 + int(70 * (col_idx / total_cols))
-                row_progress = int((70 / total_cols) * (last_i / total_rows))
-                preview_row = last_i - 1 if last_i else 0
-                pv = col_series.at[preview_row] if preview_row >= 0 else ""
-                yield (
-                    json.dumps(
-                        {
-                            "status": "progress",
-                            "column": col,
-                            "row": last_i,
-                            "total_rows": total_rows,
-                            "preview": (str(pv)[:60] + "...")
-                            if isinstance(pv, str) and pv
-                            else "",
-                            "progress": base_progress + row_progress,
-                            "message": f"Processing rows 1–{last_i}/{total_rows} in {col} (batch {_ANON_BATCH})",
-                        }
-                    )
-                    + "\n"
-                )
-        else:
-            yield (
-                json.dumps(
-                    {
-                        "status": "progress",
-                        "message": f"Column '{col}' not found.",
+                        "message": f"Column ‘{col}’ not found.",
                         "progress": 20,
                     }
                 )
                 + "\n"
             )
+            continue
+
+        if col in completed_columns:
+            yield (
+                json.dumps(
+                    {
+                        "status": "progress",
+                        "message": f"Skipping ‘{col}’ (already done in checkpoint).",
+                        "progress": 20 + int(70 * ((col_idx + 1) / total_cols)),
+                    }
+                )
+                + "\n"
+            )
+            continue
+
+        yield (
+            json.dumps(
+                {
+                    "status": "progress",
+                    "message": f"Anonymizing column: {col}...",
+                    "progress": 20 + int(70 * (col_idx / total_cols)),
+                }
+            )
+            + "\n"
+        )
+
+        # How far we already got in this column (0 = fresh start).
+        resume_batch_end = checkpoint_batch_end if col == checkpoint_col else 0
+
+        col_series = df[col]
+        batch_starts = list(range(0, total_rows, _ANON_BATCH))
+        for batch_start in batch_starts:
+            batch_end = min(batch_start + _ANON_BATCH, total_rows)
+
+            if batch_end <= resume_batch_end:
+                # Already saved in checkpoint — skip without reprocessing.
+                continue
+
+            chunk_texts = []
+            chunk_indices = []
+            for i in range(batch_start, batch_end):
+                text = col_series.at[i]
+                if pd.isna(text) or not isinstance(text, str) or not text.strip():
+                    continue
+                chunk_texts.append(text)
+                chunk_indices.append(i)
+
+            if chunk_texts:
+                masked = process_chunk_sync(chunk_texts, layer_config, layers)
+                for row_i, new_val in zip(chunk_indices, masked):
+                    df.at[row_i, col] = new_val
+
+            # Checkpoint after every batch.
+            meta["current_col"] = col
+            meta["current_batch_end"] = batch_end
+            _save_checkpoint(df, meta, sep)
+
+            last_i = batch_end
+            base_progress = 20 + int(70 * (col_idx / total_cols))
+            row_progress = int((70 / total_cols) * (last_i / total_rows))
+            preview_row = last_i - 1 if last_i else 0
+            pv = col_series.at[preview_row] if preview_row >= 0 else ""
+            yield (
+                json.dumps(
+                    {
+                        "status": "progress",
+                        "column": col,
+                        "row": last_i,
+                        "total_rows": total_rows,
+                        "checkpoint_saved": True,
+                        "preview": (str(pv)[:60] + "...")
+                        if isinstance(pv, str) and pv
+                        else "",
+                        "progress": base_progress + row_progress,
+                        "message": f"Processing rows 1–{last_i}/{total_rows} in {col} (batch {_ANON_BATCH})",
+                    }
+                )
+                + "\n"
+            )
+
+        # Column done — update completed list and remove in-progress markers.
+        completed_columns.add(col)
+        meta["completed_columns"] = list(completed_columns)
+        meta.pop("current_col", None)
+        meta.pop("current_batch_end", None)
+        _save_checkpoint(df, meta, sep)
 
     # --- Count what was masked (tags inserted into output) ---
     _TAG_RE = re.compile(r'\[(NAME|PII|LOCATION|TITLE)\]')
@@ -266,6 +373,8 @@ def process_file_with_layers(
                 else:
                     if entity_text not in removed_samples[key]:
                         removed_samples[key].append(entity_text)
+
+    _clear_checkpoint()
 
     yield (
         json.dumps(

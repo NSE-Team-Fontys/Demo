@@ -328,6 +328,26 @@ def build_vectors():
         return jsonify({"status": "error", "error": str(e)}), 500
 
 
+@app.route("/api/checkpoint-status", methods=["GET"])
+def checkpoint_status():
+    from anonymizer import CHECKPOINT_META
+    if not CHECKPOINT_META.exists():
+        return jsonify({"has_checkpoint": False})
+    try:
+        meta = json.loads(CHECKPOINT_META.read_text(encoding="utf-8"))
+        completed = meta.get("completed_columns", [])
+        total = meta.get("selected_columns", [])
+        return jsonify({
+            "has_checkpoint": True,
+            "completed_columns": completed,
+            "total_columns": total,
+            "selected_layers": meta.get("selected_layers", []),
+            "current_col": meta.get("current_col"),
+        })
+    except Exception:
+        return jsonify({"has_checkpoint": False})
+
+
 @app.route("/api/status", methods=["GET"])
 def status():
     anonymized_exists = os.path.exists(ANONYMIZED_CSV_PATH)
@@ -718,7 +738,7 @@ Responses:
                     "stream": False,
                     "format": "json",
                 },
-                timeout=120,
+                timeout=300,
             )
 
             if response.status_code == 200:
@@ -958,7 +978,7 @@ Responses:
                             "stream": False,
                             "format": "json",
                         },
-                        timeout=120,
+                        timeout=300,
                     )
 
                     if response.status_code == 200:
@@ -1169,4 +1189,4 @@ def vector_stats():
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5001)
+    app.run(debug=True, port=5001, threaded=True, use_reloader=False)
