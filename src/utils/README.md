@@ -1,0 +1,41 @@
+# Utilities (`src/utils`)
+
+The `utils` module provides shared, low-level technical infrastructure and helper functions consumed across the entire analytical pipeline (e.g., anonymization, embedding, generation). It is built to ensure consistent file IO, heuristic parsing, and optimal hardware acceleration routing for large language models and encodings.
+
+## Core Components
+
+### `file_parsers.py`
+
+This script manages robust, fault-tolerant dataset ingestion. Because survey data can arrive in numerous formats with varying delimiters and encodings, this utility ensures that upstream systems only ever receive clean `pandas.DataFrame` objects.
+
+*   **Intelligent Separator Sniffing (`detect_sep`)**: 
+    European tabular data notoriously suffers from mixing `,` and `;` delimiters. This algorithm:
+    1. Reads a 50-line sample ignoring encoding errors.
+    2. Attempts standard `csv.Sniffer` resolution.
+    3. Triggers a fallback heuristic scoring system. It evaluates each candidate delimiter against the sample, tracking column count mode, punishing variance in row sizing, and penalizing parsing errors. It reliably deduces the correct split string without user intervention.
+*   **Column Type Inference (`is_questionnaire_column`)**:
+    Differentiates metadata columns (e.g., `institution`, `study_mode`) from actual survey text responses. It performs regex-like checks (checking for `?` characters, specific Dutch prefix queries) and explicitly excludes hardcoded demographics imported from `METADATA_COLS`.
+*   **File State Management**: 
+    Controls the physical disk state of uploaded datasets via `save_uploaded_file` and `get_upload_path`, maintaining metadata in an intermediary `upload_info.json` to persist state across server reboots.
+
+### `model_device.py`
+
+This is the central hardware acceleration router for PyTorch and `sentence_transformers`. It ensures that embedding computations (`02_embedding`), cross-encoder reranking (`03_retrieval`), and local generation pipelines operate on the fastest silicon available on the host machine.
+
+*   **Auto-Detection Hardware Cascading**:
+    `get_model_device()` implements a cascade fallback:
+    1.  **NVIDIA GPUs**: Checks `torch.cuda.is_available()`.
+    2.  **Apple Silicon (MPS)**: Injects safe checks to evaluate if the `mps` backend is built and ready, allowing M1/M2/M3 chips to accelerate heavy transformer workloads natively.
+    3.  **CPU Fallback**: Defaults to `cpu` if no dedicated accelerator is found.
+*   **Environment Variable Overrides**:
+    The auto-detection can be manually clamped by setting the `MODEL_DEVICE` environment variable (e.g., `MODEL_DEVICE=cpu` or `MODEL_DEVICE=cuda:0`), which is heavily utilized in containerized orchestrations to strictly monitor resource consumption.
+*   **Pipeline Normalization (`get_pipeline_device`)**:
+    HuggingFace standard pipelines strictly demand integer configurations (e.g., `0` for CUDA device 0) or specific PyTorch classes (`torch.device('mps')`) rather than generic string descriptors. This transformer function patches those inconsistencies automatically. 
+
+---
+
+## Technical Configuration References
+
+| Environment Variable | Supported Values | Fallback | Purpose |
+| :--- | :--- | :--- | :--- |
+| `MODEL_DEVICE` | `auto`, `cuda`, `mps`, `cpu` | `auto` | Forces the machine learning pipeline into a specific processing architecture. |
