@@ -272,7 +272,7 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
               <div className="relative border-2 border-dashed border-indigo-200 bg-white/50 p-12 rounded-2xl text-center hover:border-indigo-500 cursor-pointer transition-all duration-300">
                 <input
                   type="file"
-                  accept=".csv"
+                  accept=".csv,.xlsx,.xls"
                   onChange={handleFileUpload}
                   disabled={loading}
                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
@@ -285,7 +285,7 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
                   </div>
                   <div className="space-y-1">
                     <p className="text-lg font-semibold text-gray-800">Drop your CSV file here or click to browse</p>
-                    <p className="text-sm text-gray-500">Supports .csv files with standard delimiters</p>
+                    <p className="text-sm text-gray-500">Supports .csv and .xlsx files</p>
                   </div>
                   {file && <p className="mt-4 inline-flex items-center text-sm font-medium text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full ring-1 ring-emerald-200">✓ {file.name}</p>}
                 </div>

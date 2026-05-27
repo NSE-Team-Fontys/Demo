@@ -101,6 +101,13 @@ def detect_sep(path: str) -> str:
         return ";"
 
 
+def _read_input(path: str, sep: str = None) -> "pd.DataFrame":
+    ext = Path(path).suffix.lower()
+    if ext in (".xlsx", ".xls"):
+        return pd.read_excel(path)
+    return pd.read_csv(path, sep=sep or detect_sep(path), encoding="utf-8-sig")
+
+
 def process_file_with_layers(
     input_path: str,
     output_path: str,
@@ -108,11 +115,12 @@ def process_file_with_layers(
     layers: list,
     sep: str = None,
 ):
-    if sep is None:
+    is_xlsx = Path(input_path).suffix.lower() in (".xlsx", ".xls")
+    if not is_xlsx and sep is None:
         sep = detect_sep(input_path)
 
     # Always read original texts from source for end-of-run verification.
-    df_original = pd.read_csv(input_path, sep=sep, encoding="utf-8-sig")
+    df_original = _read_input(input_path, sep)
     original_texts = {
         col: df_original[col].copy()
         for col in columns_to_anonymize

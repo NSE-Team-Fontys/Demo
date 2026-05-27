@@ -32,10 +32,42 @@ app = Flask(__name__)
 CORS(app)
 
 UPLOAD_FILE = "data/temp_upload.csv"
+UPLOAD_INFO_FILE = Path("data/upload_info.json")
 VECTOR_DB_PATH = Path("./survey_vector_db")
 TEMP_DIR = Path("./temp")
 ANONYMIZED_CSV_PATH = Path("./data/anonymized_survey.csv")
 SEP_FILE = Path("./data/detected_sep.txt")
+
+
+def _get_upload_path() -> str | None:
+    """Return the path of the currently uploaded file (csv or xlsx)."""
+    if UPLOAD_INFO_FILE.exists():
+        try:
+            info = json.loads(UPLOAD_INFO_FILE.read_text(encoding="utf-8"))
+            p = info.get("path")
+            if p and Path(p).exists():
+                return p
+        except Exception:
+            pass
+    if Path(UPLOAD_FILE).exists():
+        return UPLOAD_FILE
+    return None
+
+
+def _read_df(path: str, sep: str = None, nrows: int = None) -> "pd.DataFrame":
+    """Read a CSV or XLSX file into a DataFrame."""
+    ext = Path(path).suffix.lower()
+    if ext in (".xlsx", ".xls"):
+        kwargs = {}
+        if nrows is not None:
+            kwargs["nrows"] = nrows
+        return pd.read_excel(path, **kwargs)
+    kw = {"encoding": "utf-8-sig"}
+    if sep:
+        kw["sep"] = sep
+    if nrows is not None:
+        kw["nrows"] = nrows
+    return pd.read_csv(path, **kw)
 THEME_EMBEDDING_MODEL = "BAAI/bge-m3"
 THEMES_LIST = [
     "Content and Organisation",
@@ -193,17 +225,23 @@ def inspect_file():
     if not file:
         return jsonify({"status": "error", "error": "No file uploaded"})
 
-    # Save the file temporarily
-    Path(UPLOAD_FILE).parent.mkdir(parents=True, exist_ok=True)
-    file.save(UPLOAD_FILE)
+    ext = Path(file.filename or "upload.csv").suffix.lower()
+    if ext not in (".csv", ".xlsx", ".xls"):
+        ext = ".csv"
+
+    save_path = f"data/temp_upload{ext}"
+    Path(save_path).parent.mkdir(parents=True, exist_ok=True)
+    file.save(save_path)
+    UPLOAD_INFO_FILE.write_text(json.dumps({"path": save_path, "ext": ext}), encoding="utf-8")
 
     try:
-        sep = detect_sep(UPLOAD_FILE)
-        SEP_FILE.parent.mkdir(parents=True, exist_ok=True)
-        SEP_FILE.write_text(sep)
+        sep = None
+        if ext == ".csv":
+            sep = detect_sep(save_path)
+            SEP_FILE.parent.mkdir(parents=True, exist_ok=True)
+            SEP_FILE.write_text(sep)
 
-        # Read just the first few rows to get columns and a preview
-        df = pd.read_csv(UPLOAD_FILE, sep=sep, nrows=5, encoding="utf-8-sig")
+        df = _read_df(save_path, sep=sep, nrows=5)
         preview_records = df.head(1).to_dict(orient="records")
         for rec in preview_records:
             for key, value in list(rec.items()):
@@ -229,13 +267,18 @@ def anonymize():
         selected_columns = data.get("selected_columns", [])
         selected_layers = data.get("selected_layers", ["presidio", "eu-pii"])
 
-        input_file = Path(UPLOAD_FILE)
-        output_file = ANONYMIZED_CSV_PATH
-
-        if not input_file.exists():
+        upload_path = _get_upload_path()
+        if not upload_path:
             return jsonify({"status": "error", "error": "No file uploaded"}), 400
 
-        sep = SEP_FILE.read_text().strip() if SEP_FILE.exists() else detect_sep(str(input_file))
+        input_file = Path(upload_path)
+        output_file = ANONYMIZED_CSV_PATH
+
+        ext = input_file.suffix.lower()
+        if ext == ".csv":
+            sep = SEP_FILE.read_text().strip() if SEP_FILE.exists() else detect_sep(str(input_file))
+        else:
+            sep = ","  # xlsx has no delimiter; anonymizer will detect xlsx by extension
         print(f"[ANONYMIZE] Columns: {selected_columns} | Layers: {selected_layers} | sep={repr(sep)}")
 
         return Response(
