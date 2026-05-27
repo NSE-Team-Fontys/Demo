@@ -504,6 +504,34 @@ def vector_checkpoint_status():
         return jsonify({"has_checkpoint": False})
 
 
+@app.route("/api/run-anonymize-check", methods=["POST"])
+def run_anonymize_check():
+    from anonymizer import REPORT_JSON, run_check_stream
+
+    original_path = _get_upload_path()
+    if not original_path or not Path(original_path).exists():
+        return jsonify({"status": "error", "error": "Origineel bestand niet gevonden. Upload het bestand opnieuw."}), 400
+    if not ANONYMIZED_CSV_PATH.exists():
+        return jsonify({"status": "error", "error": "Geanonimiseerd bestand niet gevonden. Voer eerst de anonimisering uit."}), 400
+
+    # Use columns from last report if available, otherwise auto-detect
+    columns = None
+    if REPORT_JSON.exists():
+        try:
+            columns = json.loads(REPORT_JSON.read_text(encoding="utf-8")).get("columns")
+        except Exception:
+            pass
+    if not columns:
+        sep = detect_sep(str(ANONYMIZED_CSV_PATH))
+        df_tmp = pd.read_csv(str(ANONYMIZED_CSV_PATH), sep=sep, nrows=0, encoding="utf-8-sig")
+        columns = [c for c in df_tmp.columns if is_questionnaire_column(c)]
+
+    def generate():
+        yield from run_check_stream(original_path, str(ANONYMIZED_CSV_PATH), columns)
+
+    return Response(generate(), mimetype="application/x-ndjson")
+
+
 @app.route("/api/anonymize-report", methods=["GET"])
 def anonymize_report():
     from anonymizer import REPORT_JSON

@@ -50,6 +50,53 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
     setShowStats(true);
   };
 
+  const runCheck = async () => {
+    setLoading(true);
+    setResult(null);
+    setProgress(0);
+    setStatusMessage('Verificatie starten...');
+    try {
+      const res = await fetch('http://localhost:5001/api/run-anonymize-check', { method: 'POST' });
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          const data = JSON.parse(line);
+          if (data.status === 'progress') {
+            if (data.progress !== undefined) setProgress(data.progress);
+            if (data.message) setStatusMessage(data.message);
+          } else if (data.status === 'success') {
+            setResult(data);
+            setProgress(100);
+            setStatusMessage('Verificatie voltooid!');
+            setLastReport({
+              timestamp: new Date().toLocaleString('nl-NL'),
+              rows_processed: data.rows_processed,
+              total_entities: data.stats.total_entities,
+              ...data.stats,
+              columns: data.columns_anonymized,
+            });
+          } else if (data.status === 'error') {
+            setResult({ error: data.error });
+            break;
+          }
+        }
+      }
+    } catch (err) {
+      setResult({ error: err.message });
+    } finally {
+      setLoading(false);
+      setShowStats(true);
+    }
+  };
+
   const MASKING_INFO = [
     { tag: '[NAME]', meaning: 'Names / persons' },
     { tag: '[LOCATION]', meaning: 'Addresses / locations' },
@@ -336,17 +383,39 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
             </div>
 
             {existingAnonymized && (
-              <div className="flex items-center justify-between p-4 bg-indigo-50 border border-indigo-100 rounded-xl">
-                <div className="flex items-center space-x-3 text-indigo-800">
-                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
-                  <span className="text-sm font-medium">An anonymized dataset is already available.</span>
+              <div className="p-4 bg-indigo-50 border border-indigo-100 rounded-xl space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center space-x-3 text-indigo-800">
+                    <svg className="w-5 h-5 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
+                    <span className="text-sm font-medium">Er is al een geanonimiseerde dataset beschikbaar.</span>
+                  </div>
+                  <div className="flex gap-2 shrink-0">
+                    <button
+                      onClick={runCheck}
+                      disabled={loading}
+                      className="px-4 py-2 bg-indigo-600 text-white text-sm font-bold rounded-lg shadow-sm hover:bg-indigo-700 transition-all disabled:opacity-50"
+                    >
+                      {loading ? 'Bezig...' : 'Check uitvoeren'}
+                    </button>
+                    <button
+                      onClick={() => { if (typeof onComplete === 'function') onComplete(); }}
+                      className="px-4 py-2 bg-white text-indigo-600 text-sm font-bold rounded-lg shadow-sm hover:shadow-md transition-all ring-1 ring-indigo-200 hover:bg-indigo-50"
+                    >
+                      Overslaan
+                    </button>
+                  </div>
                 </div>
-                <button
-                  onClick={() => { if (typeof onComplete === 'function') onComplete(); }}
-                  className="px-5 py-2 bg-white text-indigo-600 text-sm font-bold rounded-lg shadow-sm hover:shadow-md transition-all ring-1 ring-indigo-200 hover:bg-indigo-50"
-                >
-                  Skip & Use Existing
-                </button>
+                {loading && (
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-xs text-indigo-700 font-medium">
+                      <span>{statusMessage}</span>
+                      <span>{progress}%</span>
+                    </div>
+                    <div className="w-full bg-indigo-100 rounded-full h-1.5">
+                      <div className="bg-indigo-500 h-1.5 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>

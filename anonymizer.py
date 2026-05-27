@@ -501,6 +501,125 @@ def process_file_with_layers(
     )
 
 
+def run_check_stream(original_path: str, anonymized_path: str, columns: list, sep: str = None):
+    """
+    Run only the verification step on already-existing original + anonymized files.
+    Yields NDJSON progress events; final event has status='success' with full stats.
+    """
+    from src.core.layers.layer1_presidio import collect_presidio_spans
+    from src.core.layers.privacy_pipeline import _filter_spans
+
+    yield json.dumps({"status": "progress", "message": "Bestanden inlezen...", "progress": 5}) + "\n"
+
+    try:
+        df_original = _read_input(original_path, sep)
+        df_anon = _read_input(anonymized_path, sep)
+    except Exception as e:
+        yield json.dumps({"status": "error", "error": f"Kon bestanden niet lezen: {e}"}) + "\n"
+        return
+
+    valid_cols = [c for c in columns if c in df_original.columns and c in df_anon.columns]
+    if not valid_cols:
+        yield json.dumps({"status": "error", "error": "Geen overeenkomende kolommen gevonden in beide bestanden."}) + "\n"
+        return
+
+    total_rows = len(df_original)
+    yield json.dumps({"status": "progress", "message": f"{total_rows} rijen gevonden. Tags tellen...", "progress": 10}) + "\n"
+
+    # Count tags in anonymized output
+    _TAG_RE = re.compile(r'\[(NAME|PII|LOCATION|TITLE)\]')
+    total_cells = 0
+    affected_cells = 0
+    total_entities = 0
+    tag_counts = {"NAME": 0, "PII": 0, "LOCATION": 0, "TITLE": 0}
+
+    for col in valid_cols:
+        for val in df_anon[col]:
+            if pd.isna(val) or not isinstance(val, str) or not val.strip():
+                continue
+            total_cells += 1
+            matches = _TAG_RE.findall(val)
+            if matches:
+                affected_cells += 1
+                total_entities += len(matches)
+                for tag in matches:
+                    tag_counts[tag] += 1
+
+    yield json.dumps({"status": "progress", "message": "Presidio verificatie uitvoeren op originele tekst...", "progress": 20}) + "\n"
+
+    layer_config = {"names": True, "locations": True, "pii": True, "titles": True}
+    missed_counts = {"NAME": 0, "PII": 0, "LOCATION": 0, "TITLE": 0}
+    missed_samples = {"NAME": [], "PII": [], "LOCATION": [], "TITLE": []}
+    removed_samples = {"NAME": [], "PII": [], "LOCATION": [], "TITLE": []}
+
+    for col_idx, col in enumerate(valid_cols):
+        base_progress = 20 + int(75 * (col_idx / len(valid_cols)))
+        yield json.dumps({
+            "status": "progress",
+            "message": f"Kolom controleren: {col}...",
+            "progress": base_progress,
+        }) + "\n"
+
+        for idx in range(total_rows):
+            original_val = df_original[col].iloc[idx]
+            anonymized_val = df_anon[col].iloc[idx]
+
+            if pd.isna(original_val) or not isinstance(original_val, str) or not original_val.strip():
+                continue
+
+            raw_spans = collect_presidio_spans(original_val, layer_config)
+            filtered_spans = _filter_spans(original_val, raw_spans, layer_config)
+            for start, end, tag in filtered_spans:
+                key = tag.strip("[]")
+                if key not in missed_counts:
+                    continue
+                entity_text = original_val[start:end]
+                if isinstance(anonymized_val, str) and entity_text.lower() in anonymized_val.lower():
+                    missed_counts[key] += 1
+                    if entity_text not in missed_samples[key]:
+                        missed_samples[key].append(entity_text)
+                else:
+                    if entity_text not in removed_samples[key]:
+                        removed_samples[key].append(entity_text)
+
+        col_progress = 20 + int(75 * ((col_idx + 1) / len(valid_cols)))
+        yield json.dumps({"status": "progress", "message": f"Kolom '{col}' klaar.", "progress": col_progress}) + "\n"
+
+    yield json.dumps({"status": "progress", "message": "Rapport opslaan...", "progress": 97}) + "\n"
+
+    _write_report(
+        input_path=original_path,
+        output_path=anonymized_path,
+        columns=valid_cols,
+        layers=["presidio"],
+        total_rows=total_rows,
+        total_cells=total_cells,
+        affected_cells=affected_cells,
+        total_entities=total_entities,
+        tag_counts=tag_counts,
+        missed_counts=missed_counts,
+        missed_samples=missed_samples,
+        removed_samples=removed_samples,
+    )
+
+    yield json.dumps({
+        "status": "success",
+        "message": "Verificatie voltooid",
+        "rows_processed": total_rows,
+        "columns_anonymized": valid_cols,
+        "progress": 100,
+        "stats": {
+            "total_cells": total_cells,
+            "affected_cells": affected_cells,
+            "total_entities": total_entities,
+            "tag_counts": tag_counts,
+            "missed_counts": missed_counts,
+            "missed_samples": missed_samples,
+            "removed_samples": removed_samples,
+        },
+    }) + "\n"
+
+
 if __name__ == "__main__":
     INPUT_FILE = "data.csv"
     OUTPUT_FILE = "data_clean.csv"
