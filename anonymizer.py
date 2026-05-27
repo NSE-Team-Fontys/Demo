@@ -7,6 +7,9 @@ from pathlib import Path
 
 import pandas as pd
 
+os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
+
+from src.core.model_device import describe_model_device, get_model_device
 from src.core.layers.privacy_pipeline import process_chunk_sync, validate_selected_layers
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -275,22 +278,24 @@ def process_file_with_layers(
             + "\n"
         )
     if "eu-pii" in layers:
+        device_label = describe_model_device(get_model_device())
         yield (
             json.dumps(
                 {
                     "status": "progress",
-                    "message": "Loading Layer 2 (EU-PII-Safeguard)...",
+                    "message": f"Loading Layer 2 (EU-PII-Safeguard) on {device_label}...",
                     "progress": 20,
                 }
             )
             + "\n"
         )
     if "openai-privacy-filter" in layers:
+        device_label = describe_model_device(get_model_device())
         yield (
             json.dumps(
                 {
                     "status": "progress",
-                    "message": "Loading Layer 2 (OpenAI Privacy Filter)...",
+                    "message": f"Loading Layer 2 (OpenAI Privacy Filter) on {device_label}...",
                     "progress": 20,
                 }
             )

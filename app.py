@@ -16,6 +16,8 @@ from flask_cors import CORS
 
 # Fix for macOS (Apple Silicon) deadlocks when using HuggingFace models in Flask threads
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
+# Let unsupported PyTorch MPS ops fall back to CPU instead of failing the request.
+os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
 
 import json
 import re

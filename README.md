@@ -50,9 +50,16 @@ Useful optional variables:
 
 ```env
 ANONYMIZE_BATCH_SIZE=512
+MODEL_DEVICE=mps
+PYTORCH_ENABLE_MPS_FALLBACK=1
 LAYER2_FP16=1
 DISABLE_SPACY_MODEL_AUTO_INSTALL=1
 ```
+
+`MODEL_DEVICE=auto` prefers CUDA, then Apple MPS, then CPU. On a Mac, set
+`MODEL_DEVICE=mps` to force the PyTorch-backed anonymization layer onto the
+Apple GPU. Presidio/spaCy still runs on CPU; the EU-PII / Transformer layer is
+the part that can use MPS.
 
 ## C4 Model
 
