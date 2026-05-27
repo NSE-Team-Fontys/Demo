@@ -40,12 +40,13 @@ function buildSubthemeRows(subthemes, apiRows, sourceComments) {
         subtheme: row.subtheme,
         percentage: Number.isFinite(percentage) ? percentage : 0,
         mentions: Number.isFinite(mentions) ? mentions : 0,
+        docPercentage: Number.isFinite(Number(row.doc_percentage)) ? Number(row.doc_percentage) : null,
       }
     })
   }
 
   const comments = sourceComments.map((comment) => String(comment).toLowerCase()).filter(Boolean)
-  return subthemes.map((subtheme) => {
+  const rows = subthemes.map((subtheme) => {
     const tokens = subthemeTokens(subtheme)
     const mentions = comments.filter((comment) =>
       tokens.some((token) => comment.includes(token) || comment.includes(token.slice(0, 6))),
@@ -54,9 +55,15 @@ function buildSubthemeRows(subthemes, apiRows, sourceComments) {
     return {
       subtheme,
       mentions,
-      percentage: comments.length > 0 ? Math.round((mentions / comments.length) * 100) : 0,
+      docPercentage: comments.length > 0 ? Math.round((mentions / comments.length) * 100) : 0,
+      percentage: 0,
     }
   })
+  const totalMentions = rows.reduce((sum, row) => sum + row.mentions, 0)
+  return rows.map((row) => ({
+    ...row,
+    percentage: totalMentions > 0 ? Math.round((row.mentions / totalMentions) * 100) : 0,
+  }))
 }
 
 function CommentColumn({ title, icon, tone, comments }) {
@@ -163,7 +170,7 @@ function SubthemeMentionChart({ rows }) {
             </div>
           ))}
           <p className="text-[10px] text-on-surface-variant/60">
-            Percentages are based on retrieved comments for this theme, not sentiment scoring.
+            Percentages show share of detected subtheme mentions, not sentiment scoring.
           </p>
         </div>
       ) : (

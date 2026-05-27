@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 
 const DEFAULT_PROMPT = `You are an expert data analyst. Read the following student survey responses about '{theme_name}'.
+Use the provided theme scope to keep the analysis focused on this selected theme. Do not drift into Support / Mentoring unless the selected theme is Support / Mentoring.
 Summarize the general consensus in 2 sentences. Extract 3 key sentiments (Positive, Neutral, or Critical) and provide a 1-sentence point for each.
 Also extract 3 to 5 short sub-themes or topics mentioned.
 Respond EXACTLY in this JSON format:

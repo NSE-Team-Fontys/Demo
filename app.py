@@ -51,7 +51,8 @@ RERANKER_CANDIDATE_MULTIPLIER = int(
     os.environ.get("RERANKER_CANDIDATE_MULTIPLIER", "5")
 )
 RERANKER_MAX_CANDIDATES = int(os.environ.get("RERANKER_MAX_CANDIDATES", "100"))
-LLM_CONTEXT_DOCUMENTS = int(os.environ.get("LLM_CONTEXT_DOCUMENTS", "15"))
+LLM_CONTEXT_DOCUMENTS = int(os.environ.get("LLM_CONTEXT_DOCUMENTS", "100"))
+INSIGHT_CACHE_VERSION = 3
 THEMES_LIST = [
     "Content and Organisation",
     "Professional Practice",
@@ -61,6 +62,39 @@ THEMES_LIST = [
     "Engagement & Contact",
     "Special Circumstances",
 ]
+THEME_DEFINITIONS = {
+    "Content and Organisation": (
+        "Curriculum content, course organization, planning, schedules, workload, "
+        "study materials, module structure, learning objectives, and information "
+        "about how the programme is arranged."
+    ),
+    "Professional Practice": (
+        "Connection to professional practice, internships, industry projects, "
+        "guest lectures, career readiness, workplace skills, practical assignments, "
+        "and links with companies or the professional field."
+    ),
+    "Teachers": (
+        "Lecturers and instructors, teaching quality, explanations, subject expertise, "
+        "didactic skill, classroom teaching, teacher feedback, and teacher availability "
+        "for learning-related questions."
+    ),
+    "Support / Mentoring": (
+        "Mentors, study coaches, student advisors, counseling, personal guidance, "
+        "wellbeing support, non-academic support, supervision, and mentoring."
+    ),
+    "Examination & Assessment": (
+        "Exams, tests, assignments, grading, assessment criteria, rubrics, resits, "
+        "assessment alignment, and feedback on assessed work."
+    ),
+    "Engagement & Contact": (
+        "Student involvement, belonging, contact with classmates or staff, communication, "
+        "student voice, feeling heard, class atmosphere, community, and participation."
+    ),
+    "Special Circumstances": (
+        "Accommodations for disability, illness, caregiving, financial stress, accessibility, "
+        "special personal circumstances, flexible arrangements, and study adjustments."
+    ),
+}
 _theme_overview_cache = {}
 _theme_embedding_models = {}
 _theme_query_embeddings = {}
@@ -112,6 +146,15 @@ def filter_condition(canonical_key: str, value: str):
     return {"$or": conditions}
 
 
+def build_where_filter(filters: dict):
+    if not filters:
+        return None
+    conditions = [filter_condition(key, value) for key, value in filters.items()]
+    if len(conditions) == 1:
+        return conditions[0]
+    return {"$and": conditions}
+
+
 def clear_runtime_caches():
     _theme_overview_cache.clear()
 
@@ -136,12 +179,17 @@ def get_theme_embedding_model(model_id: str | None = None):
     return _theme_embedding_models[selected_model]
 
 
+def theme_query_text(theme_name: str) -> str:
+    definition = THEME_DEFINITIONS.get(theme_name)
+    return f"{theme_name}. {definition}" if definition else theme_name
+
+
 def get_theme_query_embeddings(model_id: str | None = None):
     selected_model = model_id or THEME_EMBEDDING_MODEL
     if selected_model not in _theme_query_embeddings:
         model = get_theme_embedding_model(selected_model)
         _theme_query_embeddings[selected_model] = {
-            theme: model.encode(theme, normalize_embeddings=True).tolist()
+            theme: model.encode(theme_query_text(theme), normalize_embeddings=True).tolist()
             for theme in THEMES_LIST
         }
     return _theme_query_embeddings[selected_model]
@@ -608,8 +656,20 @@ def save_cache(cache_data):
         json.dump(cache_data, f, indent=2)
 
 
+def current_reranker_id():
+    return selected_reranker_model() if reranker_enabled() else None
+
+
+def cache_matches_generation_settings(cached_theme: dict) -> bool:
+    return (
+        cached_theme.get("cache_version") == INSIGHT_CACHE_VERSION
+        and cached_theme.get("llm_context_documents") == LLM_CONTEXT_DOCUMENTS
+        and cached_theme.get("reranker") == current_reranker_id()
+    )
+
+
 def subtheme_mention_rows(subthemes: list, docs: list) -> list:
-    """Approximate how often extracted subthemes are mentioned in retrieved responses."""
+    """Approximate each subtheme's share of detected subtheme mentions."""
     if not subthemes or not docs:
         return []
 
@@ -632,6 +692,10 @@ def subtheme_mention_rows(subthemes: list, docs: list) -> list:
         "naar",
     }
     normalized_docs = [str(doc).lower() for doc in docs]
+    doc_words = [
+        set(re.findall(r"[a-zA-ZÀ-ÿ0-9]+", doc))
+        for doc in normalized_docs
+    ]
     rows = []
 
     for subtheme in subthemes:
@@ -648,11 +712,11 @@ def subtheme_mention_rows(subthemes: list, docs: list) -> list:
         token_roots = {token[:6] for token in tokens if len(token) > 6}
 
         mentions = 0
-        for doc in normalized_docs:
+        for doc, words in zip(normalized_docs, doc_words):
             if (
                 label_norm in doc
-                or any(token in doc for token in tokens)
-                or any(root in doc for root in token_roots)
+                or any(token in words for token in tokens)
+                or any(any(word.startswith(root) for word in words) for root in token_roots)
             ):
                 mentions += 1
 
@@ -660,11 +724,90 @@ def subtheme_mention_rows(subthemes: list, docs: list) -> list:
             {
                 "subtheme": label,
                 "mentions": mentions,
-                "percentage": int(round((mentions / len(docs)) * 100)),
+                "doc_percentage": int(round((mentions / len(docs)) * 100)),
+                "percentage": 0,
             }
         )
 
+    total_mentions = sum(row["mentions"] for row in rows)
+    if total_mentions > 0:
+        for row in rows:
+            row["percentage"] = int(round((row["mentions"] / total_mentions) * 100))
+
     return rows
+
+
+def percentages_from_counts(counts: dict[str, int]) -> dict[str, int]:
+    """Convert theme counts to integer percentages that sum to exactly 100."""
+    total = sum(max(0, int(counts.get(theme, 0))) for theme in THEMES_LIST)
+    if total <= 0:
+        return {theme: 0 for theme in THEMES_LIST}
+
+    raw = {
+        theme: (max(0, int(counts.get(theme, 0))) * 100) / total
+        for theme in THEMES_LIST
+    }
+    percentages = {theme: int(raw[theme]) for theme in THEMES_LIST}
+    remainder = 100 - sum(percentages.values())
+    by_fraction = sorted(
+        THEMES_LIST,
+        key=lambda theme: (raw[theme] - percentages[theme], counts.get(theme, 0)),
+        reverse=True,
+    )
+
+    for theme in by_fraction[:remainder]:
+        percentages[theme] += 1
+
+    return percentages
+
+
+def theme_distribution(collection, model_id: str | None = None, where_filter=None) -> dict:
+    """Assign each response to its closest hardcoded theme so totals equal 100%."""
+    if where_filter:
+        matching_docs = collection.get(where=where_filter)
+        total_docs = (
+            len(matching_docs["ids"])
+            if matching_docs and matching_docs.get("ids")
+            else 0
+        )
+    else:
+        total_docs = collection.count()
+
+    counts = {theme: 0 for theme in THEMES_LIST}
+    if total_docs <= 0:
+        return {
+            "counts": counts,
+            "percentages": percentages_from_counts(counts),
+            "total_docs": 0,
+        }
+
+    theme_embeddings = get_theme_query_embeddings(model_id)
+    best_by_doc = {}
+
+    for theme_name in THEMES_LIST:
+        results = collection.query(
+            query_embeddings=[theme_embeddings[theme_name]],
+            n_results=total_docs,
+            where=where_filter,
+            include=["distances"],
+        )
+        ids = results.get("ids", [[]])[0] if results.get("ids") else []
+        distances = (
+            results.get("distances", [[]])[0] if results.get("distances") else []
+        )
+        for doc_id, distance in zip(ids, distances):
+            current = best_by_doc.get(doc_id)
+            if current is None or distance < current[0]:
+                best_by_doc[doc_id] = (distance, theme_name)
+
+    for _, theme_name in best_by_doc.values():
+        counts[theme_name] += 1
+
+    return {
+        "counts": counts,
+        "percentages": percentages_from_counts(counts),
+        "total_docs": total_docs,
+    }
 
 
 def ensure_ollama_model_available(model_name: str, allow_pull: bool = False) -> None:
@@ -719,8 +862,9 @@ def theme_summary():
         theme_query = data.get("query", "")
         ollama_model = data.get("ollama_model", "gemma4:e4b")
         allow_model_download = bool(data.get("allow_model_download", False))
+        theme_search_query = theme_query_text(theme_name) if theme_name else theme_query
 
-        if not theme_query:
+        if not theme_search_query:
             return jsonify({"status": "error", "error": "No query provided"}), 400
 
         # ── Check cache FIRST — no Ollama round-trip needed for cached themes ──
@@ -739,7 +883,11 @@ def theme_summary():
                 and "llm_document_count" in cached_data
                 and "reranker" in cached_data
             )
-            if has_view_more_fields and has_reranker_fields:
+            if (
+                has_view_more_fields
+                and has_reranker_fields
+                and cache_matches_generation_settings(cached_data)
+            ):
                 print(f"[GEMMA4] Returning cached summary for: {theme_name}")
                 cached_data["status"] = "success"
                 return jsonify(cached_data)
@@ -756,8 +904,9 @@ def theme_summary():
 
         embedding_model = collection_embedding_model(collection)
         model = get_theme_embedding_model(embedding_model)
-        query_embedding = model.encode(theme_query, normalize_embeddings=True)
+        query_embedding = model.encode(theme_search_query, normalize_embeddings=True)
         total_docs = collection.count()
+        distribution = theme_distribution(collection, embedding_model)
         retrieval_k = min(
             max(20 * RERANKER_CANDIDATE_MULTIPLIER, 20),
             max(total_docs, 1),
@@ -776,14 +925,13 @@ def theme_summary():
         if results["documents"] and len(results["documents"]) > 0:
             for i, doc in enumerate(results["documents"][0]):
                 distance = results["distances"][0][i]
-                similarity = max(0, 1 - distance)
-                if similarity >= 0.5:
-                    relevant_docs.append(doc)
-                    relevant_distances.append(distance)
+                relevant_docs.append(doc)
+                relevant_distances.append(distance)
 
-        vector_relevant_count = len(relevant_docs)
+        vector_relevant_count = distribution["counts"].get(theme_name, len(relevant_docs))
+        frequency = distribution["percentages"].get(theme_name, 0)
         ranked_docs = rerank_documents(
-            theme_query,
+            theme_search_query,
             relevant_docs[:RERANKER_MAX_CANDIDATES],
             distances=relevant_distances[:RERANKER_MAX_CANDIDATES],
             top_n=RERANKER_MAX_CANDIDATES,
@@ -794,7 +942,10 @@ def theme_summary():
 
         # Real Gemma Call via Ollama
 
+        theme_scope = THEME_DEFINITIONS.get(theme_name, theme_name)
         prompt = f"""You are an expert data analyst. Read the following student survey responses about '{theme_name}'.
+Theme scope: {theme_scope}
+Only analyze comments as evidence for this theme. Do not drift into Support / Mentoring unless the selected theme is Support / Mentoring.
 Summarize the general consensus in 2 sentences. Extract 3 key sentiments (Positive, Neutral, or Critical) and provide a 1-sentence point for each.
 Select up to 3 exact positive student comments and up to 3 exact critical student comments from the responses. Use verbatim text only; do not invent comments.
 Select up to 3 exact student suggestions where students propose a solution, improvement, or concrete next step instead of only complaining. Use verbatim text only; return an empty array if no clear suggestions exist.
@@ -877,10 +1028,13 @@ Responses:
         response_data = {
             "status": "success",
             "theme": theme_name,
+            "frequency": frequency,
             "document_count": len(relevant_docs),
             "vector_relevant_count": vector_relevant_count,
             "llm_document_count": len(llm_docs),
-            "reranker": selected_reranker_model() if reranker_enabled() else None,
+            "cache_version": INSIGHT_CACHE_VERSION,
+            "llm_context_documents": LLM_CONTEXT_DOCUMENTS,
+            "reranker": current_reranker_id(),
             "summary": summary,
             "sentiments": sentiments,
             "positive_comments": positive_comments[:3],
@@ -948,10 +1102,12 @@ def precompute_insights():
             collection = client.get_collection("survey_responses")
             total_docs = collection.count()
             cache = load_cache()
+            embedding_model = collection_embedding_model(collection)
+            distribution = theme_distribution(collection, embedding_model)
 
             for i, theme in enumerate(themes):
                 theme_name = theme.get("name")
-                query = theme.get("query", theme_name)
+                query = theme_query_text(theme_name)
 
                 yield (
                     json.dumps(
@@ -965,13 +1121,13 @@ def precompute_insights():
                     + "\n"
                 )
 
-                embedding_model = collection_embedding_model(collection)
                 model = get_theme_embedding_model(embedding_model)
                 query_embedding = model.encode(query, normalize_embeddings=True)
+                retrieval_k = min(RERANKER_MAX_CANDIDATES, max(total_docs, 1))
 
                 results = collection.query(
                     query_embeddings=[query_embedding.tolist()],
-                    n_results=total_docs,
+                    n_results=retrieval_k,
                     include=["documents", "distances"],
                 )
 
@@ -980,12 +1136,12 @@ def precompute_insights():
                 if results["documents"] and len(results["documents"]) > 0:
                     for j, doc in enumerate(results["documents"][0]):
                         distance = results["distances"][0][j]
-                        similarity = max(0, 1 - distance)
-                        if similarity >= 0.5:
-                            relevant_docs.append(doc)
-                            relevant_distances.append(distance)
+                        relevant_docs.append(doc)
+                        relevant_distances.append(distance)
 
-                vector_relevant_count = len(relevant_docs)
+                vector_relevant_count = distribution["counts"].get(
+                    theme_name, len(relevant_docs)
+                )
                 ranked_docs = rerank_documents(
                     query,
                     relevant_docs[:RERANKER_MAX_CANDIDATES],
@@ -996,24 +1152,18 @@ def precompute_insights():
                 relevant_docs = [item["document"] for item in ranked_docs]
                 llm_docs = relevant_docs[:LLM_CONTEXT_DOCUMENTS]
 
-                frequency = (
-                    int((vector_relevant_count / max(total_docs, 1)) * 100)
-                    if total_docs > 0
-                    else 0
-                )
+                frequency = distribution["percentages"].get(theme_name, 0)
 
                 # Check cache for summary
                 cached_theme = cache.get(theme_name, {})
-                cache_has_current_reranker = (
-                    "llm_document_count" in cached_theme
-                    and cached_theme.get("reranker")
-                    == (selected_reranker_model() if reranker_enabled() else None)
+                cache_has_current_settings = cache_matches_generation_settings(
+                    cached_theme
                 )
                 if (
                     theme_name in cache
                     and "summary" in cache[theme_name]
                     and cache[theme_name].get("sentiments")
-                    and cache_has_current_reranker
+                    and cache_has_current_settings
                 ):
                     # Update frequency but keep summary
                     cache[theme_name]["frequency"] = frequency
@@ -1021,9 +1171,9 @@ def precompute_insights():
                     cache[theme_name]["llm_document_count"] = min(
                         len(relevant_docs), LLM_CONTEXT_DOCUMENTS
                     )
-                    cache[theme_name]["reranker"] = (
-                        selected_reranker_model() if reranker_enabled() else None
-                    )
+                    cache[theme_name]["cache_version"] = INSIGHT_CACHE_VERSION
+                    cache[theme_name]["llm_context_documents"] = LLM_CONTEXT_DOCUMENTS
+                    cache[theme_name]["reranker"] = current_reranker_id()
                     save_cache(cache)
                     yield (
                         json.dumps(
@@ -1058,9 +1208,9 @@ def precompute_insights():
                         "frequency": frequency,
                         "vector_relevant_count": vector_relevant_count,
                         "llm_document_count": 0,
-                        "reranker": selected_reranker_model()
-                        if reranker_enabled()
-                        else None,
+                        "cache_version": INSIGHT_CACHE_VERSION,
+                        "llm_context_documents": LLM_CONTEXT_DOCUMENTS,
+                        "reranker": current_reranker_id(),
                         "summary": "Not enough highly relevant responses found.",
                         "sentiments": [],
                     }
@@ -1071,10 +1221,13 @@ def precompute_insights():
                 if custom_prompt.strip():
                     prompt = (
                         custom_prompt.replace("{theme_name}", theme_name)
+                        + f"\n\nTheme scope: {THEME_DEFINITIONS.get(theme_name, theme_name)}"
                         + "\n\nResponses:\n"
                     )
                 else:
                     prompt = f"""You are an expert data analyst. Read the following student survey responses about '{theme_name}'.
+Theme scope: {THEME_DEFINITIONS.get(theme_name, theme_name)}
+Only analyze comments as evidence for this theme. Do not drift into Support / Mentoring unless the selected theme is Support / Mentoring.
 Summarize the general consensus in 2 sentences. Extract 3 key sentiments (Positive, Neutral, or Critical) and provide a 1-sentence point for each.
 Select up to 3 exact positive student comments and up to 3 exact critical student comments from the responses. Use verbatim text only; do not invent comments.
 Select up to 3 exact student suggestions where students propose a solution, improvement, or concrete next step instead of only complaining. Use verbatim text only; return an empty array if no clear suggestions exist.
@@ -1122,9 +1275,9 @@ Responses:
                             "frequency": frequency,
                             "vector_relevant_count": vector_relevant_count,
                             "llm_document_count": len(llm_docs),
-                            "reranker": selected_reranker_model()
-                            if reranker_enabled()
-                            else None,
+                            "cache_version": INSIGHT_CACHE_VERSION,
+                            "llm_context_documents": LLM_CONTEXT_DOCUMENTS,
+                            "reranker": current_reranker_id(),
                             "summary": parsed.get(
                                 "summary", "Summary could not be parsed."
                             ),
@@ -1181,7 +1334,11 @@ Responses:
 
 @app.route("/api/themes-overview", methods=["GET"])
 def get_themes_overview():
-    cache = load_cache()
+    cache = {
+        theme: data
+        for theme, data in load_cache().items()
+        if isinstance(data, dict) and cache_matches_generation_settings(data)
+    }
 
     # Check for filters
     filters = {}
@@ -1209,12 +1366,7 @@ def get_themes_overview():
         client = chromadb.PersistentClient(path=str(VECTOR_DB_PATH))
         collection = client.get_collection("survey_responses")
 
-        where_clause = {}
-        if len(filters) == 1:
-            k, v = list(filters.items())[0]
-            where_clause = {k: v}
-        elif len(filters) > 1:
-            where_clause = {"$and": [{k: v} for k, v in filters.items()]}
+        where_clause = build_where_filter(filters)
 
         # Total matching documents
         filtered_docs = collection.get(where=where_clause)
@@ -1232,31 +1384,20 @@ def get_themes_overview():
             _theme_overview_cache[cache_key] = new_cache
             return jsonify(new_cache)
 
-        embedding_model = collection_embedding_model(collection)
-        theme_embeddings = get_theme_query_embeddings(embedding_model)
-
+        distribution = theme_distribution(
+            collection,
+            collection_embedding_model(collection),
+            where_filter=where_clause,
+        )
         for theme_name in THEMES_LIST:
             if theme_name not in new_cache:
                 continue
-
-            results = collection.query(
-                query_embeddings=[theme_embeddings[theme_name]],
-                n_results=total_docs,
-                where=where_clause,
-                include=["documents", "distances"],
+            new_cache[theme_name]["frequency"] = distribution["percentages"].get(
+                theme_name, 0
             )
-
-            relevant_docs = []
-            if results["documents"] and len(results["documents"]) > 0:
-                for j, doc in enumerate(results["documents"][0]):
-                    distance = results["distances"][0][j]
-                    similarity = max(0, 1 - distance)
-                    if similarity >= 0.5:
-                        relevant_docs.append(doc)
-
-            new_cache[theme_name]["frequency"] = int(
-                (len(relevant_docs) / total_docs) * 100
-            )
+            new_cache[theme_name]["vector_relevant_count"] = distribution[
+                "counts"
+            ].get(theme_name, 0)
 
         _theme_overview_cache[cache_key] = new_cache
         return jsonify(new_cache)
