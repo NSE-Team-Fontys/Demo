@@ -1,12 +1,16 @@
 import chromadb
 
-from src.core.embedding_models import describe_embedding_runtime, load_embedding_model
+from src.core.embedding_models import (
+    DEFAULT_EMBEDDING_MODEL,
+    describe_embedding_runtime,
+    load_embedding_model,
+)
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
 DB_PATH         = './survey_vector_db'
 COLLECTION      = 'survey_responses'
-EMBEDDING_MODEL = 'BAAI/bge-m3'
+EMBEDDING_MODEL = DEFAULT_EMBEDDING_MODEL
 
 DEFAULT_N_RESULTS   = 10
 DEFAULT_INSTITUTION = None   # None = search across all institutions

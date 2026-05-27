@@ -115,7 +115,7 @@ flowchart LR
     l2b["Optional Layer\nOpenAI Privacy Filter"]
     merge["Collect spans\nfilter overlaps\napply masks once"]
     csv["anonymized_survey.csv"]
-    embed["Embedding model\nBAAI/bge-m3 or selected model"]
+    embed["Embedding model\nOcten 0.6B default or selected model"]
     db["ChromaDB collection\nsurvey_responses"]
     insights["Ollama insights\ncached summaries"]
     dashboard["Dashboard filters\nquery + theme cards"]
@@ -182,7 +182,7 @@ Main file: `vector_builder.py`
 - Uses selected questionnaire columns.
 - Stores documents, embeddings, and metadata in ChromaDB.
 - Loads the embedding model before deleting/recreating the Chroma collection.
-- Supports Hugging Face/SentenceTransformer models such as `Qwen/Qwen3-Embedding-8B`.
+- Supports the configured Hugging Face/SentenceTransformer embedding models: `Octen/Octen-Embedding-0.6B` by default, `Octen/Octen-Embedding-4B`, and `Octen/Octen-Embedding-8B`.
 - Stores the selected embedding model in Chroma metadata so queries and theme summaries use the same vector dimensions later.
 - Supports `allow_model_download` from the frontend:
   - enabled: download model if missing.
@@ -213,6 +213,9 @@ Behavior:
 
 - Ollama availability and selected model are checked before generation.
 - If the model is missing, generation fails unless `Pull Ollama model if missing` is enabled in the UI.
+- Chroma retrieves broad first-stage matches, then `zeroentropy/zerank-2-reranker` reranks the strongest candidates before the prompt is built.
+- The dashboard sends up to 15 reranked answers to the LLM by default (`LLM_CONTEXT_DOCUMENTS=15`).
+- Insight cache entries include `vector_relevant_count` and `llm_document_count` so you can see how many answers matched the theme and how many answers the LLM actually received.
 - Successful summaries are cached in `gemma_cache.json`.
 - Failed generations are not cached as successful insights.
 
@@ -297,7 +300,6 @@ Check Ollama:
 ```powershell
 ollama list
 ollama pull gemma4:e4b
-ollama pull gemma4:26b
 ```
 
 Or enable `Pull Ollama model if missing` in the UI.

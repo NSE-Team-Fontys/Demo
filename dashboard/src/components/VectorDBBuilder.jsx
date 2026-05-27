@@ -2,91 +2,39 @@ import { useState, useEffect } from 'react';
 
 const AVAILABLE_MODELS = [
   {
-    id: 'BAAI/bge-m3',
-    name: 'BGE-M3',
-    provider: 'BAAI',
-    description: 'Top-performing multilingual model. Highest silhouette score in benchmarks — best semantic clustering quality.',
-    silhouette: 0.93,
-    daviesBouldin: 0.34,
-    embedTime: '42s',
-    languages: '100+ languages',
+    id: 'Octen/Octen-Embedding-0.6B',
+    name: 'Octen Embedding 0.6B',
+    provider: 'Octen',
+    description: 'Default compact Octen embedding model. Best starting point for local iteration before moving to larger Octen variants.',
+    role: 'Compact',
+    silhouette: null,
+    daviesBouldin: null,
+    embedTime: 'Fastest Octen',
+    languages: 'Multilingual',
     recommended: true
   },
   {
-    id: 'intfloat/multilingual-e5-large-instruct',
-    name: 'E5-Large Instruct',
-    provider: 'Intfloat',
-    description: 'Instruction-tuned multilingual model. Strong silhouette with low noise — excellent for guided embedding tasks.',
-    silhouette: 0.91,
-    daviesBouldin: 0.47,
-    embedTime: '28s',
+    id: 'Octen/Octen-Embedding-4B',
+    name: 'Octen Embedding 4B',
+    provider: 'Octen',
+    description: 'Medium Octen embedding model for better retrieval quality when you can spend more memory and inference time.',
+    role: 'Balanced',
+    silhouette: null,
+    daviesBouldin: null,
+    embedTime: 'Moderate',
     languages: 'Multilingual',
     recommended: false
   },
   {
-    id: 'BAAI/bge-large-en-v1.5',
-    name: 'BGE-Large EN v1.5',
-    provider: 'BAAI',
-    description: 'English-focused large model. Very low Davies-Bouldin score — tightest clusters among all tested models.',
-    silhouette: 0.90,
-    daviesBouldin: 0.14,
-    embedTime: '52s',
-    languages: 'English',
-    recommended: false
-  },
-  {
-    id: 'Qwen/Qwen3-Embedding-0.6B',
-    name: 'Qwen3 Embedding 0.6B',
-    provider: 'Alibaba / Qwen',
-    description: 'Compact 0.6B param model from Qwen3 family. Lowest noise percentage in benchmarks but slower inference.',
-    silhouette: 0.90,
-    daviesBouldin: 0.41,
-    embedTime: '431s',
-    languages: 'Multilingual',
-    recommended: false
-  },
-  {
-    id: 'Qwen/Qwen3-Embedding-8B',
-    name: 'Qwen3 Embedding 8B',
-    provider: 'Alibaba / Qwen',
-    description: 'Large Hugging Face Qwen3 embedding model. Same SentenceTransformer loading path as the other embedding models.',
+    id: 'Octen/Octen-Embedding-8B',
+    name: 'Octen Embedding 8B',
+    provider: 'Octen',
+    description: 'Largest Octen embedding option for maximum semantic retrieval quality on capable hardware.',
+    role: 'High capacity',
     silhouette: null,
     daviesBouldin: null,
     embedTime: 'Slow',
     languages: 'Multilingual',
-    recommended: false
-  },
-  {
-    id: 'paraphrase-multilingual-MiniLM-L12-v2',
-    name: 'Multilingual MiniLM-L12',
-    provider: 'Microsoft',
-    description: 'Ultra-fast lightweight model. Best Davies-Bouldin score (0.15) and fastest embedding time — ideal for quick iteration.',
-    silhouette: 0.90,
-    daviesBouldin: 0.15,
-    embedTime: '5s',
-    languages: '50+ languages',
-    recommended: false
-  },
-  {
-    id: 'clips/e5-large-trm-nl',
-    name: 'E5-Large TRM (Dutch)',
-    provider: 'CLIPS',
-    description: 'Dutch-optimized large transformer. Low noise and strong clustering — best pick for Dutch-heavy survey data.',
-    silhouette: 0.88,
-    daviesBouldin: 0.38,
-    embedTime: '38s',
-    languages: 'Dutch / English',
-    recommended: false
-  },
-  {
-    id: 'clips/e5-small-trm-nl',
-    name: 'E5-Small TRM (Dutch)',
-    provider: 'CLIPS',
-    description: 'Lightweight Dutch transformer. Fastest of all tested models with solid clustering quality.',
-    silhouette: 0.86,
-    daviesBouldin: 0.32,
-    embedTime: '4s',
-    languages: 'Dutch / English',
     recommended: false
   }
 ];
@@ -101,7 +49,7 @@ export default function VectorDBBuilder({ onSuccess }) {
   // Configuration state
   const [columns, setColumns] = useState([]);
   const [selectedColumns, setSelectedColumns] = useState([]);
-  const [selectedModel, setSelectedModel] = useState('BAAI/bge-m3');
+  const [selectedModel, setSelectedModel] = useState('Octen/Octen-Embedding-0.6B');
   const [allowModelDownload, setAllowModelDownload] = useState(true);
   const [rowCount, setRowCount] = useState(0);
   const [configLoaded, setConfigLoaded] = useState(false);
@@ -327,7 +275,7 @@ export default function VectorDBBuilder({ onSuccess }) {
                           <div className="flex items-center gap-2 flex-wrap">
                             <p className={`font-bold text-sm ${isSelected ? 'text-fuchsia-900' : 'text-gray-700'}`}>{model.name}</p>
                             <span className="text-[10px] font-medium text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">{model.provider}</span>
-                            {model.recommended && <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">Best Score</span>}
+                            {model.recommended && <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">Default</span>}
                           </div>
                           <p className="text-xs text-gray-500 mt-1">{model.description}</p>
                           <div className="flex flex-wrap gap-2 mt-2">
@@ -336,7 +284,7 @@ export default function VectorDBBuilder({ onSuccess }) {
                                 Silhouette: {model.silhouette.toFixed(2)}
                               </span>
                             ) : (
-                              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">Not benchmarked</span>
+                              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-fuchsia-100 text-fuchsia-700">{model.role}</span>
                             )}
                             {typeof model.daviesBouldin === 'number' && (
                               <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${model.daviesBouldin <= 0.20 ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}>
@@ -352,7 +300,7 @@ export default function VectorDBBuilder({ onSuccess }) {
                   );
                 })}
               </div>
-              <p className="text-[11px] text-gray-400">Benchmarked on 1000 survey responses using HDBSCAN clustering</p>
+              <p className="text-[11px] text-gray-400">Choose between compact, balanced, and high-capacity Octen embeddings</p>
             </div>
           </div>
 

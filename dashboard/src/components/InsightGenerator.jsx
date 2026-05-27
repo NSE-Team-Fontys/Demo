@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 
 const DEFAULT_PROMPT = `You are an expert data analyst. Read the following student survey responses about '{theme_name}'.
+Use the provided theme scope to keep the analysis focused on this selected theme. Do not drift into Support / Mentoring unless the selected theme is Support / Mentoring.
 Summarize the general consensus in 2 sentences. Extract 3 key sentiments (Positive, Neutral, or Critical) and provide a 1-sentence point for each.
 Also extract 3 to 5 short sub-themes or topics mentioned.
 Respond EXACTLY in this JSON format:
@@ -29,42 +30,6 @@ const AVAILABLE_MODELS = [
     description: 'Larger Gemma 4 option for higher-quality local analysis when your machine has enough memory.',
     size: 'Large',
     speed: 'Slow',
-    recommended: false
-  },
-  {
-    id: 'gemma3:4b',
-    name: 'Gemma 3 4B',
-    provider: 'Google',
-    description: 'Previous generation Gemma. Reliable and well-tested for summary tasks.',
-    size: '~3 GB',
-    speed: 'Fast',
-    recommended: false
-  },
-  {
-    id: 'llama3.2:3b',
-    name: 'Llama 3.2 3B',
-    provider: 'Meta',
-    description: 'Compact but capable model from Meta. Good general-purpose summarization.',
-    size: '~2 GB',
-    speed: 'Very Fast',
-    recommended: false
-  },
-  {
-    id: 'mistral:7b',
-    name: 'Mistral 7B',
-    provider: 'Mistral AI',
-    description: 'Powerful 7B parameter model. Higher quality output but slower inference.',
-    size: '~4.1 GB',
-    speed: 'Moderate',
-    recommended: false
-  },
-  {
-    id: 'phi4-mini:latest',
-    name: 'Phi-4 Mini',
-    provider: 'Microsoft',
-    description: 'Microsoft\'s efficient small model. Strong reasoning capabilities.',
-    size: '~2.5 GB',
-    speed: 'Fast',
     recommended: false
   }
 ];
