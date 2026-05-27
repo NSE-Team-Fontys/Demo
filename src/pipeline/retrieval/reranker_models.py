@@ -5,7 +5,7 @@ from functools import lru_cache
 
 from sentence_transformers import CrossEncoder
 
-from src.core.model_device import describe_model_device, get_model_device
+from src.utils.model_device import describe_model_device, get_model_device
 
 DEFAULT_RERANKER_MODEL = "zeroentropy/zerank-2-reranker"
 

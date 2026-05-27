@@ -12,7 +12,7 @@ from src.utils.file_parsers import (
     save_uploaded_file,
 )
 
-_engine = import_module("src.pipeline.01_anonymization.engine")
+_engine = import_module("src.pipeline.anonymization.engine")
 
 
 def inspect_uploaded_file(file) -> dict:

@@ -3,12 +3,12 @@ import chromadb
 from src.config.paths import VECTOR_DB_PATH
 from src.config.settings import RERANKER_CANDIDATE_MULTIPLIER, RERANKER_MAX_CANDIDATES
 from src.config.themes import METADATA_ALIASES, THEME_DEFINITIONS, THEMES_LIST
-from src.core.embedding_models import (
+from src.pipeline.embedding.embedding_models import (
     DEFAULT_EMBEDDING_MODEL,
     describe_embedding_runtime,
     load_embedding_model,
 )
-from src.core.reranker_models import (
+from src.pipeline.retrieval.reranker_models import (
     describe_reranker_runtime,
     load_reranker_model,
     reranker_enabled,

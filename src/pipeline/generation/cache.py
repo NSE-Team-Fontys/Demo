@@ -4,7 +4,7 @@ import json
 from src.config.paths import CACHE_FILE
 from src.config.settings import INSIGHT_CACHE_VERSION, LLM_CONTEXT_DOCUMENTS
 
-retrieval = import_module("src.pipeline.03_retrieval.service")
+retrieval = import_module("src.pipeline.retrieval.service")
 
 
 def load_cache():

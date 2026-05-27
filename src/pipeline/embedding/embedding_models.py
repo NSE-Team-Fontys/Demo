@@ -5,7 +5,7 @@ from functools import lru_cache
 
 from sentence_transformers import SentenceTransformer
 
-from src.core.model_device import describe_model_device, get_model_device
+from src.utils.model_device import describe_model_device, get_model_device
 
 DEFAULT_EMBEDDING_MODEL = "Octen/Octen-Embedding-0.6B"
 

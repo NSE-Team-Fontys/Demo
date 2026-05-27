@@ -8,7 +8,7 @@ from typing import Optional
 import torch
 from transformers import pipeline as hf_pipeline
 
-from src.core.model_device import describe_model_device, get_model_device, get_pipeline_device
+from src.utils.model_device import describe_model_device, get_model_device, get_pipeline_device
 
 from .layer2_text_norm import normalize_for_ner
 

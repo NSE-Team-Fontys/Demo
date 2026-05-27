@@ -1,6 +1,6 @@
 import chromadb
 
-from src.core.embedding_models import (
+from src.pipeline.embedding.embedding_models import (
     DEFAULT_EMBEDDING_MODEL,
     describe_embedding_runtime,
     load_embedding_model,

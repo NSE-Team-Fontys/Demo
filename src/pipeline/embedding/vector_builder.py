@@ -6,13 +6,13 @@ import json
 
 from src.config.paths import VECTOR_CHECKPOINT
 from src.config.themes import METADATA_COLS, SOURCE_METADATA_ALIASES
-from src.core.embedding_models import (
+from src.pipeline.embedding.embedding_models import (
     AVAILABLE_EMBEDDING_MODELS,
     DEFAULT_EMBEDDING_MODEL,
     describe_embedding_runtime,
     load_embedding_model,
 )
-from src.core.model_device import describe_model_device, get_model_device
+from src.utils.model_device import describe_model_device, get_model_device
 from src.utils.file_parsers import detect_sep, is_questionnaire_column
 
 
