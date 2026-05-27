@@ -775,8 +775,10 @@ def load_cache():
 
 
 def save_cache(cache_data):
-    with open(CACHE_FILE, "w", encoding="utf-8") as f:
+    tmp_file = CACHE_FILE.with_suffix(f"{CACHE_FILE.suffix}.tmp")
+    with open(tmp_file, "w", encoding="utf-8") as f:
         json.dump(cache_data, f, indent=2)
+    tmp_file.replace(CACHE_FILE)
 
 
 def current_reranker_id():
@@ -784,11 +786,34 @@ def current_reranker_id():
 
 
 def cache_matches_generation_settings(cached_theme: dict) -> bool:
+    if not isinstance(cached_theme, dict):
+        return False
     return (
         cached_theme.get("cache_version") == INSIGHT_CACHE_VERSION
         and cached_theme.get("llm_context_documents") == LLM_CONTEXT_DOCUMENTS
         and cached_theme.get("reranker") == current_reranker_id()
     )
+
+
+def cache_has_full_dashboard_payload(cached_theme: dict) -> bool:
+    """Require every field used by the overview drawer and view-more page."""
+    if not cache_matches_generation_settings(cached_theme):
+        return False
+
+    required_fields = [
+        "frequency",
+        "vector_relevant_count",
+        "llm_document_count",
+        "summary",
+        "sentiments",
+        "positive_comments",
+        "critical_comments",
+        "student_suggestions",
+        "subthemes",
+        "subtheme_mentions",
+        "quotes",
+    ]
+    return all(field in cached_theme for field in required_fields)
 
 
 def subtheme_mention_rows(subthemes: list, docs: list) -> list:
@@ -995,22 +1020,7 @@ def theme_summary():
         if theme_name in cache:
             print(f"[GEMMA4] Returning cached summary for: {theme_name}")
             cached_data = cache[theme_name]
-            has_view_more_fields = (
-                "positive_comments" in cached_data
-                and "critical_comments" in cached_data
-                and "student_suggestions" in cached_data
-                and "subtheme_mentions" in cached_data
-            )
-            has_reranker_fields = (
-                "vector_relevant_count" in cached_data
-                and "llm_document_count" in cached_data
-                and "reranker" in cached_data
-            )
-            if (
-                has_view_more_fields
-                and has_reranker_fields
-                and cache_matches_generation_settings(cached_data)
-            ):
+            if cache_has_full_dashboard_payload(cached_data):
                 print(f"[GEMMA4] Returning cached summary for: {theme_name}")
                 cached_data["status"] = "success"
                 return jsonify(cached_data)
@@ -1279,16 +1289,12 @@ def precompute_insights():
 
                 # Check cache for summary
                 cached_theme = cache.get(theme_name, {})
-                cache_has_current_settings = cache_matches_generation_settings(
-                    cached_theme
-                )
                 if (
                     theme_name in cache
-                    and "summary" in cache[theme_name]
-                    and cache[theme_name].get("sentiments")
-                    and cache_has_current_settings
+                    and cache_has_full_dashboard_payload(cached_theme)
                 ):
                     # Update frequency but keep summary
+                    cache[theme_name]["theme"] = theme_name
                     cache[theme_name]["frequency"] = frequency
                     cache[theme_name]["vector_relevant_count"] = vector_relevant_count
                     cache[theme_name]["llm_document_count"] = min(
@@ -1328,6 +1334,7 @@ def precompute_insights():
 
                 if not relevant_docs:
                     cache[theme_name] = {
+                        "theme": theme_name,
                         "frequency": frequency,
                         "vector_relevant_count": vector_relevant_count,
                         "llm_document_count": 0,
@@ -1336,6 +1343,12 @@ def precompute_insights():
                         "reranker": current_reranker_id(),
                         "summary": "Not enough highly relevant responses found.",
                         "sentiments": [],
+                        "positive_comments": [],
+                        "critical_comments": [],
+                        "student_suggestions": [],
+                        "subthemes": [],
+                        "subtheme_mentions": [],
+                        "quotes": [],
                     }
                     save_cache(cache)
                     continue
@@ -1395,6 +1408,7 @@ Responses:
                         parsed = json.loads(json_str)
 
                         cache[theme_name] = {
+                            "theme": theme_name,
                             "frequency": frequency,
                             "vector_relevant_count": vector_relevant_count,
                             "llm_document_count": len(llm_docs),
@@ -1469,7 +1483,7 @@ def get_themes_overview():
     cache = {
         theme: data
         for theme, data in load_cache().items()
-        if isinstance(data, dict) and cache_matches_generation_settings(data)
+        if cache_has_full_dashboard_payload(data)
     }
 
     # Check for filters
