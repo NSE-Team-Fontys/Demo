@@ -3,9 +3,9 @@ from importlib import import_module
 from flask import Blueprint, Response, jsonify, request
 
 vector_bp = Blueprint("vector", __name__)
-embedding = import_module("src.pipeline.embedding.service")
-generation = import_module("src.pipeline.generation.service")
-retrieval = import_module("src.pipeline.retrieval.service")
+embedding = import_module("src.pipeline.02_embedding.service")
+generation = import_module("src.pipeline.04_generation.service")
+retrieval = import_module("src.pipeline.03_retrieval.service")
 
 
 @vector_bp.route("/api/status", methods=["GET"])

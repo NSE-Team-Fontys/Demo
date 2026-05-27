@@ -8,11 +8,11 @@ from src.config.settings import (
     RERANKER_MAX_CANDIDATES,
 )
 
-cache_store = import_module("src.pipeline.generation.cache")
-insight_metrics = import_module("src.pipeline.generation.insight_metrics")
-llm_clients = import_module("src.pipeline.generation.llm_clients")
-prompts = import_module("src.pipeline.generation.prompts")
-retrieval = import_module("src.pipeline.retrieval.service")
+cache_store = import_module("src.pipeline.04_generation.cache")
+insight_metrics = import_module("src.pipeline.04_generation.insight_metrics")
+llm_clients = import_module("src.pipeline.04_generation.llm_clients")
+prompts = import_module("src.pipeline.04_generation.prompts")
+retrieval = import_module("src.pipeline.03_retrieval.service")
 LocalModelConnectionError = llm_clients.LocalModelConnectionError
 get_llm_client = llm_clients.get_llm_client
 

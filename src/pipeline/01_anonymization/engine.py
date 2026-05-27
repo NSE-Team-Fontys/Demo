@@ -8,7 +8,7 @@ import pandas as pd
 os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
 
 from src.utils.model_device import describe_model_device, get_model_device
-from src.pipeline.anonymization.layers.privacy_pipeline import process_chunk_sync, validate_selected_layers
+from .layers.privacy_pipeline import process_chunk_sync, validate_selected_layers
 from src.config.paths import (
     ANON_CHECKPOINT_CSV,
     ANON_CHECKPOINT_META,
@@ -283,8 +283,8 @@ def process_file_with_layers(
         + "\n"
     )
 
-    from src.pipeline.anonymization.layers.layer1_presidio import collect_presidio_spans
-    from src.pipeline.anonymization.layers.privacy_pipeline import _filter_spans, unload_all_layer_models
+    from .layers.layer1_presidio import collect_presidio_spans
+    from .layers.privacy_pipeline import _filter_spans, unload_all_layer_models
 
     layer_config = {"names": True, "locations": True, "pii": True, "titles": True}
     missed_counts = {"NAME": 0, "PII": 0, "LOCATION": 0, "TITLE": 0}
@@ -362,8 +362,8 @@ def run_check_stream(original_path: str, anonymized_path: str, columns: list, se
     Run only the verification step on already-existing original + anonymized files.
     Yields NDJSON progress events; final event has status='success' with full stats.
     """
-    from src.pipeline.anonymization.layers.layer1_presidio import collect_presidio_spans
-    from src.pipeline.anonymization.layers.privacy_pipeline import _filter_spans
+    from .layers.layer1_presidio import collect_presidio_spans
+    from .layers.privacy_pipeline import _filter_spans
 
     yield json.dumps({"status": "progress", "message": "Bestanden inlezen...", "progress": 5}) + "\n"
 

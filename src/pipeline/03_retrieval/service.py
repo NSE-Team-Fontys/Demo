@@ -1,19 +1,20 @@
 import chromadb
+from importlib import import_module
 
 from src.config.paths import VECTOR_DB_PATH
 from src.config.settings import RERANKER_CANDIDATE_MULTIPLIER, RERANKER_MAX_CANDIDATES
 from src.config.themes import METADATA_ALIASES, THEME_DEFINITIONS, THEMES_LIST
-from src.pipeline.embedding.embedding_models import (
-    DEFAULT_EMBEDDING_MODEL,
-    describe_embedding_runtime,
-    load_embedding_model,
-)
-from src.pipeline.retrieval.reranker_models import (
-    describe_reranker_runtime,
-    load_reranker_model,
-    reranker_enabled,
-    selected_reranker_model,
-)
+
+embedding_models = import_module("src.pipeline.02_embedding.embedding_models")
+reranker_models = import_module("src.pipeline.03_retrieval.reranker_models")
+
+DEFAULT_EMBEDDING_MODEL = embedding_models.DEFAULT_EMBEDDING_MODEL
+describe_embedding_runtime = embedding_models.describe_embedding_runtime
+load_embedding_model = embedding_models.load_embedding_model
+describe_reranker_runtime = reranker_models.describe_reranker_runtime
+load_reranker_model = reranker_models.load_reranker_model
+reranker_enabled = reranker_models.reranker_enabled
+selected_reranker_model = reranker_models.selected_reranker_model
 
 COLLECTION_NAME = "survey_responses"
 THEME_EMBEDDING_MODEL = DEFAULT_EMBEDDING_MODEL

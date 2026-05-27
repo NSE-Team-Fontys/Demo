@@ -3,9 +3,9 @@ import json
 import os
 
 from src.config.paths import ANONYMIZED_CSV_PATH, VECTOR_DB_PATH
-from src.pipeline.embedding.embedding_models import DEFAULT_EMBEDDING_MODEL
+from .embedding_models import DEFAULT_EMBEDDING_MODEL
 
-_builder = import_module("src.pipeline.embedding.vector_builder")
+_builder = import_module("src.pipeline.02_embedding.vector_builder")
 
 
 def build_vectors_stream(

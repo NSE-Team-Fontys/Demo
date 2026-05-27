@@ -1,10 +1,11 @@
+from importlib import import_module
+
 import chromadb
 
-from src.pipeline.embedding.embedding_models import (
-    DEFAULT_EMBEDDING_MODEL,
-    describe_embedding_runtime,
-    load_embedding_model,
-)
+embedding_models = import_module("src.pipeline.02_embedding.embedding_models")
+DEFAULT_EMBEDDING_MODEL = embedding_models.DEFAULT_EMBEDDING_MODEL
+describe_embedding_runtime = embedding_models.describe_embedding_runtime
+load_embedding_model = embedding_models.load_embedding_model
 
 # ── Config ────────────────────────────────────────────────────────────────────
 

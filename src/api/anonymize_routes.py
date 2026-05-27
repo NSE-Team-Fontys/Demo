@@ -3,7 +3,7 @@ from importlib import import_module
 from flask import Blueprint, Response, jsonify, request
 
 anonymize_bp = Blueprint("anonymize", __name__)
-service = import_module("src.pipeline.anonymization.service")
+service = import_module("src.pipeline.01_anonymization.service")
 
 
 @anonymize_bp.route("/api/inspect-file", methods=["POST"])

@@ -3,7 +3,7 @@ from importlib import import_module
 from flask import Blueprint, Response, jsonify, request
 
 insight_bp = Blueprint("insight", __name__)
-generation = import_module("src.pipeline.generation.service")
+generation = import_module("src.pipeline.04_generation.service")
 
 
 @insight_bp.route("/api/theme-summary", methods=["POST"])

@@ -6,7 +6,7 @@ import json
 
 from src.config.paths import VECTOR_CHECKPOINT
 from src.config.themes import METADATA_COLS, SOURCE_METADATA_ALIASES
-from src.pipeline.embedding.embedding_models import (
+from .embedding_models import (
     AVAILABLE_EMBEDDING_MODELS,
     DEFAULT_EMBEDDING_MODEL,
     describe_embedding_runtime,
