@@ -504,6 +504,18 @@ def vector_checkpoint_status():
         return jsonify({"has_checkpoint": False})
 
 
+@app.route("/api/anonymize-report", methods=["GET"])
+def anonymize_report():
+    from anonymizer import REPORT_JSON
+    if not REPORT_JSON.exists():
+        return jsonify({"has_report": False})
+    try:
+        data = json.loads(REPORT_JSON.read_text(encoding="utf-8"))
+        return jsonify({"has_report": True, **data})
+    except Exception as e:
+        return jsonify({"has_report": False, "error": str(e)})
+
+
 @app.route("/api/checkpoint-status", methods=["GET"])
 def checkpoint_status():
     from anonymizer import CHECKPOINT_META
@@ -1406,6 +1418,15 @@ Responses:
                 )
                 + "\n"
             )
+
+            try:
+                requests.post(
+                    "http://localhost:11434/api/generate",
+                    json={"model": ollama_model, "keep_alive": 0},
+                    timeout=10,
+                )
+            except Exception:
+                pass
 
         except Exception as e:
             yield json.dumps({"status": "error", "message": str(e)}) + "\n"

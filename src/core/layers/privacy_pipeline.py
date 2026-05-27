@@ -190,6 +190,20 @@ def collect_layer2_spans_batch(texts: list, config: Optional[dict], layers: list
     return merged
 
 
+def unload_all_layer_models(layers: list[str]) -> None:
+    import gc
+    if "presidio" in layers:
+        from .layer1_presidio import unload_models as _u1
+        _u1()
+    if "eu-pii" in layers:
+        from .layer2_eu_pii import unload_models as _u2
+        _u2()
+    if "openai-privacy-filter" in layers:
+        from .layer2_openai_privacy_filter import unload_models as _u3
+        _u3()
+    gc.collect()
+
+
 def validate_selected_layers(layers: list[str]) -> None:
     """Fail fast when a selected layer is unavailable instead of silently skipping it."""
     if "presidio" in layers:

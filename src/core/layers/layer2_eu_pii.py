@@ -42,6 +42,17 @@ except Exception as e:
     logger.warning(f"eu-pii-safeguard failed to load: {e}. Layer will be skipped.")
 
 
+def unload_models() -> None:
+    global _ner
+    _ner = None
+    import gc
+    gc.collect()
+    if torch.backends.mps.is_available():
+        torch.mps.empty_cache()
+    elif torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+
 def ensure_eu_pii_available() -> None:
     """Raise a clear error if the selected EU-PII layer is unavailable."""
     if _ner is None:

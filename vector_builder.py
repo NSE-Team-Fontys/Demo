@@ -406,6 +406,15 @@ def build_vector_db_stream(
 
         _clear_vector_checkpoint()
 
+        del model
+        import gc
+        gc.collect()
+        import torch
+        if torch.backends.mps.is_available():
+            torch.mps.empty_cache()
+        elif torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
         yield json.dumps({
             "status": "success",
             "message": "Vector DB built successfully",

@@ -18,13 +18,37 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
   const [currentPreview, setCurrentPreview] = useState('');
   const [lastCheckpointRow, setLastCheckpointRow] = useState(null);
   const [checkpoint, setCheckpoint] = useState(null);
+  const [lastReport, setLastReport] = useState(null);
 
   useEffect(() => {
     fetch('http://localhost:5001/api/checkpoint-status')
       .then(r => r.json())
       .then(data => { if (data.has_checkpoint) setCheckpoint(data); })
       .catch(() => {});
+    fetch('http://localhost:5001/api/anonymize-report')
+      .then(r => r.json())
+      .then(data => { if (data.has_report) setLastReport(data); })
+      .catch(() => {});
   }, []);
+
+  const loadLastReport = () => {
+    if (!lastReport) return;
+    setResult({
+      message: `Resultaten van vorige run (${lastReport.timestamp})`,
+      rows_processed: lastReport.rows_processed,
+      columns_anonymized: lastReport.columns,
+      stats: {
+        total_cells: lastReport.total_cells,
+        affected_cells: lastReport.affected_cells,
+        total_entities: lastReport.total_entities,
+        tag_counts: lastReport.tag_counts,
+        missed_counts: lastReport.missed_counts,
+        missed_samples: lastReport.missed_samples,
+        removed_samples: lastReport.removed_samples,
+      },
+    });
+    setShowStats(true);
+  };
 
   const MASKING_INFO = [
     { tag: '[NAME]', meaning: 'Names / persons' },
@@ -265,6 +289,25 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
                     </button>
                   </div>
                 </div>
+              </div>
+            )}
+            {lastReport && (
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-slate-100 rounded-xl shrink-0">
+                    <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                  </div>
+                  <div>
+                    <p className="font-semibold text-slate-700 text-sm">Vorige run beschikbaar</p>
+                    <p className="text-xs text-slate-500">{lastReport.timestamp} — {lastReport.rows_processed} rijen, {lastReport.total_entities} entiteiten verwijderd</p>
+                  </div>
+                </div>
+                <button
+                  onClick={loadLastReport}
+                  className="px-4 py-2 bg-slate-700 text-white text-sm font-bold rounded-lg hover:bg-slate-800 transition-all shrink-0"
+                >
+                  Bekijk resultaten
+                </button>
               </div>
             )}
             <div className="group relative">

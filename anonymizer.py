@@ -2,6 +2,7 @@ import csv
 import json
 import os
 import re
+from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
@@ -16,6 +17,84 @@ _ANON_BATCH = int(os.environ.get("ANONYMIZE_BATCH_SIZE", "512"))
 
 CHECKPOINT_CSV = Path("data/anon_checkpoint.csv")
 CHECKPOINT_META = Path("data/anon_checkpoint_meta.json")
+REPORT_FILE = Path("data/anonymization_report.txt")
+REPORT_JSON = Path("data/anonymization_report.json")
+
+
+def _write_report(
+    input_path: str,
+    output_path: str,
+    columns: list,
+    layers: list,
+    total_rows: int,
+    total_cells: int,
+    affected_cells: int,
+    total_entities: int,
+    tag_counts: dict,
+    missed_counts: dict,
+    missed_samples: dict,
+    removed_samples: dict,
+) -> None:
+    lines = []
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    lines.append(f"Anonymization Report — {ts}")
+    lines.append("=" * 60)
+    lines.append(f"Input file   : {input_path}")
+    lines.append(f"Output file  : {output_path}")
+    lines.append(f"Layers used  : {', '.join(layers)}")
+    lines.append(f"Columns      : {', '.join(columns)}")
+    lines.append(f"Rows         : {total_rows}")
+    lines.append("")
+    lines.append("--- Detection summary ---")
+    lines.append(f"Cells scanned   : {total_cells}")
+    lines.append(f"Cells affected  : {affected_cells}  ({100 * affected_cells / total_cells:.1f}%)" if total_cells else f"Cells affected  : {affected_cells}")
+    lines.append(f"Entities masked : {total_entities}")
+    lines.append("")
+    lines.append("Tag breakdown:")
+    for tag, count in tag_counts.items():
+        lines.append(f"  [{tag}]  {count}")
+    lines.append("")
+    lines.append("--- Verification (Presidio re-scan on original) ---")
+    lines.append("Entities still present in output (potential misses):")
+    any_missed = False
+    for tag, count in missed_counts.items():
+        if count:
+            any_missed = True
+            lines.append(f"  [{tag}]  {count} possibly missed:")
+            for s in missed_samples.get(tag, []):
+                lines.append(f"    - {s}")
+    if not any_missed:
+        lines.append("  (none)")
+    lines.append("")
+    lines.append("Entities successfully removed:")
+    for tag, samples in removed_samples.items():
+        if samples:
+            lines.append(f"  [{tag}]  {len(samples)} unique:")
+            for s in samples:
+                lines.append(f"    - {s}")
+    lines.append("")
+    try:
+        REPORT_FILE.parent.mkdir(parents=True, exist_ok=True)
+        REPORT_FILE.write_text("\n".join(lines), encoding="utf-8")
+        stats_payload = {
+            "timestamp": ts,
+            "input_path": input_path,
+            "output_path": output_path,
+            "layers": layers,
+            "columns": columns,
+            "rows_processed": total_rows,
+            "total_cells": total_cells,
+            "affected_cells": affected_cells,
+            "total_entities": total_entities,
+            "tag_counts": tag_counts,
+            "missed_counts": missed_counts,
+            "missed_samples": missed_samples,
+            "removed_samples": removed_samples,
+        }
+        REPORT_JSON.write_text(json.dumps(stats_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(f"[REPORT] Saved to {REPORT_FILE} and {REPORT_JSON}")
+    except Exception as e:
+        print(f"[REPORT] Warning: could not save report: {e}")
 
 
 def _load_checkpoint(input_path: str, sep: str):
@@ -349,7 +428,7 @@ def process_file_with_layers(
     )
 
     from src.core.layers.layer1_presidio import collect_presidio_spans
-    from src.core.layers.privacy_pipeline import _filter_spans
+    from src.core.layers.privacy_pipeline import _filter_spans, unload_all_layer_models
 
     layer_config = {"names": True, "locations": True, "pii": True, "titles": True}
     missed_counts = {"NAME": 0, "PII": 0, "LOCATION": 0, "TITLE": 0}
@@ -382,6 +461,21 @@ def process_file_with_layers(
                     if entity_text not in removed_samples[key]:
                         removed_samples[key].append(entity_text)
 
+    _write_report(
+        input_path=input_path,
+        output_path=output_path,
+        columns=columns_to_anonymize,
+        layers=layers,
+        total_rows=total_rows,
+        total_cells=total_cells,
+        affected_cells=affected_cells,
+        total_entities=total_entities,
+        tag_counts=tag_counts,
+        missed_counts=missed_counts,
+        missed_samples=missed_samples,
+        removed_samples=removed_samples,
+    )
+    unload_all_layer_models(layers)
     _clear_checkpoint()
 
     yield (
