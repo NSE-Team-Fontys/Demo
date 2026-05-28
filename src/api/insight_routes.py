@@ -64,6 +64,8 @@ def get_themes_overview():
         "programme",
         "study_mode",
         "cohort",
+        "sector",
+        "language",
     ]:
         value = request.args.get(key)
         if value and value != "All":

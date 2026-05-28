@@ -165,6 +165,8 @@ def filter_options_payload() -> dict:
         "programmes": set(),
         "study_modes": set(),
         "cohorts": set(),
+        "sectors": set(),
+        "languages": set(),
     }
     bucket_keys = {
         "institutions": "institution",
@@ -173,6 +175,8 @@ def filter_options_payload() -> dict:
         "programmes": "programme",
         "study_modes": "study_mode",
         "cohorts": "cohort",
+        "sectors": "sector",
+        "languages": "language",
     }
 
     for meta in all_docs.get("metadatas") or []:
