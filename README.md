@@ -2,19 +2,31 @@
 
 This project is a local-first dashboard for turning open-text NSE-style survey answers into anonymized, searchable, and summarized insights.
 
-The core idea is simple:
+The core data flow is:
 
-1. Upload a CSV with survey responses.
-2. Select questionnaire columns.
+1. Upload a CSV or Excel survey export.
+2. Inspect columns and select questionnaire text fields.
 3. Anonymize selected text using layered privacy filters.
-4. Build a local Chroma vector database.
-5. Generate/query insights with local models.
+4. Embed anonymized answers into a local Chroma vector database.
+5. Retrieve, rerank, and generate thematic insights with local LLMs.
 
 The project is built for demos and applied research, not production deployment.
 
 ## Quick Start
 
 ### Backend
+
+macOS/Linux:
+
+```bash
+cd /path/to/Demo
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python app.py
+```
+
+Windows PowerShell:
 
 ```powershell
 cd C:\fontys\semester_4\group\Demo
@@ -28,8 +40,8 @@ Backend runs on `http://127.0.0.1:5001`.
 
 ### Frontend
 
-```powershell
-cd C:\fontys\semester_4\group\Demo\dashboard
+```bash
+cd dashboard
 npm install
 npm run dev
 ```
@@ -50,9 +62,59 @@ Useful optional variables:
 
 ```env
 ANONYMIZE_BATCH_SIZE=512
+MODEL_DEVICE=mps
+PYTORCH_ENABLE_MPS_FALLBACK=1
 LAYER2_FP16=1
 DISABLE_SPACY_MODEL_AUTO_INSTALL=1
+RERANKER_ENABLED=true
+RERANKER_MODEL=zeroentropy/zerank-2-reranker
+RERANKER_CANDIDATE_MULTIPLIER=5
+RERANKER_MAX_CANDIDATES=100
+LLM_CONTEXT_DOCUMENTS=100
 ```
+
+`MODEL_DEVICE=auto` prefers CUDA, then Apple MPS, then CPU. On a Mac, set `MODEL_DEVICE=mps` to force the PyTorch-backed anonymization layer onto the Apple GPU. Presidio/spaCy still runs on CPU; the EU-PII / Transformer layer is the part that can use MPS.
+
+## Architecture
+
+`app.py` is intentionally tiny. It must stay below 30 lines and only create the Flask app, enable CORS, and register Blueprints.
+
+Application logic is split by pipeline stage:
+
+```text
+src/
+├── api/
+│   ├── anonymize_routes.py       # HTTP routes for upload, inspection, anonymization, reports
+│   ├── vector_routes.py          # HTTP routes for vector build, search, stats, filters
+│   └── insight_routes.py         # HTTP routes for summaries, cache, precompute
+├── config/
+│   ├── paths.py                  # Runtime file paths
+│   ├── runtime.py                # .env loading and process env defaults
+│   ├── settings.py               # Reranker, context, cache settings
+│   └── themes.py                 # Theme definitions and metadata aliases
+├── pipeline/
+│   ├── 01_anonymization/
+│   │   ├── engine.py             # Privacy masking engine
+│   │   ├── service.py            # Stage 01 orchestration for API use
+│   │   ├── checkpoints.py        # Anonymization resume checkpoint persistence
+│   │   └── reporting.py          # Anonymization report writer
+│   ├── 02_embedding/
+│   │   ├── vector_builder.py     # Embedding and Chroma population
+│   │   └── service.py            # Stage 02 orchestration for API use
+│   ├── 03_retrieval/
+│   │   ├── service.py            # Vector search, filters, reranking, theme distribution
+│   │   └── query_cli.py          # CLI helper for local vector search
+│   └── 04_generation/
+│       ├── service.py            # Insight generation orchestration
+│       ├── llm_clients.py        # Ollama client and llama.cpp provider interface
+│       ├── prompts.py            # Prompt construction and JSON parsing
+│       ├── cache.py              # Insight cache policy
+│       └── insight_metrics.py    # Subtheme mention metrics
+└── utils/
+    └── file_parsers.py           # CSV/Excel loading, delimiter detection, previews
+```
+
+Root-level `anonymizer.py`, `vector_builder.py`, and `queryVectorDB.py` are compatibility shims. New code should import from `src/pipeline/...` or `src/api/...`.
 
 ## C4 Model
 
@@ -61,102 +123,99 @@ DISABLE_SPACY_MODEL_AUTO_INSTALL=1
 ```mermaid
 flowchart LR
     user["Quality officer / researcher"]
-    studentData["NSE-style CSV survey export"]
+    studentData["NSE-style CSV or Excel survey export"]
     app["NSE Privacy-First Insights Demo"]
     hf["Hugging Face Hub"]
     ollama["Local Ollama"]
 
-    user -->|"Uploads CSV, selects columns/layers, explores dashboard"| app
+    user -->|"Uploads data, selects columns/layers, explores dashboard"| app
     studentData -->|"Raw open-text answers + metadata"| app
     app -->|"Optional first-time model downloads"| hf
     app -->|"Local summary generation"| ollama
-
     app -->|"Anonymized aggregates, vector search, summaries"| user
 ```
-
-
 
 ### Level 2: Containers
 
 ```mermaid
 flowchart TB
-    browser["React/Vite Dashboard\n(dashboard/src)"]
-    flask["Flask API\n(app.py)"]
-    anonymizer["Anonymization Pipeline\n(anonymizer.py + src/core/layers)"]
-    vectors["Vector Builder\n(vector_builder.py)"]
-    chroma["ChromaDB\n(survey_vector_db/)"]
+    browser["React/Vite Dashboard\ndashboard/src"]
+    flask["Flask API\napp.py + src/api Blueprints"]
+    anonymization["Stage 01 Anonymization\nsrc/pipeline/01_anonymization"]
+    embedding["Stage 02 Embedding\nsrc/pipeline/02_embedding"]
+    retrieval["Stage 03 Retrieval\nsrc/pipeline/03_retrieval"]
+    generation["Stage 04 Generation\nsrc/pipeline/04_generation"]
+    chroma["ChromaDB\nsurvey_vector_db/"]
     cache["Insight Cache\ngemma_cache.json"]
+    files["Local files\ndata/temp_upload.*\ndata/anonymized_survey.csv"]
     ollama["Ollama API\nlocalhost:11434"]
-    files["Local CSV files\ndata/temp_upload.csv\ndata/anonymized_survey.csv"]
 
-    browser -->|"REST / NDJSON streams"| flask
-    flask -->|"read/write uploaded CSV"| files
-    flask -->|"selected columns + layers"| anonymizer
-    anonymizer -->|"anonymized CSV"| files
-    flask -->|"selected columns + embedding model"| vectors
-    vectors -->|"documents + embeddings + metadata"| chroma
-    flask -->|"query/filter/search"| chroma
-    flask -->|"theme summaries"| ollama
-    flask -->|"cached summaries"| cache
-    browser -->|"dashboard, filters, query, pipeline UI"| flask
+    browser -->|"REST + NDJSON streams"| flask
+    flask --> anonymization
+    flask --> embedding
+    flask --> retrieval
+    flask --> generation
+    anonymization -->|"read/write CSV or Excel"| files
+    embedding -->|"anonymized answers"| files
+    embedding -->|"documents + embeddings + metadata"| chroma
+    retrieval -->|"query/filter/rerank"| chroma
+    generation -->|"retrieved context"| retrieval
+    generation -->|"local prompts"| ollama
+    generation -->|"cached summaries"| cache
 ```
 
-
-
-### Level 3: Privacy And Insight Pipeline
+### Level 3: Pipeline Flow
 
 ```mermaid
 flowchart LR
-    upload["Upload CSV"]
+    upload["Upload CSV/Excel"]
     inspect["Inspect columns\nDetect separator"]
     select["Select questionnaire columns\nand privacy layers"]
-    l1["Layer 1\nPresidio + spaCy NL/EN\ncustom regex"]
-    l2["Layer 2\nEU-PII-Safeguard"]
-    l2b["Optional Layer\nOpenAI Privacy Filter"]
-    merge["Collect spans\nfilter overlaps\napply masks once"]
-    csv["anonymized_survey.csv"]
-    embed["Embedding model\nBAAI/bge-m3 or selected model"]
+    anon["Stage 01\nAnonymization"]
+    csv["data/anonymized_survey.csv"]
+    embed["Stage 02\nEmbeddings"]
     db["ChromaDB collection\nsurvey_responses"]
-    insights["Ollama insights\ncached summaries"]
+    retrieve["Stage 03\nSearch + rerank"]
+    generate["Stage 04\nPrompt + local LLM"]
     dashboard["Dashboard filters\nquery + theme cards"]
 
-    upload --> inspect --> select
-    select --> l1 --> merge
-    select --> l2 --> merge
-    select --> l2b --> merge
-    merge --> csv --> embed --> db
-    db --> dashboard
-    db --> insights --> dashboard
+    upload --> inspect --> select --> anon --> csv --> embed --> db
+    db --> retrieve --> generate --> dashboard
+    retrieve --> dashboard
 ```
-
-
 
 ## Current Data Flow
 
-### 1. Upload and inspect
+### 1. Upload And Inspect
 
 Endpoint: `POST /api/inspect-file`
 
-- Saves upload to `data/temp_upload.csv`.
-- Detects separator: comma, semicolon, or tab.
+Module ownership:
+
+- API route: `src/api/anonymize_routes.py`
+- Stage service: `src/pipeline/01_anonymization/service.py`
+- Shared parser helpers: `src/utils/file_parsers.py`
+
+Behavior:
+
+- Saves upload to `data/temp_upload.*`.
+- Supports `.csv`, `.xlsx`, and `.xls`.
+- Detects CSV separator: comma, semicolon, or tab.
 - Returns columns and a first-row preview.
-- The frontend auto-selects questionnaire columns, including headers with:
-  - `?`
-  - `Wil jij...`
-  - `Waarom...`
-  - `Wat voor soort...`
+- The frontend auto-selects questionnaire columns, including headers with `?`, `Wil jij...`, `Waarom...`, or `Wat voor soort...`.
 
 ### 2. Anonymize
 
 Endpoint: `POST /api/anonymize`
 
-Main files:
+Module ownership:
 
-- `anonymizer.py`
-- `src/core/layers/privacy_pipeline.py`
-- `src/core/layers/layer1_presidio.py`
-- `src/core/layers/layer2_eu_pii.py`
-- `src/core/layers/layer2_openai_privacy_filter.py`
+- API route: `src/api/anonymize_routes.py`
+- Stage service: `src/pipeline/01_anonymization/service.py`
+- Masking engine: `src/pipeline/01_anonymization/engine.py`
+- Checkpoints: `src/pipeline/01_anonymization/checkpoints.py`
+- Reports: `src/pipeline/01_anonymization/reporting.py`
+- Core privacy layers: `src/core/layers/`
 
 Current layer options:
 
@@ -168,25 +227,39 @@ Important behavior:
 
 - Selected layers are preflighted before processing.
 - If a selected model cannot load, the backend returns an error instead of silently skipping it.
-- All layer spans are collected first, merged, filtered, then applied once. This avoids corrupting text with repeated regex replacements.
+- Layer spans are collected, merged, filtered, and applied once.
 - Output is written to `data/anonymized_survey.csv`.
+- Progress is streamed as NDJSON.
+- Resume checkpoints are written under `data/`.
 
-### 3. Build vectors
+Related endpoints:
+
+- `GET /api/inspect-anonymized`
+- `POST /api/run-anonymize-check`
+- `GET /api/anonymize-report`
+- `GET /api/checkpoint-status`
+
+### 3. Build Vectors
 
 Endpoint: `POST /api/build-vectors`
 
-Main file: `vector_builder.py`
+Module ownership:
+
+- API route: `src/api/vector_routes.py`
+- Stage service: `src/pipeline/02_embedding/service.py`
+- Vector builder: `src/pipeline/02_embedding/vector_builder.py`
+- Static metadata aliases: `src/config/themes.py`
+
+Behavior:
 
 - Reads `data/anonymized_survey.csv`.
-- Detects CSV separator independently.
 - Uses selected questionnaire columns.
 - Stores documents, embeddings, and metadata in ChromaDB.
 - Loads the embedding model before deleting/recreating the Chroma collection.
-- Supports Hugging Face/SentenceTransformer models such as `Qwen/Qwen3-Embedding-8B`.
-- Stores the selected embedding model in Chroma metadata so queries and theme summaries use the same vector dimensions later.
-- Supports `allow_model_download` from the frontend:
-  - enabled: download model if missing.
-  - disabled: only use locally cached models and fail before changing ChromaDB if unavailable.
+- Supports `Octen/Octen-Embedding-0.6B` by default, plus `Octen/Octen-Embedding-4B` and `Octen/Octen-Embedding-8B`.
+- Stores the selected embedding model in Chroma metadata so later queries use matching vector dimensions.
+- Supports `allow_model_download` from the frontend.
+- Streams progress as NDJSON.
 
 Metadata is normalized to stable dashboard keys:
 
@@ -199,45 +272,103 @@ Metadata is normalized to stable dashboard keys:
 
 NSE/RIO aliases such as `Jaar`, `Leerroute_Track`, `Type Student`, and `Actuele naam instelling volgens RIO` are mapped into these keys.
 
-### 4. Generate insights
+Related endpoint:
+
+- `GET /api/vector-checkpoint-status`
+
+### 4. Retrieve And Query
+
+Endpoints:
+
+- `GET /api/filter-options`
+- `GET /api/query-vectors`
+- `GET /api/vector-stats`
+
+Module ownership:
+
+- API route: `src/api/vector_routes.py`
+- Stage service: `src/pipeline/03_retrieval/service.py`
+
+Behavior:
+
+- Reads Chroma metadata for dashboard filter options.
+- Builds metadata filters using canonical keys and known aliases.
+- Embeds search queries with the same embedding model stored in the Chroma collection.
+- Retrieves broad candidates from Chroma.
+- Uses `zeroentropy/zerank-2-reranker` by default to rerank candidates.
+- Computes theme distribution from the closest hardcoded theme embedding.
+- Caches filtered theme overview frequency results in memory.
+
+### 5. Generate Insights
 
 Endpoints:
 
 - `POST /api/precompute-insights`
 - `POST /api/theme-summary`
 - `POST /api/clear-cache`
+- `GET /api/themes-overview`
 
-Insights use local Ollama at `http://localhost:11434`.
+Module ownership:
+
+- API route: `src/api/insight_routes.py`
+- Stage service: `src/pipeline/04_generation/service.py`
+- Local LLM clients: `src/pipeline/04_generation/llm_clients.py`
+- Prompt construction: `src/pipeline/04_generation/prompts.py`
+- Cache policy: `src/pipeline/04_generation/cache.py`
+- Subtheme metrics: `src/pipeline/04_generation/insight_metrics.py`
 
 Behavior:
 
-- Ollama availability and selected model are checked before generation.
-- If the model is missing, generation fails unless `Pull Ollama model if missing` is enabled in the UI.
+- Uses local Ollama at `http://localhost:11434`.
+- Checks Ollama availability and selected model before generation.
+- If the model is missing, generation fails unless model download is enabled in the UI.
+- Retrieves and reranks context before building the prompt.
+- Sends up to `LLM_CONTEXT_DOCUMENTS` reranked answers to the LLM. The default is `100`.
 - Successful summaries are cached in `gemma_cache.json`.
 - Failed generations are not cached as successful insights.
+- `/api/themes-overview` returns cached insight cards and uses Stage 03 retrieval for filtered theme frequencies.
 
-### 5. Query and dashboard filters
+`src/pipeline/04_generation/llm_clients.py` contains the provider abstraction. Ollama is implemented; llama.cpp has a placeholder client so the API routes do not need to change when llama.cpp support is added.
 
-Endpoints:
+## API Route Map
 
-- `GET /api/filter-options`
-- `GET /api/query-vectors`
-- `GET /api/themes-overview`
-- `GET /api/vector-stats`
+```text
+Stage 01 anonymization:
+POST /api/inspect-file
+POST /api/anonymize
+GET  /api/inspect-anonymized
+POST /api/run-anonymize-check
+GET  /api/anonymize-report
+GET  /api/checkpoint-status
 
-Performance notes:
+Stage 02 embedding:
+POST /api/build-vectors
+GET  /api/vector-checkpoint-status
+GET  /api/status
 
-- `/api/themes-overview` caches filtered frequency results in memory.
-- The backend reuses the theme embedding model and the seven theme embeddings.
-- Restarting Flask clears in-memory caches.
-- Rebuilding vectors clears runtime caches.
+Stage 03 retrieval:
+GET  /api/filter-options
+GET  /api/query-vectors
+GET  /api/vector-stats
+
+Stage 04 generation:
+POST /api/theme-summary
+POST /api/precompute-insights
+POST /api/clear-cache
+GET  /api/themes-overview
+```
 
 ## Key Files
 
 ```text
-app.py                                      Flask API and orchestration
-anonymizer.py                               CSV anonymization runner
-vector_builder.py                           ChromaDB / embedding builder
+app.py                                      Thin Flask app factory and Blueprint registration
+src/api/*.py                               Flask Blueprints only
+src/config/*.py                            Static paths, themes, settings, runtime env setup
+src/utils/file_parsers.py                  CSV/Excel parsing helpers
+src/pipeline/01_anonymization/             Upload inspection, anonymization, reports, checkpoints
+src/pipeline/02_embedding/                 Embeddings and Chroma population
+src/pipeline/03_retrieval/                 Vector search, filters, reranking, theme distribution
+src/pipeline/04_generation/                LLM clients, prompts, cache, insight orchestration
 src/core/layers/privacy_pipeline.py         Late-mask span pipeline
 src/core/layers/layer1_presidio.py          Presidio + spaCy + custom regex
 src/core/layers/layer2_eu_pii.py            EU-PII Hugging Face layer
@@ -255,9 +386,14 @@ dashboard/src/pages/Overview.jsx            Dashboard filters and themes
 These are runtime artifacts and should not be committed:
 
 ```text
-data/temp_upload.csv
+data/temp_upload.*
 data/anonymized_survey.csv
 data/detected_sep.txt
+data/anon_checkpoint.csv
+data/anon_checkpoint_meta.json
+data/anonymization_report.txt
+data/anonymization_report.json
+data/vector_checkpoint.json
 survey_vector_db/
 gemma_cache.json
 __pycache__/
@@ -265,39 +401,41 @@ __pycache__/
 
 ## Contributor Notes
 
-- Keep code comments and README content in English.
-- Keep decision logs and portfolio writing in Dutch if added outside this demo.
-- Do not commit `.env`, generated CSVs, ChromaDB files, or model cache files.
-- If you change the pipeline behavior, update this README and the presentation deck.
-- If you add a new model-backed layer, add a preflight check so unavailable models fail clearly.
+- Keep application logic out of `app.py`.
+- Keep HTTP concerns in `src/api`.
+- Keep data-flow logic in the matching `src/pipeline/*` stage.
+- Keep static constants, theme definitions, path definitions, and env defaults in `src/config`.
+- Keep shared parsers and small helpers in `src/utils`.
+- Do not commit `.env`, generated CSVs, ChromaDB files, reports, checkpoints, or model cache files.
+- If you add llama.cpp support, implement it behind `src/pipeline/04_generation/llm_clients.py` so API routes remain unchanged.
+- If you add Hierarchical RAG, put retrieval strategy code behind `src/pipeline/03_retrieval` so API routes remain unchanged.
 - If you change metadata handling, keep canonical dashboard keys stable: `institution`, `academic_year`, `location`, `programme`, `study_mode`, `cohort`.
 
 ## Common Issues
 
-### Model downloads are slow
+### Model Downloads Are Slow
 
 First runs may download Hugging Face or Ollama models. Add `HF_TOKEN` for better Hugging Face rate limits.
 
-### Flask loads twice
+### Flask Loads Twice
 
-Flask debug mode uses the reloader. This can load models twice and clear in-memory caches. Use:
+`app.py` runs Flask with `use_reloader=False` to avoid loading model stacks twice. If you use the Flask CLI manually, also disable the reloader:
 
-```powershell
+```bash
 flask --app app run --port 5001 --no-reload
 ```
 
-### Filters are empty
+### Filters Are Empty
 
 Rebuild the vector database after changing metadata mappings. Filter options come from Chroma metadata.
 
-### Insight generation fails
+### Insight Generation Fails
 
 Check Ollama:
 
-```powershell
+```bash
 ollama list
 ollama pull gemma4:e4b
-ollama pull gemma4:26b
 ```
 
-Or enable `Pull Ollama model if missing` in the UI.
+Or enable model download in the UI.

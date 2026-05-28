@@ -146,6 +146,13 @@ _analyzer: AnalyzerEngine | None = None
 _anonymizer = AnonymizerEngine()
 
 
+def unload_models() -> None:
+    global _analyzer
+    _analyzer = None
+    import gc
+    gc.collect()
+
+
 _SPACY_NL_MODEL = "nl_core_news_lg"
 _SPACY_EN_MODEL = "en_core_web_lg"
 _SPACY_NL_WHL = "https://github.com/explosion/spacy-models/releases/download/nl_core_news_lg-3.8.0/nl_core_news_lg-3.8.0-py3-none-any.whl"

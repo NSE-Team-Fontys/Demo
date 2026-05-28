@@ -8,7 +8,7 @@ from typing import Optional
 import torch
 from transformers import pipeline as hf_pipeline
 
-from src.core.model_device import describe_model_device, get_model_device, get_pipeline_device
+from src.utils.model_device import describe_model_device, get_model_device, get_pipeline_device
 
 from .layer2_text_norm import normalize_for_ner
 
@@ -40,6 +40,17 @@ except Exception as e:
     _ner = None
     _load_error = e
     logger.warning(f"eu-pii-safeguard failed to load: {e}. Layer will be skipped.")
+
+
+def unload_models() -> None:
+    global _ner
+    _ner = None
+    import gc
+    gc.collect()
+    if torch.backends.mps.is_available():
+        torch.mps.empty_cache()
+    elif torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
 
 def ensure_eu_pii_available() -> None:

@@ -1,0 +1,336 @@
+from importlib import import_module
+import json
+
+from src.config.settings import (
+    INSIGHT_CACHE_VERSION,
+    LLM_CONTEXT_DOCUMENTS,
+    RERANKER_CANDIDATE_MULTIPLIER,
+    RERANKER_MAX_CANDIDATES,
+)
+
+cache_store = import_module("src.pipeline.04_generation.cache")
+insight_metrics = import_module("src.pipeline.04_generation.insight_metrics")
+llm_clients = import_module("src.pipeline.04_generation.llm_clients")
+prompts = import_module("src.pipeline.04_generation.prompts")
+retrieval = import_module("src.pipeline.03_retrieval.service")
+LocalModelConnectionError = llm_clients.LocalModelConnectionError
+get_llm_client = llm_clients.get_llm_client
+
+load_cache = cache_store.load_cache
+save_cache = cache_store.save_cache
+clear_insight_cache = cache_store.clear_insight_cache
+cache_matches_generation_settings = cache_store.cache_matches_generation_settings
+cache_has_full_dashboard_payload = cache_store.cache_has_full_dashboard_payload
+
+
+def _select_theme_documents(
+    collection,
+    theme_name: str,
+    query: str,
+    *,
+    allow_model_download: bool,
+):
+    embedding_model = retrieval.collection_embedding_model(collection)
+    model = retrieval.get_theme_embedding_model(embedding_model)
+    query_embedding = model.encode(query, normalize_embeddings=True)
+    total_docs = collection.count()
+    distribution = retrieval.theme_distribution(collection, embedding_model)
+    retrieval_k = min(
+        max(20 * RERANKER_CANDIDATE_MULTIPLIER, 20),
+        max(total_docs, 1),
+        RERANKER_MAX_CANDIDATES,
+    )
+
+    results = collection.query(
+        query_embeddings=[query_embedding.tolist()],
+        n_results=retrieval_k,
+        include=["documents", "distances"],
+    )
+
+    relevant_docs = []
+    relevant_distances = []
+    if results["documents"] and len(results["documents"]) > 0:
+        for i, doc in enumerate(results["documents"][0]):
+            relevant_docs.append(doc)
+            relevant_distances.append(results["distances"][0][i])
+
+    ranked_docs = retrieval.rerank_documents(
+        query,
+        relevant_docs[:RERANKER_MAX_CANDIDATES],
+        distances=relevant_distances[:RERANKER_MAX_CANDIDATES],
+        top_n=RERANKER_MAX_CANDIDATES,
+        allow_model_download=allow_model_download,
+    )
+    selected_docs = [item["document"] for item in ranked_docs]
+    return {
+        "frequency": distribution["percentages"].get(theme_name, 0),
+        "vector_relevant_count": distribution["counts"].get(theme_name, len(relevant_docs)),
+        "relevant_docs": selected_docs,
+        "llm_docs": selected_docs[:LLM_CONTEXT_DOCUMENTS],
+    }
+
+
+def generate_theme_summary(
+    *,
+    theme_name: str,
+    theme_query: str,
+    ollama_model: str,
+    allow_model_download: bool,
+    provider: str = "ollama",
+) -> dict:
+    theme_search_query = retrieval.theme_query_text(theme_name) if theme_name else theme_query
+    if not theme_search_query:
+        raise ValueError("No query provided")
+
+    cache = load_cache()
+    if theme_name in cache:
+        cached_data = cache[theme_name]
+        if cache_has_full_dashboard_payload(cached_data):
+            response_data = dict(cached_data)
+            response_data["status"] = "success"
+            print(f"[GEMMA4] Returning cached summary for: {theme_name}")
+            return response_data
+        print(
+            f"[GEMMA4] Cached summary for {theme_name} is missing current "
+            "dashboard fields; regenerating."
+        )
+
+    print(f"[GEMMA4] Cache miss — generating summary for: {theme_name}")
+    client = get_llm_client(provider)
+    client.ensure_model_available(ollama_model, allow_download=allow_model_download)
+
+    collection = retrieval.get_collection()
+    selected = _select_theme_documents(
+        collection,
+        theme_name,
+        theme_search_query,
+        allow_model_download=allow_model_download,
+    )
+    relevant_docs = selected["relevant_docs"]
+    llm_docs = selected["llm_docs"]
+    prompt = prompts.build_prompt(theme_name, llm_docs)
+    real_quotes = relevant_docs[:3] if len(relevant_docs) >= 3 else relevant_docs
+
+    print(
+        f"[GEMMA] Reranked {selected['vector_relevant_count']} relevant docs; "
+        f"sending {len(llm_docs)} docs to local {provider}..."
+    )
+    result_text = client.generate_json(ollama_model, prompt, timeout=600)
+    print(f"[GEMMA] Raw response received: {result_text}")
+    parsed = prompts.parse_llm_json(result_text)
+
+    sentiments = parsed.get("sentiments", [])
+    response_data = {
+        "status": "success",
+        "theme": theme_name,
+        "frequency": selected["frequency"],
+        "document_count": len(relevant_docs),
+        "vector_relevant_count": selected["vector_relevant_count"],
+        "llm_document_count": len(llm_docs),
+        "cache_version": INSIGHT_CACHE_VERSION,
+        "llm_context_documents": LLM_CONTEXT_DOCUMENTS,
+        "reranker": retrieval.current_reranker_id(),
+        "summary": parsed.get("summary", "Summary could not be parsed."),
+        "sentiments": sentiments,
+        "positive_comments": parsed.get("positive_comments", [])[:3],
+        "critical_comments": parsed.get("critical_comments", [])[:3],
+        "student_suggestions": parsed.get("student_suggestions", [])[:3],
+        "subthemes": parsed.get("subthemes", []),
+        "subtheme_mentions": insight_metrics.subtheme_mention_rows(
+            parsed.get("subthemes", []), relevant_docs
+        ),
+        "quotes": real_quotes,
+    }
+
+    if sentiments:
+        cache[theme_name] = response_data
+        save_cache(cache)
+        print(f"[GEMMA4] Saved summary to cache for: {theme_name}")
+
+    return response_data
+
+
+def precompute_insights_stream(
+    *,
+    themes: list[dict],
+    ollama_model: str,
+    custom_prompt: str,
+    allow_model_download: bool,
+    provider: str = "ollama",
+):
+    try:
+        yield json.dumps(
+            {
+                "status": "progress",
+                "progress": 1,
+                "message": f"Checking Ollama model '{ollama_model}'...",
+            }
+        ) + "\n"
+
+        client = get_llm_client(provider)
+        client.ensure_model_available(ollama_model, allow_download=allow_model_download)
+
+        collection = retrieval.get_collection()
+        cache = load_cache()
+        embedding_model = retrieval.collection_embedding_model(collection)
+        distribution = retrieval.theme_distribution(collection, embedding_model)
+        model = retrieval.get_theme_embedding_model(embedding_model)
+
+        for i, theme in enumerate(themes):
+            theme_name = theme.get("name")
+            query = retrieval.theme_query_text(theme_name)
+
+            yield json.dumps(
+                {
+                    "status": "progress",
+                    "theme": theme_name,
+                    "progress": int((i / len(themes)) * 100),
+                    "message": f"Querying VectorDB for {theme_name}...",
+                }
+            ) + "\n"
+
+            query_embedding = model.encode(query, normalize_embeddings=True)
+            retrieval_k = min(RERANKER_MAX_CANDIDATES, max(collection.count(), 1))
+            results = collection.query(
+                query_embeddings=[query_embedding.tolist()],
+                n_results=retrieval_k,
+                include=["documents", "distances"],
+            )
+
+            relevant_docs = []
+            relevant_distances = []
+            if results["documents"] and len(results["documents"]) > 0:
+                for j, doc in enumerate(results["documents"][0]):
+                    relevant_docs.append(doc)
+                    relevant_distances.append(results["distances"][0][j])
+
+            vector_relevant_count = distribution["counts"].get(theme_name, len(relevant_docs))
+            ranked_docs = retrieval.rerank_documents(
+                query,
+                relevant_docs[:RERANKER_MAX_CANDIDATES],
+                distances=relevant_distances[:RERANKER_MAX_CANDIDATES],
+                top_n=RERANKER_MAX_CANDIDATES,
+                allow_model_download=allow_model_download,
+            )
+            relevant_docs = [item["document"] for item in ranked_docs]
+            llm_docs = relevant_docs[:LLM_CONTEXT_DOCUMENTS]
+            frequency = distribution["percentages"].get(theme_name, 0)
+
+            cached_theme = cache.get(theme_name, {})
+            if theme_name in cache and cache_has_full_dashboard_payload(cached_theme):
+                cache[theme_name]["theme"] = theme_name
+                cache[theme_name]["frequency"] = frequency
+                cache[theme_name]["vector_relevant_count"] = vector_relevant_count
+                cache[theme_name]["llm_document_count"] = min(
+                    len(relevant_docs), LLM_CONTEXT_DOCUMENTS
+                )
+                cache[theme_name]["cache_version"] = INSIGHT_CACHE_VERSION
+                cache[theme_name]["llm_context_documents"] = LLM_CONTEXT_DOCUMENTS
+                cache[theme_name]["reranker"] = retrieval.current_reranker_id()
+                save_cache(cache)
+                yield json.dumps(
+                    {
+                        "status": "progress",
+                        "theme": theme_name,
+                        "progress": int(((i + 1) / len(themes)) * 100),
+                        "message": f"Loaded cached insights for {theme_name}",
+                    }
+                ) + "\n"
+                continue
+
+            yield json.dumps(
+                {
+                    "status": "progress",
+                    "theme": theme_name,
+                    "progress": int(((i + 0.5) / len(themes)) * 100),
+                    "message": (
+                        f"{ollama_model} is generating summary for "
+                        f"{theme_name} with {len(llm_docs)} answers..."
+                    ),
+                }
+            ) + "\n"
+
+            if not relevant_docs:
+                cache[theme_name] = {
+                    "theme": theme_name,
+                    "frequency": frequency,
+                    "vector_relevant_count": vector_relevant_count,
+                    "llm_document_count": 0,
+                    "cache_version": INSIGHT_CACHE_VERSION,
+                    "llm_context_documents": LLM_CONTEXT_DOCUMENTS,
+                    "reranker": retrieval.current_reranker_id(),
+                    "summary": "Not enough highly relevant responses found.",
+                    "sentiments": [],
+                    "positive_comments": [],
+                    "critical_comments": [],
+                    "student_suggestions": [],
+                    "subthemes": [],
+                    "subtheme_mentions": [],
+                    "quotes": [],
+                }
+                save_cache(cache)
+                continue
+
+            prompt = prompts.build_prompt(theme_name, llm_docs, custom_prompt=custom_prompt)
+            real_quotes = relevant_docs[:3] if len(relevant_docs) >= 3 else relevant_docs
+
+            try:
+                parsed = prompts.parse_llm_json(
+                    client.generate_json(ollama_model, prompt, timeout=600)
+                )
+                cache[theme_name] = {
+                    "theme": theme_name,
+                    "frequency": frequency,
+                    "vector_relevant_count": vector_relevant_count,
+                    "llm_document_count": len(llm_docs),
+                    "cache_version": INSIGHT_CACHE_VERSION,
+                    "llm_context_documents": LLM_CONTEXT_DOCUMENTS,
+                    "reranker": retrieval.current_reranker_id(),
+                    "summary": parsed.get("summary", "Summary could not be parsed."),
+                    "sentiments": parsed.get("sentiments", []),
+                    "positive_comments": parsed.get("positive_comments", [])[:3],
+                    "critical_comments": parsed.get("critical_comments", [])[:3],
+                    "student_suggestions": parsed.get("student_suggestions", [])[:3],
+                    "subthemes": parsed.get("subthemes", []),
+                    "subtheme_mentions": insight_metrics.subtheme_mention_rows(
+                        parsed.get("subthemes", []), relevant_docs
+                    ),
+                    "quotes": real_quotes,
+                }
+            except Exception as exc:
+                yield json.dumps(
+                    {
+                        "status": "error",
+                        "theme": theme_name,
+                        "message": f"Failed to generate summary: {str(exc)}",
+                    }
+                ) + "\n"
+                return
+            save_cache(cache)
+
+        yield json.dumps(
+            {
+                "status": "success",
+                "message": "All insights generated!",
+                "progress": 100,
+            }
+        ) + "\n"
+        client.unload(ollama_model)
+
+    except Exception as exc:
+        yield json.dumps({"status": "error", "message": str(exc)}) + "\n"
+
+
+def themes_overview_payload(filters: dict) -> dict:
+    cache = {
+        theme: data
+        for theme, data in load_cache().items()
+        if cache_has_full_dashboard_payload(data)
+    }
+    if not filters:
+        return cache
+    try:
+        return retrieval.filtered_themes_overview(cache, filters)
+    except Exception as exc:
+        print(f"[DYNAMIC FILTER ERROR] {str(exc)}")
+        return cache
