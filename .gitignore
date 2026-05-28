@@ -61,6 +61,8 @@ chroma.sqlite3
 **/.playwright-cli/
 *.yml
 *.yaml
+!.github/**/*.yml
+!.github/**/*.yaml
 
 # OS files
 .DS_Store
