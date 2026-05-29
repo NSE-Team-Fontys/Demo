@@ -35,5 +35,5 @@ This module serves as the functional interface/facade between this pipeline pack
 2. **Analysis:** `vector_builder.py` loads the anonymized CSV, reads its schema, and identifies which columns are text responses based on headers and user-selected constraints.
 3. **Model Load:** `embedding_models.py` conditionally downloads or loads a localized `SentenceTransformer` model onto the system GPU/MPS if available.
 4. **Resumption check:** `vector_builder.py` reads local disk checkpoints. If you have already processed e.g. 5,000 of 10,000 respondents before a crash, it skips generating embeddings for the first 5,000.
-5. **Generation & Storage:** Iterating in batches (e.g., 50 records per batch), it encodes responses into float vectors, adds context metadata, and persists the payload into ChromaDB.
-6. **Progress Streaming:** Every batch updates the client progress counter until generation is 100% complete.
+5. **Embedding & Storage:** Iterating in batches (e.g., 50 records per batch), it encodes responses into float vectors, adds context metadata, and persists the payload into ChromaDB.
+6. **Progress Streaming:** Every batch updates the client progress counter until vector building is 100% complete.

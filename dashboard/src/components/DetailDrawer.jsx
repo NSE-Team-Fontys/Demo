@@ -51,17 +51,17 @@ export default function DetailDrawer({ theme, onClose }) {
       {/* Body */}
       <div className="p-4 md:p-6 space-y-6">
 
-        {/* Live Gemma 4 Summary */}
+        {/* Gemma 4 Summary */}
         <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
           <div className="flex justify-between items-center mb-3">
             <div className="flex items-center gap-2">
               <span className="material-symbols-outlined text-blue-600">psychology</span>
-              <h4 className="text-sm font-bold text-blue-900">Gemma 4 Live Insights</h4>
+              <h4 className="text-sm font-bold text-blue-900">Gemma 4 Insights</h4>
             </div>
             {loadingLive && (
               <span className="flex items-center gap-1 text-[10px] uppercase font-bold text-blue-500 tracking-wider animate-pulse">
                 <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
-                Querying VectorDB...
+                Loading insights...
               </span>
             )}
           </div>

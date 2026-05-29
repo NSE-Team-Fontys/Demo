@@ -1,6 +1,7 @@
 flask
 flask-cors
 python-dotenv
+requests
 pandas
 chromadb
 sentence-transformers
@@ -15,3 +16,6 @@ https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.8.0
 # Default PyTorch wheels include Apple Silicon MPS support on macOS.
 # For NVIDIA CUDA Linux machines, install the matching CUDA wheel separately if needed.
 torch
+
+# llama.cpp is used as an external local server (`llama-server`), so
+# `llama-cpp-python` is not required for this Flask app.
