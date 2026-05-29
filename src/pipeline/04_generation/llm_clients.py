@@ -11,7 +11,6 @@ from src.config.settings import (
     DEFAULT_LLM_PROVIDER,
     LLAMA_CPP_API_KEY,
     LLAMA_CPP_BASE_URL,
-    LLAMA_CPP_MAX_TOKENS,
     LLAMA_CPP_SERVER_BIN,
     LLAMA_CPP_STARTUP_TIMEOUT,
 )
@@ -46,7 +45,7 @@ class LlamaCppClient:
 
     def _server_command(self, model_name: str) -> list[str]:
         model = resolve_llama_cpp_model(model_name)
-        return [LLAMA_CPP_SERVER_BIN, "-hf", model.llama_server_model_id]
+        return model.server_command(LLAMA_CPP_SERVER_BIN)
 
     def _check_llama_server_binary(self) -> None:
         if shutil.which(LLAMA_CPP_SERVER_BIN):
@@ -176,15 +175,7 @@ class LlamaCppClient:
             response = requests.post(
                 f"{self.base_url}/v1/chat/completions",
                 headers=self._headers(),
-                json={
-                    "model": model.id,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "stream": False,
-                    "temperature": 0.1,
-                    "max_tokens": LLAMA_CPP_MAX_TOKENS,
-                    "response_format": {"type": "json_object"},
-                    "chat_template_kwargs": {"enable_thinking": False},
-                },
+                json=model.chat_completion_payload(prompt),
                 timeout=timeout,
             )
         except requests.exceptions.ConnectionError as exc:

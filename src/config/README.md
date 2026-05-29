@@ -20,7 +20,7 @@ Initializes fundamental process environments.
 Controls tunable runtime behavior for retrieval and local insight generation:
 *   **Vector Allowances**: `RERANKER_MAX_CANDIDATES` and `RERANKER_CANDIDATE_MULTIPLIER` control the "funnel width" of vector embeddings parsed by the costly cross-encoder pipeline.
 *   **Prompt Window Constraints**: `LLM_CONTEXT_DOCUMENTS` binds maximum prompt inject lengths.
-*   **Local LLM Runtime**: `DEFAULT_LLM_PROVIDER`, `DEFAULT_LLM_MODEL`, `LLAMA_CPP_BASE_URL`, `LLAMA_CPP_API_KEY`, `LLAMA_CPP_MAX_TOKENS`, `LLAMA_CPP_SERVER_BIN`, and `LLAMA_CPP_STARTUP_TIMEOUT` configure the llama.cpp-backed generation client. The default model is `unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL`, and the backend can start a managed `llama-server` for known registry models when the UI allows it.
+*   **Local LLM Runtime**: `DEFAULT_LLM_PROVIDER`, `DEFAULT_LLM_MODEL`, `LLAMA_CPP_BASE_URL`, `LLAMA_CPP_API_KEY`, `LLAMA_CPP_SERVER_BIN`, and `LLAMA_CPP_STARTUP_TIMEOUT` configure the llama.cpp-backed generation client. The default model is `unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL`, and the backend can start a managed `llama-server` for known registry models when the UI allows it. Per-model generation tuning such as context size, max tokens, sampling, JSON mode, and thinking is centralized in `src/pipeline/04_generation/llama_cpp_models.py`.
 *   **Cache Binding**: `INSIGHT_CACHE_VERSION` strictly forces JSON cache rotations globally. Generation cache entries are also bound to the selected LLM provider and model.
 
 ### `themes.py`

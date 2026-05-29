@@ -36,6 +36,7 @@ def cache_matches_generation_settings(
     *,
     llm_provider: str | None = None,
     llm_model: str | None = None,
+    llm_generation_settings: dict | None = None,
     match_llm_identity: bool = False,
 ) -> bool:
     if not isinstance(cached_theme, dict):
@@ -49,6 +50,11 @@ def cache_matches_generation_settings(
         matches = matches and cached_theme.get("llm_provider") == llm_provider
     if match_llm_identity and llm_model is not None:
         matches = matches and cached_theme.get("llm_model") == llm_model
+    if llm_generation_settings is not None:
+        matches = (
+            matches
+            and cached_theme.get("llm_generation_settings") == llm_generation_settings
+        )
     return matches
 
 
@@ -57,12 +63,14 @@ def cache_has_full_dashboard_payload(
     *,
     llm_provider: str | None = None,
     llm_model: str | None = None,
+    llm_generation_settings: dict | None = None,
     match_llm_identity: bool = False,
 ) -> bool:
     if not cache_matches_generation_settings(
         cached_theme,
         llm_provider=llm_provider,
         llm_model=llm_model,
+        llm_generation_settings=llm_generation_settings,
         match_llm_identity=match_llm_identity,
     ):
         return False

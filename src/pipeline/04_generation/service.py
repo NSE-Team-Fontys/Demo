@@ -13,6 +13,7 @@ from src.config.settings import (
 cache_store = import_module("src.pipeline.04_generation.cache")
 insight_metrics = import_module("src.pipeline.04_generation.insight_metrics")
 llm_clients = import_module("src.pipeline.04_generation.llm_clients")
+llama_cpp_models = import_module("src.pipeline.04_generation.llama_cpp_models")
 prompts = import_module("src.pipeline.04_generation.prompts")
 retrieval = import_module("src.pipeline.03_retrieval.service")
 LocalModelConnectionError = llm_clients.LocalModelConnectionError
@@ -25,9 +26,30 @@ cache_matches_generation_settings = cache_store.cache_matches_generation_setting
 cache_has_full_dashboard_payload = cache_store.cache_has_full_dashboard_payload
 
 
-def _cached_dashboard_response(cache: dict, theme_name: str) -> dict | None:
+def _model_generation_settings(provider: str, llm_model: str) -> dict | None:
+    selected = (provider or DEFAULT_LLM_PROVIDER).strip().lower()
+    if selected not in {"llama.cpp", "llamacpp", "llama-cpp"}:
+        return None
+    return llama_cpp_models.resolve_llama_cpp_model(llm_model).generation.to_dict()
+
+
+def _cached_dashboard_response(
+    cache: dict,
+    theme_name: str,
+    *,
+    llm_provider: str | None = None,
+    llm_model: str | None = None,
+    llm_generation_settings: dict | None = None,
+    match_llm_identity: bool = False,
+) -> dict | None:
     cached_data = cache.get(theme_name)
-    if not cache_has_full_dashboard_payload(cached_data):
+    if not cache_has_full_dashboard_payload(
+        cached_data,
+        llm_provider=llm_provider,
+        llm_model=llm_model,
+        llm_generation_settings=llm_generation_settings,
+        match_llm_identity=match_llm_identity,
+    ):
         return None
     response_data = dict(cached_data)
     response_data["status"] = "success"
@@ -92,12 +114,20 @@ def generate_theme_summary(
 ) -> dict:
     llm_model = str(llm_model or DEFAULT_LLM_MODEL).strip()
     provider = str(provider or DEFAULT_LLM_PROVIDER).strip()
+    llm_generation_settings = _model_generation_settings(provider, llm_model)
     theme_search_query = retrieval.theme_query_text(theme_name) if theme_name else theme_query
     if not theme_search_query:
         raise ValueError("No query provided")
 
     cache = load_cache()
-    cached_response = _cached_dashboard_response(cache, theme_name)
+    cached_response = _cached_dashboard_response(
+        cache,
+        theme_name,
+        llm_provider=provider,
+        llm_model=llm_model,
+        llm_generation_settings=llm_generation_settings,
+        match_llm_identity=True,
+    )
     if cached_response is not None:
         print(f"[LLM] Returning cached summary for: {theme_name}")
         return cached_response
@@ -144,6 +174,7 @@ def generate_theme_summary(
             "llm_context_documents": LLM_CONTEXT_DOCUMENTS,
             "llm_provider": provider,
             "llm_model": llm_model,
+            "llm_generation_settings": llm_generation_settings,
             "reranker": retrieval.current_reranker_id(),
             "summary": parsed.get("summary", "Summary could not be parsed."),
             "sentiments": sentiments,
@@ -179,11 +210,20 @@ def precompute_insights_stream(
     provider = str(provider or DEFAULT_LLM_PROVIDER).strip()
     client = None
     try:
+        llm_generation_settings = _model_generation_settings(provider, llm_model)
         cache = load_cache()
         cached_theme_names = {
             theme.get("name")
             for theme in themes
-            if _cached_dashboard_response(cache, theme.get("name")) is not None
+            if _cached_dashboard_response(
+                cache,
+                theme.get("name"),
+                llm_provider=provider,
+                llm_model=llm_model,
+                llm_generation_settings=llm_generation_settings,
+                match_llm_identity=True,
+            )
+            is not None
         }
         if len(cached_theme_names) == len(themes):
             for i, theme in enumerate(themes):
@@ -225,7 +265,17 @@ def precompute_insights_stream(
             theme_name = theme.get("name")
             query = retrieval.theme_query_text(theme_name)
 
-            if _cached_dashboard_response(cache, theme_name) is not None:
+            if (
+                _cached_dashboard_response(
+                    cache,
+                    theme_name,
+                    llm_provider=provider,
+                    llm_model=llm_model,
+                    llm_generation_settings=llm_generation_settings,
+                    match_llm_identity=True,
+                )
+                is not None
+            ):
                 yield json.dumps(
                     {
                         "status": "progress",
@@ -294,6 +344,7 @@ def precompute_insights_stream(
                     "llm_context_documents": LLM_CONTEXT_DOCUMENTS,
                     "llm_provider": provider,
                     "llm_model": llm_model,
+                    "llm_generation_settings": llm_generation_settings,
                     "reranker": retrieval.current_reranker_id(),
                     "summary": "Not enough highly relevant responses found.",
                     "sentiments": [],
@@ -323,6 +374,7 @@ def precompute_insights_stream(
                     "llm_context_documents": LLM_CONTEXT_DOCUMENTS,
                     "llm_provider": provider,
                     "llm_model": llm_model,
+                    "llm_generation_settings": llm_generation_settings,
                     "reranker": retrieval.current_reranker_id(),
                     "summary": parsed.get("summary", "Summary could not be parsed."),
                     "sentiments": parsed.get("sentiments", []),

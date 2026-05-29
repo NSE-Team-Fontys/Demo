@@ -75,10 +75,11 @@ DEFAULT_LLM_PROVIDER=llama.cpp
 DEFAULT_LLM_MODEL=unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL
 LLAMA_CPP_BASE_URL=http://127.0.0.1:8080
 LLAMA_CPP_API_KEY=no-key
-LLAMA_CPP_MAX_TOKENS=4096
 ```
 
 `MODEL_DEVICE=auto` prefers CUDA, then Apple MPS, then CPU. On a Mac, set `MODEL_DEVICE=mps` to force the PyTorch-backed anonymization layer onto the Apple GPU. Presidio/spaCy still runs on CPU; the EU-PII / Transformer layer is the part that can use MPS.
+
+llama.cpp generation tuning is model-specific and lives in `src/pipeline/04_generation/llama_cpp_models.py`.
 
 ## Architecture
 
