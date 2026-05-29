@@ -4,6 +4,8 @@ from flask import Blueprint, Response, jsonify, request
 
 insight_bp = Blueprint("insight", __name__)
 generation = import_module("src.pipeline.04_generation.service")
+settings = import_module("src.config.settings")
+llama_cpp_models = import_module("src.pipeline.04_generation.llama_cpp_models")
 
 
 @insight_bp.route("/api/theme-summary", methods=["POST"])
@@ -13,9 +15,9 @@ def theme_summary():
         payload = generation.generate_theme_summary(
             theme_name=data.get("theme", ""),
             theme_query=data.get("query", ""),
-            ollama_model=data.get("ollama_model", "gemma4:e4b"),
+            llm_model=data.get("llm_model") or settings.DEFAULT_LLM_MODEL,
             allow_model_download=bool(data.get("allow_model_download", False)),
-            provider=data.get("provider", "ollama"),
+            provider=data.get("provider", settings.DEFAULT_LLM_PROVIDER),
         )
         return jsonify(payload)
     except ValueError as exc:
@@ -23,7 +25,7 @@ def theme_summary():
     except generation.LocalModelConnectionError as exc:
         return jsonify({"status": "error", "error": str(exc)}), 503
     except Exception as exc:
-        print(f"[GEMMA4 ERROR] {str(exc)}")
+        print(f"[LLAMA_CPP ERROR] {str(exc)}")
         return jsonify({"status": "error", "error": str(exc)}), 500
 
 
@@ -45,12 +47,24 @@ def precompute_insights():
     return Response(
         generation.precompute_insights_stream(
             themes=themes,
-            ollama_model=data.get("ollama_model", "gemma4:e4b"),
+            llm_model=data.get("llm_model") or settings.DEFAULT_LLM_MODEL,
             custom_prompt=data.get("custom_prompt", ""),
             allow_model_download=bool(data.get("allow_model_download", False)),
-            provider=data.get("provider", "ollama"),
+            provider=data.get("provider", settings.DEFAULT_LLM_PROVIDER),
         ),
         mimetype="application/x-ndjson",
+    )
+
+
+@insight_bp.route("/api/llm-models", methods=["GET"])
+def llm_models():
+    return jsonify(
+        {
+            "default_provider": settings.DEFAULT_LLM_PROVIDER,
+            "default_model": settings.DEFAULT_LLM_MODEL,
+            "llama_cpp_base_url": settings.LLAMA_CPP_BASE_URL,
+            "models": llama_cpp_models.llama_cpp_model_options(),
+        }
     )
 
 

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { AVAILABLE_LLM_MODELS, LLM_PROVIDER } from '../config/llmModels.js';
 
 const DEFAULT_PROMPT = `You are an expert data analyst. Read the following student survey responses about '{theme_name}'.
 Use the provided theme scope to keep the analysis focused on this selected theme. Do not drift into Support / Mentoring unless the selected theme is Support / Mentoring.
@@ -18,38 +19,17 @@ Respond EXACTLY in this JSON format:
   "subthemes": ["...", "..."]
 }`;
 
-const AVAILABLE_MODELS = [
-  {
-    id: 'gemma4:e4b',
-    name: 'Gemma 4 E4B',
-    provider: 'Google',
-    description: 'Efficient 4-billion parameter model. Excellent at structured JSON output and analysis.',
-    size: '~3 GB',
-    speed: 'Fast',
-    recommended: true
-  },
-  {
-    id: 'gemma4:26b',
-    name: 'Gemma 4 26B',
-    provider: 'Google',
-    description: 'Larger Gemma 4 option for higher-quality local analysis when your machine has enough memory.',
-    size: 'Large',
-    speed: 'Slow',
-    recommended: false
-  }
-];
-
 export default function InsightGenerator({ onComplete }) {
   const [progress, setProgress] = useState(0);
   const [logs, setLogs] = useState([]);
   const [generating, setGenerating] = useState(false);
 
   // Configuration
-  const [selectedModel, setSelectedModel] = useState('gemma4:e4b');
+  const [selectedModel, setSelectedModel] = useState('unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL');
   const [customPrompt, setCustomPrompt] = useState(DEFAULT_PROMPT);
   const [showPromptEditor, setShowPromptEditor] = useState(false);
   const [clearCache, setClearCache] = useState(false);
-  const [allowModelDownload, setAllowModelDownload] = useState(false);
+  const [allowModelDownload, setAllowModelDownload] = useState(true);
 
   const logRef = useRef(null);
 
@@ -62,8 +42,27 @@ export default function InsightGenerator({ onComplete }) {
 
   const startGeneration = async () => {
     setGenerating(true);
-    setLogs([]);
+    setLogs([`Starting insight generation with ${activeModel?.name || selectedModel}...`]);
     setProgress(0);
+    let completed = false;
+
+    const handleStreamEvent = (data) => {
+      if (data.status === 'progress') {
+        setProgress(data.progress);
+        const prefix = data.theme ? `[${data.theme}] ` : '';
+        setLogs(prev => [...prev, `${prefix}${data.message}`]);
+      } else if (data.status === 'success') {
+        completed = true;
+        setProgress(100);
+        setLogs(prev => [...prev, "✅ " + data.message]);
+        setGenerating(false);
+        setTimeout(onComplete, 1500);
+      } else if (data.status === 'error') {
+        completed = true;
+        setLogs(prev => [...prev, "❌ Error: " + (data.message || data.error || 'Insight generation failed')]);
+        setGenerating(false);
+      }
+    };
     
     try {
       // If clearing cache, delete it first
@@ -83,38 +82,65 @@ export default function InsightGenerator({ onComplete }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           themes: THEMES,
-          ollama_model: selectedModel,
+          llm_model: selectedModel,
+          provider: LLM_PROVIDER,
           custom_prompt: customPrompt !== DEFAULT_PROMPT ? customPrompt : '',
           allow_model_download: allowModelDownload
         })
       });
+
+      if (!res.ok) {
+        let message = `Request failed with HTTP ${res.status}`;
+        try {
+          const data = await res.json();
+          message = data.message || data.error || message;
+        } catch (e) {
+          const text = await res.text();
+          if (text) message = text;
+        }
+        throw new Error(message);
+      }
+
+      if (!res.body) {
+        throw new Error('The backend did not return a progress stream.');
+      }
       
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
+      let buffer = '';
       
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) {
+          buffer += decoder.decode();
+          break;
+        }
         
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split('\n').filter(Boolean);
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
         
         for (let line of lines) {
           try {
-            const data = JSON.parse(line);
-            if (data.status === 'progress') {
-              setProgress(data.progress);
-              setLogs(prev => [...prev, `[${data.theme}] ${data.message}`]);
-            } else if (data.status === 'success') {
-              setProgress(100);
-              setLogs(prev => [...prev, "✅ " + data.message]);
-              setTimeout(onComplete, 1500);
-            } else if (data.status === 'error') {
-              setLogs(prev => [...prev, "❌ Error: " + data.message]);
-              setGenerating(false);
-            }
-          } catch (e) {}
+            handleStreamEvent(JSON.parse(line));
+          } catch (e) {
+            setLogs(prev => [...prev, `⚠️ Could not parse backend progress: ${line}`]);
+          }
         }
+      }
+
+      const trailingLine = buffer.trim();
+      if (trailingLine) {
+        try {
+          handleStreamEvent(JSON.parse(trailingLine));
+        } catch (e) {
+          setLogs(prev => [...prev, `⚠️ Could not parse backend progress: ${trailingLine}`]);
+        }
+      }
+
+      if (!completed) {
+        setLogs(prev => [...prev, "❌ Error: The backend stream ended before insight generation completed."]);
+        setGenerating(false);
       }
     } catch (e) {
       setLogs(prev => [...prev, "❌ Connection Error: " + e.message]);
@@ -122,7 +148,7 @@ export default function InsightGenerator({ onComplete }) {
     }
   };
 
-  const activeModel = AVAILABLE_MODELS.find(m => m.id === selectedModel);
+  const activeModel = AVAILABLE_LLM_MODELS.find(m => m.id === selectedModel);
 
   return (
     <div className="max-w-4xl mx-auto space-y-8 p-6 bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl border border-gray-100 transition-all duration-500">
@@ -150,10 +176,10 @@ export default function InsightGenerator({ onComplete }) {
             <div className="space-y-4 p-6 bg-white border border-gray-100 shadow-sm rounded-2xl">
               <div className="flex items-center space-x-2 pb-2 border-b border-gray-50">
                 <span className="text-xl">🤖</span>
-                <h3 className="font-bold text-gray-800">Ollama Model</h3>
+                <h3 className="font-bold text-gray-800">llama.cpp Model</h3>
               </div>
               <div className="space-y-2 max-h-72 overflow-y-auto p-1">
-                {AVAILABLE_MODELS.map(model => {
+                {AVAILABLE_LLM_MODELS.map(model => {
                   const isSelected = selectedModel === model.id;
                   return (
                     <label key={model.id} onClick={() => setSelectedModel(model.id)} className={`block p-3 rounded-xl border-2 cursor-pointer transition-all duration-200 ${isSelected ? 'border-violet-500 bg-violet-50/50 shadow-sm' : 'border-gray-100 hover:border-gray-200 bg-white'}`}>
@@ -179,7 +205,7 @@ export default function InsightGenerator({ onComplete }) {
                 })}
               </div>
               <p className="text-[11px] text-gray-400 leading-relaxed">
-                Model must be installed locally via <code className="bg-gray-100 px-1 py-0.5 rounded text-[10px]">ollama pull {selectedModel}</code>
+                Model must be available to <code className="bg-gray-100 px-1 py-0.5 rounded text-[10px]">llama-server</code>. Router model id: <code className="bg-gray-100 px-1 py-0.5 rounded text-[10px] break-all">{selectedModel}</code>
               </p>
             </div>
 
@@ -254,8 +280,8 @@ export default function InsightGenerator({ onComplete }) {
                     {allowModelDownload && <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>}
                   </div>
                   <div>
-                    <p className={`text-sm font-medium ${allowModelDownload ? 'text-violet-900' : 'text-gray-700'}`}>Pull Ollama model if missing</p>
-                    <p className="text-xs text-gray-500">When disabled, generation fails before running if the selected Ollama model is not installed.</p>
+                    <p className={`text-sm font-medium ${allowModelDownload ? 'text-violet-900' : 'text-gray-700'}`}>Start llama-server if needed</p>
+                    <p className="text-xs text-gray-500">When enabled, the backend runs llama-server for the selected Gemma model and unloads it after generation.</p>
                   </div>
                 </label>
               </div>
@@ -277,7 +303,7 @@ export default function InsightGenerator({ onComplete }) {
               {allowModelDownload && (
                 <>
                   <span className="text-gray-300">•</span>
-                  <span className="text-violet-600 font-medium text-xs">May pull model</span>
+                  <span className="text-violet-600 font-medium text-xs">llama-server auto-start enabled</span>
                 </>
               )}
               {customPrompt !== DEFAULT_PROMPT && (
@@ -333,7 +359,7 @@ export default function InsightGenerator({ onComplete }) {
               {/* Active model badge */}
               <div className="flex items-center gap-2">
                 <span className="text-xs font-medium text-violet-300 bg-violet-500/20 px-2 py-1 rounded-md">Model: {activeModel?.name}</span>
-                <span className="text-xs font-medium text-blue-300 bg-blue-500/20 px-2 py-1 rounded-md">via Ollama</span>
+                <span className="text-xs font-medium text-blue-300 bg-blue-500/20 px-2 py-1 rounded-md">via llama.cpp</span>
               </div>
 
               {/* Logs */}

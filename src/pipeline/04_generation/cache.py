@@ -31,18 +31,40 @@ def clear_insight_cache() -> dict:
     return {"status": "success", "message": "Cache cleared"}
 
 
-def cache_matches_generation_settings(cached_theme: dict) -> bool:
+def cache_matches_generation_settings(
+    cached_theme: dict,
+    *,
+    llm_provider: str | None = None,
+    llm_model: str | None = None,
+    match_llm_identity: bool = False,
+) -> bool:
     if not isinstance(cached_theme, dict):
         return False
-    return (
+    matches = (
         cached_theme.get("cache_version") == INSIGHT_CACHE_VERSION
         and cached_theme.get("llm_context_documents") == LLM_CONTEXT_DOCUMENTS
         and cached_theme.get("reranker") == retrieval.current_reranker_id()
     )
+    if match_llm_identity and llm_provider is not None:
+        matches = matches and cached_theme.get("llm_provider") == llm_provider
+    if match_llm_identity and llm_model is not None:
+        matches = matches and cached_theme.get("llm_model") == llm_model
+    return matches
 
 
-def cache_has_full_dashboard_payload(cached_theme: dict) -> bool:
-    if not cache_matches_generation_settings(cached_theme):
+def cache_has_full_dashboard_payload(
+    cached_theme: dict,
+    *,
+    llm_provider: str | None = None,
+    llm_model: str | None = None,
+    match_llm_identity: bool = False,
+) -> bool:
+    if not cache_matches_generation_settings(
+        cached_theme,
+        llm_provider=llm_provider,
+        llm_model=llm_model,
+        match_llm_identity=match_llm_identity,
+    ):
         return False
 
     required_fields = [

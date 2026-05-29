@@ -12,6 +12,13 @@ export function useThemeSummary(theme) {
     }
 
     let isMounted = true
+    if (theme.cachedInsight?.summary) {
+      setLiveData(theme.cachedInsight)
+      setLoadingLive(false)
+      return () => {
+        isMounted = false
+      }
+    }
 
     const fetchLiveSummary = async () => {
       setLoadingLive(true)
@@ -31,14 +38,7 @@ export function useThemeSummary(theme) {
           setLiveData({ error: data.error || 'Failed to generate summary' })
         }
       } catch (e) {
-        try {
-          const cacheRes = await fetch('/gemma_cache.json')
-          const cacheData = await cacheRes.json()
-          const cached = cacheData[theme.name]
-          if (isMounted) setLiveData(cached ? { ...cached, status: 'success' } : { error: 'No cached data for this theme.' })
-        } catch {
-          if (isMounted) setLiveData({ error: 'Failed to connect to backend server.' })
-        }
+        if (isMounted) setLiveData({ error: 'Failed to connect to backend server.' })
       } finally {
         if (isMounted) setLoadingLive(false)
       }
@@ -49,7 +49,7 @@ export function useThemeSummary(theme) {
     return () => {
       isMounted = false
     }
-  }, [theme?.id, theme?.name])
+  }, [theme?.id, theme?.name, theme?.cachedInsight])
 
   return { liveData, loadingLive }
 }
