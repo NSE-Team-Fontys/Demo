@@ -48,6 +48,26 @@ npm run dev
 
 Vite usually runs on `http://localhost:5173`.
 
+### llama.cpp (Required for Insights)
+
+The generation stage uses `llama-server` for local LLM inference. The pipeline will automatically start the server when needed.
+
+macOS:
+```bash
+brew install llama.cpp
+```
+
+Linux:
+```bash
+git clone https://github.com/ggerganov/llama.cpp
+cd llama.cpp
+make
+# Ensure the compiled llama-server is in your PATH
+```
+
+Windows:
+Download the pre-compiled Windows zip from the [llama.cpp releases page](https://github.com/ggerganov/llama.cpp/releases) and extract it. Ensure `llama-server.exe` is in your system PATH.
+
 ## Environment
 
 Create `.env` in the project root when you need Hugging Face downloads:
