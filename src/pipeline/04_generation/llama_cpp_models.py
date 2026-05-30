@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Any
 
+from src.config.settings import LLAMA_CPP_N_GPU_LAYERS
 
 DEFAULT_QUANTIZATION = "UD-Q4_K_XL"
 
@@ -22,6 +23,8 @@ class LlamaCppGenerationSettings:
         args: list[str] = []
         if self.context_size > 0:
             args.extend(["-c", str(self.context_size)])
+        if LLAMA_CPP_N_GPU_LAYERS > 0:
+            args.extend(["-ngl", str(LLAMA_CPP_N_GPU_LAYERS)])
         return args
 
     def chat_completion_payload(self, model_id: str, prompt: str) -> dict[str, Any]:
