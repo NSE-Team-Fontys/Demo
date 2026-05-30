@@ -50,23 +50,98 @@ Vite usually runs on `http://localhost:5173`.
 
 ### llama.cpp (Required for Insights)
 
-The generation stage uses `llama-server` for local LLM inference. The pipeline will automatically start the server when needed.
+The generation stage uses `llama-server` for local LLM inference. The app can start and stop the server automatically — you do not need to run it manually.
 
-macOS:
+#### macOS
+
 ```bash
 brew install llama.cpp
 ```
 
-Linux:
+#### Linux
+
 ```bash
 git clone https://github.com/ggerganov/llama.cpp
 cd llama.cpp
 make
-# Ensure the compiled llama-server is in your PATH
+# Add the build output directory to your PATH
 ```
 
-Windows:
-Download the pre-compiled Windows zip from the [llama.cpp releases page](https://github.com/ggerganov/llama.cpp/releases) and extract it. Ensure `llama-server.exe` is in your system PATH.
+#### Windows
+
+1. Go to `https://github.com/ggerganov/llama.cpp/releases` and download the latest Windows zip.
+   - With an NVIDIA GPU: pick the `cuda-12.x` variant (e.g. `llama-bXXXX-bin-win-cuda-12.4-x64.zip`)
+   - CPU only: pick the `avx2-x64` variant
+
+2. Extract the zip and check whether it bundles CUDA DLLs:
+
+```powershell
+dir C:\path\to\extracted\folder | findstr ggml-cuda
+```
+
+   - If `ggml-cuda.dll` appears — the build is self-contained and GPU will work immediately.
+   - If nothing appears — the build requires the CUDA Toolkit 12.4 runtime to be installed separately (`developer.nvidia.com` → CUDA Toolkit 12.4). Without it the server silently falls back to CPU.
+
+3. Move the extracted folder to a permanent location and add it to your PATH:
+
+```powershell
+New-Item -ItemType Directory -Path "C:\tools" -Force
+Move-Item "$env:USERPROFILE\Downloads\llama-bXXXX-bin-win-cuda-12.4-x64" "C:\tools\llama-bXXXX-bin-win-cuda-12.4-x64"
+[Environment]::SetEnvironmentVariable(
+    "PATH",
+    $env:PATH + ";C:\tools\llama-bXXXX-bin-win-cuda-12.4-x64",
+    "User"
+)
+```
+
+4. Restart your terminal, then verify:
+
+```powershell
+llama-server --version
+```
+
+#### Enabling GPU on Windows (NVIDIA)
+
+Set `LLAMA_CPP_N_GPU_LAYERS=99` in your `.env` so the app offloads all layers to the GPU when it auto-starts the server:
+
+```env
+LLAMA_CPP_N_GPU_LAYERS=99
+```
+
+Without this the server runs on CPU only. With an RTX 4050 (6 GB VRAM) and the default E4B model (~5 GB), all layers fit in VRAM and generation runs at ~30 tokens/second instead of ~5 tokens/second on CPU.
+
+To verify the GPU is being used, check the llama-server startup log for a line like:
+
+```
+I device_info:
+I   - CUDA0   : NVIDIA GeForce RTX 4050 ...
+```
+
+If only `CPU` appears, the CUDA DLLs are missing (see step 2 above).
+
+#### Optional: point to a specific binary
+
+If `llama-server` is not on your PATH, set `LLAMA_CPP_SERVER_BIN` in your `.env`:
+
+```env
+LLAMA_CPP_SERVER_BIN=C:\tools\llama.cpp\llama-server.exe
+```
+
+#### How the app starts the server
+
+When you click **Generate Insights** in the UI with **"Start llama-server if needed"** enabled, the app will:
+
+1. Check that `llama-server` is on your PATH (or at `LLAMA_CPP_SERVER_BIN`).
+2. Launch `llama-server -hf unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL -c 32000 -ngl 99` (with `-ngl` if `LLAMA_CPP_N_GPU_LAYERS` is set).
+3. On first run, llama-server downloads the model (~5 GB) from Hugging Face automatically.
+4. After startup it connects on `http://127.0.0.1:8080` (configurable via `LLAMA_CPP_BASE_URL`).
+5. After generation it shuts down the server and unloads the model.
+
+To run the server manually instead, start it before clicking Generate and leave the checkbox unchecked:
+
+```powershell
+llama-server -hf unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL -c 32000 -ngl 99
+```
 
 ## Environment
 
@@ -95,6 +170,8 @@ DEFAULT_LLM_PROVIDER=llama.cpp
 DEFAULT_LLM_MODEL=unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL
 LLAMA_CPP_BASE_URL=http://127.0.0.1:8080
 LLAMA_CPP_API_KEY=no-key
+LLAMA_CPP_SERVER_BIN=C:\tools\llama.cpp\llama-server.exe
+LLAMA_CPP_N_GPU_LAYERS=99
 ```
 
 `MODEL_DEVICE=auto` prefers CUDA, then Apple MPS, then CPU. On a Mac, set `MODEL_DEVICE=mps` to force the PyTorch-backed anonymization layer onto the Apple GPU. Presidio/spaCy still runs on CPU; the EU-PII / Transformer layer is the part that can use MPS.
