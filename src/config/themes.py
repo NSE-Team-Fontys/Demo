@@ -9,37 +9,61 @@ THEMES_LIST = [
 ]
 
 THEME_DEFINITIONS = {
+
     "Content and Organisation": (
-        "Curriculum content, course organization, planning, schedules, workload, "
-        "study materials, module structure, learning objectives, and information "
-        "about how the programme is arranged."
+        "Comments about curriculum content, courses, modules, schedules, timetables, workload, "
+        "planning, study materials, learning objectives, course structure, information provided "
+        "to students, and programme organization. "
+        "Include: curriculum, planning, workload, schedules, course content, module structure. "
+        "Exclude: teacher behaviour, mentoring, grading, exams, personal support."
     ),
+
     "Professional Practice": (
-        "Connection to professional practice, internships, industry projects, "
-        "guest lectures, career readiness, workplace skills, practical assignments, "
-        "and links with companies or the professional field."
+        "Comments about preparation for professional work, practical assignments, projects, "
+        "internships, industry relevance, professional skills, real-world application, teamwork, "
+        "and career preparation. "
+        "Include: internships, projects, workplace relevance, practical experience, employability. "
+        "Exclude: general curriculum organization, teacher quality, exams, mentoring."
     ),
+
     "Teachers": (
-        "Lecturers and instructors, teaching quality, explanations, subject expertise, "
-        "didactic skill, classroom teaching, teacher feedback, and teacher availability "
-        "for learning-related questions."
+        "Comments about teachers, lecturers, tutors, and instructors. Focus on teaching quality, "
+        "clarity of explanations, expertise, communication during lessons, availability for course-related "
+        "questions, enthusiasm, feedback quality, and classroom guidance. "
+        "Include: explanations, teaching style, expertise, responsiveness, teacher feedback. "
+        "Exclude: study coaching, personal wellbeing support, disabilities, special accommodations."
     ),
+
     "Support / Mentoring": (
-        "Mentors, study coaches, student advisors, counseling, personal guidance, "
-        "wellbeing support, non-academic support, supervision, and mentoring."
+        "Comments about coaching, mentoring, study guidance, personal support, academic advising, "
+        "student wellbeing support, accessibility of help, and individual guidance outside normal teaching. "
+        "Include: mentors, coaches, study advisors, personal guidance, wellbeing support. "
+        "Exclude: teacher performance in class, exams, grades, disabilities unless specifically about support received."
     ),
+
     "Examination & Assessment": (
-        "Exams, tests, assignments, grading, assessment criteria, rubrics, resits, "
-        "assessment alignment, and feedback on assessed work."
+        "Comments about exams, tests, assignments, grading, assessment criteria, rubrics, feedback "
+        "on assessment, fairness of grading, resits, deadlines related to assessment, and examination procedures. "
+        "Include: grades, exams, rubrics, assessment criteria, fairness, feedback on assignments. "
+        "Exclude: general teaching quality, curriculum organization, mentoring."
     ),
+
     "Engagement & Contact": (
-        "Student involvement, belonging, contact with classmates or staff, communication, "
-        "student voice, feeling heard, class atmosphere, community, and participation."
+        "Comments about communication, interaction, participation, student involvement, sense of community, "
+        "contact with fellow students, collaboration, responsiveness, and opportunities to provide input. "
+        "Include: communication, interaction, participation, student voice, community feeling. "
+        "Exclude: personal mentoring, teacher expertise, assessment quality."
     ),
+
     "Special Circumstances": (
-        "Accommodations for disability, illness, caregiving, financial stress, accessibility, "
-        "special personal circumstances, flexible arrangements, and study adjustments."
-    ),
+        "Comments about studying under special circumstances. Includes disabilities, ADHD, autism, "
+        "dyslexia, concentration difficulties, mental health challenges, stress, financial concerns, "
+        "accessibility issues, caring responsibilities, elite sports, employment, entrepreneurship, "
+        "family circumstances, and accommodations related to these situations. "
+        "Include: ADHD, dyslexia, accessibility, financial stress, disability support, work-study balance. "
+        "Exclude: general mentoring, normal academic support, teaching quality, curriculum organization."
+    )
+
 }
 
 METADATA_COLS = {
