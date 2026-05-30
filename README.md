@@ -70,34 +70,18 @@ make
 #### Windows
 
 1. Go to `https://github.com/ggerganov/llama.cpp/releases` and download the latest Windows zip.
-   - With an NVIDIA GPU: pick the `cuda-12.x` variant (e.g. `llama-bXXXX-bin-win-cuda-12.4-x64.zip`)
+   - NVIDIA GPU: pick the `cuda-12.x` variant
    - CPU only: pick the `avx2-x64` variant
 
-2. Extract the zip and check whether it bundles CUDA DLLs:
+2. Extract the zip to a permanent location of your choice (e.g. `C:\tools\llama.cpp`).
 
-```powershell
-dir C:\path\to\extracted\folder | findstr ggml-cuda
-```
+3. Either add the folder to your system PATH, or set `LLAMA_CPP_SERVER_BIN` in your `.env` to the full path of `llama-server.exe`. Both work — PATH is convenient if you also use llama-server from the terminal.
 
-   - If `ggml-cuda.dll` appears — the build is self-contained and GPU will work immediately.
-   - If nothing appears — the build requires the CUDA Toolkit 12.4 runtime to be installed separately (`developer.nvidia.com` → CUDA Toolkit 12.4). Without it the server silently falls back to CPU.
+4. Add to your `.env`:
 
-3. Move the extracted folder to a permanent location and add it to your PATH:
-
-```powershell
-New-Item -ItemType Directory -Path "C:\tools" -Force
-Move-Item "$env:USERPROFILE\Downloads\llama-bXXXX-bin-win-cuda-12.4-x64" "C:\tools\llama-bXXXX-bin-win-cuda-12.4-x64"
-[Environment]::SetEnvironmentVariable(
-    "PATH",
-    $env:PATH + ";C:\tools\llama-bXXXX-bin-win-cuda-12.4-x64",
-    "User"
-)
-```
-
-4. Restart your terminal, then verify:
-
-```powershell
-llama-server --version
+```env
+LLAMA_CPP_SERVER_BIN=C:\tools\llama.cpp\llama-server.exe
+LLAMA_CPP_N_GPU_LAYERS=99
 ```
 
 #### Enabling GPU on Windows (NVIDIA)
