@@ -132,8 +132,8 @@ PRESIDIO_OPERATORS = {
     "STUDENT_NUMBER": OperatorConfig("replace", {"new_value": "[PII]"}),
     "USERNAME": OperatorConfig("replace", {"new_value": "[PII]"}),
     "OBFUSCATED_EMAIL": OperatorConfig("replace", {"new_value": "[PII]"}),
-    "BUILDING_OR_ROOM": OperatorConfig("replace", {"new_value": "[PII]"}),
-    "FLOOR_REFERENCE": OperatorConfig("replace", {"new_value": "[LOCATION]"}),
+    "BUILDING_OR_ROOM": OperatorConfig("keep"),
+    "FLOOR_REFERENCE": OperatorConfig("keep"),
     "TEACHER_NAME_CONTEXT": OperatorConfig("replace", {"new_value": "[NAME]"}),
     "NL_BSN": OperatorConfig("replace", {"new_value": "[PII]"}),
     "DUTCH_POSTCODE": OperatorConfig("replace", {"new_value": "[LOCATION]"}),
@@ -254,12 +254,13 @@ def build_presidio_operators(config: Optional[dict] = None) -> dict:
         ops["TEACHER_NAME_CONTEXT"] = OperatorConfig("keep")
     if config.get("locations", True):
         ops["LOCATION"] = OperatorConfig("replace", {"new_value": "[LOCATION]"})
-        ops["FLOOR_REFERENCE"] = OperatorConfig("replace", {"new_value": "[LOCATION]"})
         ops["DUTCH_POSTCODE"] = OperatorConfig("replace", {"new_value": "[LOCATION]"})
     else:
         ops["LOCATION"] = OperatorConfig("keep")
-        ops["FLOOR_REFERENCE"] = OperatorConfig("keep")
         ops["DUTCH_POSTCODE"] = OperatorConfig("keep")
+    # Buildings and floors are always kept — Fontys wants to see which building is mentioned.
+    ops["BUILDING_OR_ROOM"] = OperatorConfig("keep")
+    ops["FLOOR_REFERENCE"] = OperatorConfig("keep")
     if config.get("titles", True):
         ops["DUTCH_HONORIFIC"] = OperatorConfig("replace", {"new_value": "[TITLE]"})
     else:
@@ -271,7 +272,6 @@ def build_presidio_operators(config: Optional[dict] = None) -> dict:
             "STUDENT_NUMBER",
             "USERNAME",
             "OBFUSCATED_EMAIL",
-            "BUILDING_OR_ROOM",
             "NL_BSN",
             "DUTCH_PHONE",
         ):
@@ -283,7 +283,6 @@ def build_presidio_operators(config: Optional[dict] = None) -> dict:
             "STUDENT_NUMBER",
             "USERNAME",
             "OBFUSCATED_EMAIL",
-            "BUILDING_OR_ROOM",
             "NL_BSN",
             "DUTCH_PHONE",
         ):
@@ -360,7 +359,6 @@ def presidio_masking_spec() -> dict:
             "STUDENT_NUMBER",
             "USERNAME",
             "OBFUSCATED_EMAIL",
-            "BUILDING_OR_ROOM",
             "NL_BSN",
             "DUTCH_PHONE",
         ],

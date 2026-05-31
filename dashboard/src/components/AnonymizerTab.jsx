@@ -48,6 +48,7 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
       },
     });
     setShowStats(true);
+    setStep(3);
   };
 
   const runCheck = async () => {
@@ -83,6 +84,7 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
               ...data.stats,
               columns: data.columns_anonymized,
             });
+            setStep(3);
           } else if (data.status === 'error') {
             setResult({ error: data.error });
             break;
@@ -98,10 +100,11 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
   };
 
   const MASKING_INFO = [
-    { tag: '[NAME]', meaning: 'Names / persons' },
-    { tag: '[LOCATION]', meaning: 'Addresses / locations' },
-    { tag: '[PII]', meaning: 'Identifiers (email, phone, BSN, student nr, usernames, etc.)' },
-    { tag: '[TITLE]', meaning: 'Titles (Meneer/Mevrouw, etc.)' },
+    { tag: '[NAME]',     meaning: 'Names / persons',                                           bg: 'bg-indigo-100', text: 'text-indigo-700', border: 'border-indigo-200' },
+    { tag: '[LOCATION]', meaning: 'Addresses / locations',                                    bg: 'bg-blue-100',   text: 'text-blue-700',   border: 'border-blue-200'   },
+    { tag: '[PII]',      meaning: 'Identifiers — email, phone, BSN, student nr, usernames',   bg: 'bg-purple-100', text: 'text-purple-700', border: 'border-purple-200' },
+    { tag: '[TITLE]',    meaning: 'Titles (Meneer / Mevrouw)',                                 bg: 'bg-rose-100',   text: 'text-rose-700',   border: 'border-rose-200'   },
+    { tag: '[HEALTH]',   meaning: 'Health info — illness, diagnosis, disability, medication',  bg: 'bg-emerald-100',text: 'text-emerald-700',border: 'border-emerald-200'},
   ];
 
   const LAYER_OPTIONS = [
@@ -430,11 +433,10 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
                 {MASKING_INFO.map((item) => (
                   <div
                     key={item.tag}
-                    className="px-3 py-2 bg-white rounded-lg border border-indigo-100 shadow-sm"
-                    title={item.meaning}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${item.border} ${item.bg} shadow-sm`}
                   >
-                    <span className="font-mono text-sm font-bold text-indigo-700">{item.tag}</span>
-                    <span className="ml-2 text-sm text-indigo-900">{item.meaning}</span>
+                    <span className={`font-mono text-xs font-black ${item.text}`}>{item.tag}</span>
+                    <span className="text-xs text-gray-600">{item.meaning}</span>
                   </div>
                 ))}
               </div>
@@ -716,10 +718,11 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
 
                 <div className="space-y-3">
                   {[
-                    { tag: '[NAME]',     key: 'NAME',     label: 'Names / persons',                      color: 'indigo' },
-                    { tag: '[LOCATION]', key: 'LOCATION', label: 'Addresses / locations',                color: 'blue'   },
-                    { tag: '[PII]',      key: 'PII',      label: 'Email, phone, BSN, student nr, etc.',  color: 'purple' },
-                    { tag: '[TITLE]',    key: 'TITLE',    label: 'Titles (Meneer, Mevrouw, etc.)',        color: 'rose'   },
+                    { tag: '[NAME]',     key: 'NAME',     label: 'Names / persons',                      color: 'indigo'  },
+                    { tag: '[LOCATION]', key: 'LOCATION', label: 'Addresses / locations',                color: 'blue'    },
+                    { tag: '[PII]',      key: 'PII',      label: 'Email, phone, BSN, student nr, etc.',  color: 'purple'  },
+                    { tag: '[TITLE]',    key: 'TITLE',    label: 'Titles (Meneer, Mevrouw, etc.)',        color: 'rose'    },
+                    { tag: '[HEALTH]',   key: 'HEALTH',   label: 'Health / medical information',         color: 'emerald' },
                   ].map(({ tag, key, label, color }) => {
                     const removed        = result.stats.tag_counts[key] ?? 0;
                     const missed         = result.stats.missed_counts?.[key] ?? 0;

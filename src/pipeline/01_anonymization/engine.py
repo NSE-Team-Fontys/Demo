@@ -256,11 +256,11 @@ def process_file_with_layers(
         _save_checkpoint(df, meta, sep)
 
     # --- Count what was masked (tags inserted into output) ---
-    _TAG_RE = re.compile(r'\[(NAME|PII|LOCATION|TITLE)\]')
+    _TAG_RE = re.compile(r'\[(NAME|PII|LOCATION|TITLE|HEALTH)\]')
     total_cells = 0
     affected_cells = 0
     total_entities = 0
-    tag_counts = {"NAME": 0, "PII": 0, "LOCATION": 0, "TITLE": 0}
+    tag_counts = {"NAME": 0, "PII": 0, "LOCATION": 0, "TITLE": 0, "HEALTH": 0}
 
     for col in columns_to_anonymize:
         if col in df.columns:
@@ -287,9 +287,9 @@ def process_file_with_layers(
     from .layers.privacy_pipeline import _filter_spans, unload_all_layer_models
 
     layer_config = {"names": True, "locations": True, "pii": True, "titles": True}
-    missed_counts = {"NAME": 0, "PII": 0, "LOCATION": 0, "TITLE": 0}
-    missed_samples = {"NAME": [], "PII": [], "LOCATION": [], "TITLE": []}
-    removed_samples = {"NAME": [], "PII": [], "LOCATION": [], "TITLE": []}
+    missed_counts = {"NAME": 0, "PII": 0, "LOCATION": 0, "TITLE": 0, "HEALTH": 0}
+    missed_samples = {"NAME": [], "PII": [], "LOCATION": [], "TITLE": [], "HEALTH": []}
+    removed_samples = {"NAME": [], "PII": [], "LOCATION": [], "TITLE": [], "HEALTH": []}
 
     for col in columns_to_anonymize:
         if col not in df.columns:
@@ -383,11 +383,11 @@ def run_check_stream(original_path: str, anonymized_path: str, columns: list, se
     yield json.dumps({"status": "progress", "message": f"{total_rows} rijen gevonden. Tags tellen...", "progress": 10}) + "\n"
 
     # Count tags in anonymized output
-    _TAG_RE = re.compile(r'\[(NAME|PII|LOCATION|TITLE)\]')
+    _TAG_RE = re.compile(r'\[(NAME|PII|LOCATION|TITLE|HEALTH)\]')
     total_cells = 0
     affected_cells = 0
     total_entities = 0
-    tag_counts = {"NAME": 0, "PII": 0, "LOCATION": 0, "TITLE": 0}
+    tag_counts = {"NAME": 0, "PII": 0, "LOCATION": 0, "TITLE": 0, "HEALTH": 0}
 
     for col in valid_cols:
         for val in df_anon[col]:
@@ -404,9 +404,9 @@ def run_check_stream(original_path: str, anonymized_path: str, columns: list, se
     yield json.dumps({"status": "progress", "message": "Presidio verificatie uitvoeren op originele tekst...", "progress": 20}) + "\n"
 
     layer_config = {"names": True, "locations": True, "pii": True, "titles": True}
-    missed_counts = {"NAME": 0, "PII": 0, "LOCATION": 0, "TITLE": 0}
-    missed_samples = {"NAME": [], "PII": [], "LOCATION": [], "TITLE": []}
-    removed_samples = {"NAME": [], "PII": [], "LOCATION": [], "TITLE": []}
+    missed_counts = {"NAME": 0, "PII": 0, "LOCATION": 0, "TITLE": 0, "HEALTH": 0}
+    missed_samples = {"NAME": [], "PII": [], "LOCATION": [], "TITLE": [], "HEALTH": []}
+    removed_samples = {"NAME": [], "PII": [], "LOCATION": [], "TITLE": [], "HEALTH": []}
 
     for col_idx, col in enumerate(valid_cols):
         base_progress = 20 + int(75 * (col_idx / len(valid_cols)))
