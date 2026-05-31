@@ -18,6 +18,7 @@ def theme_summary():
             llm_model=data.get("llm_model") or settings.DEFAULT_LLM_MODEL,
             allow_model_download=bool(data.get("allow_model_download", False)),
             provider=data.get("provider", settings.DEFAULT_LLM_PROVIDER),
+            filters=_filters_from_payload(data),
         )
         return jsonify(payload)
     except ValueError as exc:
@@ -51,6 +52,7 @@ def precompute_insights():
             custom_prompt=data.get("custom_prompt", ""),
             allow_model_download=bool(data.get("allow_model_download", False)),
             provider=data.get("provider", settings.DEFAULT_LLM_PROVIDER),
+            filters=_filters_from_payload(data),
         ),
         mimetype="application/x-ndjson",
     )
@@ -83,3 +85,22 @@ def get_themes_overview():
         if value and value != "All":
             filters[key] = value
     return jsonify(generation.themes_overview_payload(filters))
+
+
+def _filters_from_payload(data: dict) -> dict:
+    raw_filters = data.get("filters") or {}
+    if not isinstance(raw_filters, dict):
+        raw_filters = {}
+    filters = {}
+    for key in [
+        "institution",
+        "academic_year",
+        "location",
+        "programme",
+        "study_mode",
+        "cohort",
+    ]:
+        value = raw_filters.get(key) or data.get(key)
+        if value and value not in {"All", "all"}:
+            filters[key] = value
+    return filters
