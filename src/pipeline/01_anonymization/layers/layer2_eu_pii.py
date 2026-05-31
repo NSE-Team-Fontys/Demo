@@ -70,6 +70,8 @@ def _eu_pii_tag(entity_group: str) -> str:
         return "[NAME]"
     if any(k in label for k in ("CITY", "ADDRESS", "STREET", "LOCATION", "ZIPCODE", "POSTAL", "STATE", "COUNTRY", "REGION")):
         return "[LOCATION]"
+    if any(k in label for k in ("HEALTH", "MEDICAL", "CONDITION", "DIAGNOSIS", "ILLNESS", "DISEASE", "DISABILITY", "MEDICATION")):
+        return "[HEALTH]"
     return "[PII]"
 
 
@@ -81,6 +83,8 @@ def _config_allows_tag(config: Optional[dict], tag: str) -> bool:
     if tag == "[LOCATION]":
         return bool(config.get("locations", True))
     if tag == "[PII]":
+        return bool(config.get("pii", True))
+    if tag == "[HEALTH]":
         return bool(config.get("pii", True))
     return True
 
@@ -178,5 +182,6 @@ def eu_pii_masking_spec() -> dict:
     return {
         "[NAME]": ["*NAME*", "*PERSON*"],
         "[LOCATION]": ["*ADDRESS*", "*CITY*", "*ZIPCODE*", "*LOCATION*"],
+        "[HEALTH]": ["*HEALTH*", "*MEDICAL*", "*CONDITION*", "*DIAGNOSIS*", "*ILLNESS*", "*DISEASE*", "*DISABILITY*", "*MEDICATION*"],
         "[PII]": ["(everything else: email/phone/iban/ids/etc.)"],
     }
