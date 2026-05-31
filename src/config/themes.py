@@ -143,7 +143,7 @@ THEME_EMBEDDING_DEFINITIONS = {
         "Bijzondere omstandigheden, functiebeperking, beperking, handicap, ADHD, autisme, "
         "dyslexie, concentratieproblemen, mentale gezondheid, psychische klachten, stress, "
         "financiele zorgen, mantelzorg, topsport, werk naast studie, familieomstandigheden, "
-        "toegankelijkheid, voorzieningen, aanpassingen, extra tijd, accommodations."
+        "toegankelijkheid, voorzieningen, HEALTH, aanpassingen, extra tijd, accommodations."
     )
 
 }
