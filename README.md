@@ -57,7 +57,7 @@ The generation stage uses `llama-server` for local LLM inference. The app can st
 ```bash
 brew install llama.cpp
 ```
-
+tail -f logs/llama-server.log
 #### Linux
 
 ```bash
