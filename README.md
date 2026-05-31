@@ -57,7 +57,7 @@ The generation stage uses `llama-server` for local LLM inference. The app can st
 ```bash
 brew install llama.cpp
 ```
-
+tail -f logs/llama-server.log
 #### Linux
 
 ```bash
@@ -150,6 +150,8 @@ RERANKER_MODEL=zeroentropy/zerank-2-reranker
 RERANKER_CANDIDATE_MULTIPLIER=5
 RERANKER_MAX_CANDIDATES=100
 LLM_CONTEXT_DOCUMENTS=100
+HIERARCHICAL_RAG_BATCH_DOCUMENTS=60
+HIERARCHICAL_RAG_MAX_DOCUMENTS=0
 DEFAULT_LLM_PROVIDER=llama.cpp
 DEFAULT_LLM_MODEL=unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL
 LLAMA_CPP_BASE_URL=http://127.0.0.1:8080
@@ -157,6 +159,14 @@ LLAMA_CPP_API_KEY=no-key
 LLAMA_CPP_SERVER_BIN=C:\tools\llama.cpp\llama-server.exe
 LLAMA_CPP_N_GPU_LAYERS=99
 ```
+
+For theme insight generation, the important hierarchical RAG limit is
+`HIERARCHICAL_RAG_BATCH_DOCUMENTS`. The default is `60`, so each map-step
+small summary reads up to 60 answers. `RERANKER_MAX_CANDIDATES` still exists,
+but it applies to ad-hoc vector query/reranking endpoints, not to the number of
+answers analyzed for a theme insight. `LLM_CONTEXT_DOCUMENTS` is retained for
+legacy/single-prompt compatibility and cache invalidation; it is no longer the
+main cap for hierarchical theme summaries.
 
 `MODEL_DEVICE=auto` prefers CUDA, then Apple MPS, then CPU. On a Mac, set `MODEL_DEVICE=mps` to force the PyTorch-backed anonymization layer onto the Apple GPU. Presidio/spaCy still runs on CPU; the EU-PII / Transformer layer is the part that can use MPS.
 
@@ -411,9 +421,13 @@ Behavior:
 - Uses local llama.cpp at `http://127.0.0.1:8080` by default.
 - Checks llama.cpp availability and the selected Gemma GGUF model before generation.
 - Supports these Unsloth dynamic Q4 model ids: `unsloth/gemma-4-E2B-it-GGUF:UD-Q4_K_XL`, `unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL`, `unsloth/gemma-4-26B-A4B-it-GGUF:UD-Q4_K_M`, and `unsloth/gemma-4-31B-it-GGUF:UD-Q4_K_XL`.
-- Retrieves and reranks context before building the prompt.
-- Sends up to `LLM_CONTEXT_DOCUMENTS` reranked answers to the LLM. The default is `100`.
+- Uses semantic hierarchical RAG for theme insights instead of fixing answers to their original survey question.
+- First applies metadata filters, then compares every remaining answer with every theme embedding and assigns each answer to the closest theme.
+- Splits the assigned answers into map batches of `HIERARCHICAL_RAG_BATCH_DOCUMENTS` answers. The default is `60` answers per small summary.
+- Generates one JSON summary per batch, then sends those batch summaries into a final reduce prompt that produces the dashboard insight.
+- `HIERARCHICAL_RAG_MAX_DOCUMENTS=0` means no artificial document cap; set it above `0` to sample only the closest assigned answers during testing.
 - Successful summaries are cached in `gemma_cache.json`.
+- Cache entries include the applied filters, so a summary for all students is separate from a summary for only ICT students.
 - Failed generations are not cached as successful insights.
 - `/api/themes-overview` returns cached insight cards and uses Stage 03 retrieval for filtered theme frequencies.
 

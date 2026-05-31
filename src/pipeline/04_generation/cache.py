@@ -2,7 +2,11 @@ from importlib import import_module
 import json
 
 from src.config.paths import CACHE_FILE
-from src.config.settings import INSIGHT_CACHE_VERSION, LLM_CONTEXT_DOCUMENTS
+from src.config.settings import (
+    HIERARCHICAL_RAG_BATCH_DOCUMENTS,
+    INSIGHT_CACHE_VERSION,
+    LLM_CONTEXT_DOCUMENTS,
+)
 
 retrieval = import_module("src.pipeline.03_retrieval.service")
 
@@ -44,6 +48,8 @@ def cache_matches_generation_settings(
     matches = (
         cached_theme.get("cache_version") == INSIGHT_CACHE_VERSION
         and cached_theme.get("llm_context_documents") == LLM_CONTEXT_DOCUMENTS
+        and cached_theme.get("hierarchical_batch_documents")
+        == HIERARCHICAL_RAG_BATCH_DOCUMENTS
         and cached_theme.get("reranker") == retrieval.current_reranker_id()
     )
     if match_llm_identity and llm_provider is not None:
