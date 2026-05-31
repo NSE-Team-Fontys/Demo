@@ -10,6 +10,20 @@ presidio-anonymizer
 transformers
 langdetect
 spacy
+# spaCy GPU acceleration — pip picks the right one per platform.
+# Windows/Linux: cupy needs CUDA 12.x runtime DLLs (nvrtc, cudart, cublas) at
+#                load time. Even with a system NVIDIA CUDA Toolkit installed,
+#                cupy fails to locate the DLLs unless CUDA_PATH is set, so we
+#                pin the self-contained NVIDIA wheels — pip drops the DLLs into
+#                site-packages and cupy finds them automatically. Harmless when
+#                a toolkit is also present. ~660 MB total.
+#                spacy.prefer_gpu() falls back gracefully when no GPU is found.
+# macOS:         thinc-apple-ops routes spaCy matmul through Accelerate.
+cupy-cuda12x; sys_platform != "darwin"
+nvidia-cuda-nvrtc-cu12; sys_platform != "darwin"
+nvidia-cuda-runtime-cu12; sys_platform != "darwin"
+nvidia-cublas-cu12; sys_platform != "darwin"
+thinc-apple-ops; sys_platform == "darwin"
 # spaCy large language models (NL + EN) for Presidio NER
 https://github.com/explosion/spacy-models/releases/download/nl_core_news_lg-3.8.0/nl_core_news_lg-3.8.0-py3-none-any.whl
 https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.8.0/en_core_web_lg-3.8.0-py3-none-any.whl

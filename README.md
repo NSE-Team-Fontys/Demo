@@ -127,6 +127,15 @@ To run the server manually instead, start it before clicking Generate and leave 
 llama-server -hf unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL -c 32000 -ngl 99
 ```
 
+### Presidio (Layer 1) GPU acceleration
+
+Layer 1 uses spaCy and follows the same `MODEL_DEVICE` setting as the rest of the pipeline. The required accelerators are pinned in `requirements.txt` with platform markers, so `pip install -r requirements.txt` is enough:
+
+- **NVIDIA CUDA (Windows/Linux):** `cupy-cuda12x` plus the self-contained NVIDIA CUDA 12.x runtime DLL wheels (`nvidia-cuda-nvrtc-cu12`, `nvidia-cuda-runtime-cu12`, `nvidia-cublas-cu12`) are pinned in `requirements.txt`. The DLL wheels add ~660 MB to a fresh install but make GPU activation reliable even when no system CUDA Toolkit is present or `CUDA_PATH` is unset.
+- **Apple Silicon (macOS):** `thinc-apple-ops` is installed automatically.
+
+Look for `Presidio spaCy running on GPU (cuda:0)` in the server logs to confirm the GPU is active. If you see `spaCy could not activate CUDA — falling back to CPU`, re-run `pip install -r requirements.txt` and restart the Flask backend.
+
 ## Environment
 
 Create `.env` in the project root when you need Hugging Face downloads:

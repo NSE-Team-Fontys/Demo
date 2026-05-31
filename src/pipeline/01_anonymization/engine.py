@@ -285,6 +285,13 @@ def process_file_with_layers(
 
     from .layers.layer1_presidio import collect_presidio_spans
     from .layers.privacy_pipeline import _filter_spans, unload_all_layer_models
+    try:
+        from .layers.layer2_eu_pii import eu_pii_collect_batch, ensure_eu_pii_available
+        ensure_eu_pii_available()
+        _eu_pii_ok = True
+    except Exception as e:
+        logger.info("EU-PII unavailable for verification (%s) — HEALTH samples will be empty.", e)
+        _eu_pii_ok = False
 
     layer_config = {"names": True, "locations": True, "pii": True, "titles": True}
     missed_counts = {"NAME": 0, "PII": 0, "LOCATION": 0, "TITLE": 0, "HEALTH": 0}
@@ -294,6 +301,24 @@ def process_file_with_layers(
     for col in columns_to_anonymize:
         if col not in df.columns:
             continue
+
+        # Batch EU-PII spans for the whole column at once (transformer hates row-by-row)
+        col_eu_spans_by_idx: dict[int, list] = {}
+        if _eu_pii_ok and col in original_texts:
+            col_indices: list[int] = []
+            col_texts: list[str] = []
+            for idx in range(len(df)):
+                ov = original_texts[col].iloc[idx]
+                if isinstance(ov, str) and ov.strip():
+                    col_indices.append(idx)
+                    col_texts.append(ov)
+            if col_texts:
+                try:
+                    batched = eu_pii_collect_batch(col_texts, layer_config)
+                    col_eu_spans_by_idx = dict(zip(col_indices, batched))
+                except Exception as e:
+                    logger.warning("EU-PII verification batch failed for column '%s': %s", col, e)
+
         for idx in range(len(df)):
             original_val = original_texts.get(col, pd.Series(dtype=str)).iloc[idx] if col in original_texts else None
             anonymized_val = df[col].iloc[idx]
@@ -301,8 +326,9 @@ def process_file_with_layers(
             if pd.isna(original_val) or not isinstance(original_val, str) or not original_val.strip():
                 continue
 
-            # Detect on clean original text, then apply the same filters as the main pipeline
+            # Combine Presidio + EU-PII spans so HEALTH (and other layer-2-only entities) are attributed.
             raw_spans = collect_presidio_spans(original_val, layer_config)
+            raw_spans = list(raw_spans) + list(col_eu_spans_by_idx.get(idx, []))
             filtered_spans = _filter_spans(original_val, raw_spans, layer_config)
             for start, end, tag in filtered_spans:
                 key = tag.strip("[]")
@@ -364,6 +390,13 @@ def run_check_stream(original_path: str, anonymized_path: str, columns: list, se
     """
     from .layers.layer1_presidio import collect_presidio_spans
     from .layers.privacy_pipeline import _filter_spans
+    try:
+        from .layers.layer2_eu_pii import eu_pii_collect_batch, ensure_eu_pii_available
+        ensure_eu_pii_available()
+        _eu_pii_ok = True
+    except Exception as e:
+        logger.info("EU-PII unavailable for verification (%s) — HEALTH samples will be empty.", e)
+        _eu_pii_ok = False
 
     yield json.dumps({"status": "progress", "message": "Bestanden inlezen...", "progress": 5}) + "\n"
 
@@ -416,6 +449,23 @@ def run_check_stream(original_path: str, anonymized_path: str, columns: list, se
             "progress": base_progress,
         }) + "\n"
 
+        # Batch EU-PII spans for the whole column (transformer hates row-by-row).
+        col_eu_spans_by_idx: dict[int, list] = {}
+        if _eu_pii_ok:
+            col_indices: list[int] = []
+            col_texts: list[str] = []
+            for idx in range(total_rows):
+                ov = df_original[col].iloc[idx]
+                if isinstance(ov, str) and ov.strip():
+                    col_indices.append(idx)
+                    col_texts.append(ov)
+            if col_texts:
+                try:
+                    batched = eu_pii_collect_batch(col_texts, layer_config)
+                    col_eu_spans_by_idx = dict(zip(col_indices, batched))
+                except Exception as e:
+                    logger.warning("EU-PII verification batch failed for column '%s': %s", col, e)
+
         for idx in range(total_rows):
             original_val = df_original[col].iloc[idx]
             anonymized_val = df_anon[col].iloc[idx]
@@ -424,6 +474,7 @@ def run_check_stream(original_path: str, anonymized_path: str, columns: list, se
                 continue
 
             raw_spans = collect_presidio_spans(original_val, layer_config)
+            raw_spans = list(raw_spans) + list(col_eu_spans_by_idx.get(idx, []))
             filtered_spans = _filter_spans(original_val, raw_spans, layer_config)
             for start, end, tag in filtered_spans:
                 key = tag.strip("[]")
