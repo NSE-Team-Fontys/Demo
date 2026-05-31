@@ -335,7 +335,16 @@ def process_file_with_layers(
                 if key not in missed_counts:
                     continue
                 entity_text = original_val[start:end]
-                if isinstance(anonymized_val, str) and entity_text.lower() in anonymized_val.lower():
+                # Skip subword/fragment artifacts emitted by HF tokenizers
+                # (e.g. "HD" from "ADHD", "stoor" from "stoornis").
+                if len(entity_text.strip()) < 3:
+                    continue
+                # Word-boundary match avoids substring false positives like
+                # "burn" being found inside "[HEALTH] burn-out".
+                survived = isinstance(anonymized_val, str) and bool(
+                    re.search(rf"\b{re.escape(entity_text)}\b", anonymized_val, re.IGNORECASE)
+                )
+                if survived:
                     missed_counts[key] += 1
                     if entity_text not in missed_samples[key]:
                         missed_samples[key].append(entity_text)
@@ -481,7 +490,16 @@ def run_check_stream(original_path: str, anonymized_path: str, columns: list, se
                 if key not in missed_counts:
                     continue
                 entity_text = original_val[start:end]
-                if isinstance(anonymized_val, str) and entity_text.lower() in anonymized_val.lower():
+                # Skip subword/fragment artifacts emitted by HF tokenizers
+                # (e.g. "HD" from "ADHD", "stoor" from "stoornis").
+                if len(entity_text.strip()) < 3:
+                    continue
+                # Word-boundary match avoids substring false positives like
+                # "burn" being found inside "[HEALTH] burn-out".
+                survived = isinstance(anonymized_val, str) and bool(
+                    re.search(rf"\b{re.escape(entity_text)}\b", anonymized_val, re.IGNORECASE)
+                )
+                if survived:
                     missed_counts[key] += 1
                     if entity_text not in missed_samples[key]:
                         missed_samples[key].append(entity_text)
