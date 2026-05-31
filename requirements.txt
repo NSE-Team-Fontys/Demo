@@ -4,14 +4,10 @@ python-dotenv
 requests
 pandas
 chromadb
-sentence-transformers<5
+sentence-transformers
 presidio-analyzer
 presidio-anonymizer
-# transformers 5.x's continuous_batching module eagerly imports
-# torch.distributed.tensor, which double-registers wait_tensor and crashes
-# `import app` on CPU torch builds (Linux CI). 4.x has no such import path
-# and supports the basic HF pipeline APIs we use.
-transformers<5
+transformers
 langdetect
 spacy
 # spaCy GPU acceleration — pip picks the right one per platform.
