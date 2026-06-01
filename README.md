@@ -67,22 +67,40 @@ make
 # Add the build output directory to your PATH
 ```
 
-#### Windows
+#### Windows (Build from Source with CUDA)
 
-1. Go to `https://github.com/ggerganov/llama.cpp/releases` and download the latest Windows zip.
-   - NVIDIA GPU: pick the `cuda-12.x` variant
-   - CPU only: pick the `avx2-x64` variant
+To build `llama.cpp` from source with GPU support on Windows, you must have the **NVIDIA CUDA Toolkit**, **Visual Studio C++ Build Tools**, and **CMake** installed.
 
-2. Extract the zip to a permanent location of your choice (e.g. `C:\tools\llama.cpp`).
+1. **Install CMake** (if not already installed):
+   Open PowerShell and run:
+   ```powershell
+   winget install --id Kitware.CMake -e --source winget
+   ```
+   *Restart your PowerShell/terminal after installing.*
 
-3. Either add the folder to your system PATH, or set `LLAMA_CPP_SERVER_BIN` in your `.env` to the full path of `llama-server.exe`. Both work — PATH is convenient if you also use llama-server from the terminal.
+2. **Clone the repository**:
+   ```powershell
+   git clone https://github.com/ggerganov/llama.cpp
+   cd llama.cpp
+   ```
 
-4. Add to your `.env`:
+3. **Configure the build for CUDA**:
+   ```powershell
+   cmake -B build -DGGML_CUDA=ON
+   ```
 
-```env
-LLAMA_CPP_SERVER_BIN=C:\tools\llama.cpp\llama-server.exe
-LLAMA_CPP_N_GPU_LAYERS=99
-```
+4. **Compile the server**:
+   ```powershell
+   cmake --build build --config Release -j
+   ```
+   *This compiles `llama-server.exe` into the `build\bin\Release` directory.*
+
+5. **Configure your environment**:
+   Point your `.env` file to the newly compiled binary and set the GPU layers:
+   ```env
+   LLAMA_CPP_SERVER_BIN=build\bin\Release\llama-server.exe
+   LLAMA_CPP_N_GPU_LAYERS=99
+   ```
 
 #### Enabling GPU on Windows (NVIDIA)
 
