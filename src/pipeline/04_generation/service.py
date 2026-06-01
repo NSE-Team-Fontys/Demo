@@ -237,16 +237,30 @@ def generate_theme_summary(
         print(f"[LLM] Cache miss - generating summary for: {theme_name}")
         client.ensure_model_available(llm_model, allow_download=allow_model_download)
 
-    collection = retrieval.get_collection()
-    selected = _select_theme_documents(
-        collection,
-        theme_name,
-        batch_summaries,
-        source_document_count=len(docs),
-    )
-    return prompts.parse_llm_json(
-        client.generate_json(llm_model, reduce_prompt, timeout=600)
-    )
+        collection = retrieval.get_collection()
+        response_data = _generate_theme_payload(
+            client=client,
+            collection=collection,
+            theme_name=theme_name,
+            filters=filters,
+            provider=provider,
+            llm_model=llm_model,
+            llm_generation_settings=llm_generation_settings,
+        )
+        print(
+            f"[LLM] Hierarchical RAG analyzed "
+            f"{response_data['hierarchical_document_count']} / "
+            f"{response_data['document_count']} semantically assigned docs for "
+            f"{theme_name}."
+        )
+
+        cache[cache_key] = response_data
+        save_cache(cache)
+        print(f"[LLM] Saved summary to cache for: {theme_name}")
+
+        return response_data
+    finally:
+        client.unload(llm_model)
 
 
 def _empty_theme_payload(
@@ -298,28 +312,24 @@ def _theme_payload_from_parsed(
     llm_generation_settings: dict | None,
 ) -> dict:
     relevant_docs = selected["relevant_docs"]
-    llm_docs = selected["llm_docs"]
-    prompt = prompts.build_prompt(theme_name, llm_docs)
-    real_quotes = relevant_docs[:3] if len(relevant_docs) >= 3 else relevant_docs
-
-    print(
-        f"[GEMMA] Reranked {selected['vector_relevant_count']} relevant docs; "
-        f"sending {len(llm_docs)} docs to local {provider}..."
-    )
-    result_text = client.generate_json(ollama_model, prompt, timeout=600)
-    print(f"[GEMMA] Raw response received: {result_text}")
-    parsed = prompts.parse_llm_json(result_text)
-
     sentiments = parsed.get("sentiments", [])
-    response_data = {
+    return {
         "status": "success",
         "theme": theme_name,
         "frequency": selected["frequency"],
-        "document_count": len(relevant_docs),
+        "document_count": selected["source_document_count"],
         "vector_relevant_count": selected["vector_relevant_count"],
-        "llm_document_count": len(llm_docs),
+        "total_filtered_documents": selected["total_filtered_documents"],
+        "llm_document_count": selected["analyzed_document_count"],
+        "hierarchical_document_count": selected["analyzed_document_count"],
+        "hierarchical_batch_documents": HIERARCHICAL_RAG_BATCH_DOCUMENTS,
+        "rag_strategy": HIERARCHICAL_RAG_STRATEGY,
+        "filters_applied": filters,
         "cache_version": INSIGHT_CACHE_VERSION,
         "llm_context_documents": LLM_CONTEXT_DOCUMENTS,
+        "llm_provider": provider,
+        "llm_model": llm_model,
+        "llm_generation_settings": llm_generation_settings,
         "reranker": retrieval.current_reranker_id(),
         "summary": parsed.get("summary", "Summary could not be parsed."),
         "sentiments": sentiments,
@@ -330,17 +340,8 @@ def _theme_payload_from_parsed(
         "subtheme_mentions": insight_metrics.subtheme_mention_rows(
             parsed.get("subthemes", []), relevant_docs
         ),
-        "quotes": real_quotes,
+        "quotes": relevant_docs[:3],
     }
-
-    if sentiments:
-        cache[theme_name] = response_data
-        save_cache(cache)
-        print(f"[LLM] Saved summary to cache for: {theme_name}")
-
-        return response_data
-    finally:
-        client.unload(llm_model)
 
 
 def precompute_insights_stream(
