@@ -25,6 +25,7 @@ __pycache__/
 *.egg-info/
 .eggs/
 .python-version
+!.python-version
 venv/
 ENV/
 env/
@@ -76,3 +77,4 @@ data/
 
 # llama.cpp 
 llama.cpp/
+.python-version

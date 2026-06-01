@@ -16,13 +16,17 @@ The project is built for demos and applied research, not production deployment.
 
 ### Backend
 
+Use Python 3.12 for the backend on MAC. Python 3.14 is too new for some of the
+NLP dependencies in `requirements.txt` and may try to compile packages such as
+`thinc-apple-ops` from source.
+
 macOS/Linux:
 
 ```bash
 cd /path/to/Demo
-python -m venv .venv
+python3.12 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 python app.py
 ```
 
@@ -79,6 +83,7 @@ To build `llama.cpp` from source with GPU support on Windows, you must have the 
    *Restart your PowerShell/terminal after installing.*
 
 2. **Clone the repository**:
+   Open a terminal in the root folder of this project (the `Demo` directory) and run:
    ```powershell
    git clone https://github.com/ggerganov/llama.cpp
    cd llama.cpp
@@ -96,11 +101,29 @@ To build `llama.cpp` from source with GPU support on Windows, you must have the 
    *This compiles `llama-server.exe` into the `build\bin\Release` directory.*
 
 5. **Configure your environment**:
-   Point your `.env` file to the newly compiled binary and set the GPU layers:
+   Since you cloned it inside the project, point your `.env` file to the compiled binary inside the `llama.cpp` folder and set the GPU layers:
    ```env
-   LLAMA_CPP_SERVER_BIN=build\bin\Release\llama-server.exe
+   LLAMA_CPP_SERVER_BIN=llama.cpp\build\bin\Release\llama-server.exe
    LLAMA_CPP_N_GPU_LAYERS=99
    ```
+
+#### Verify the installation
+
+After installing, run:
+
+```bash
+llama-server --version
+```
+
+If the version prints correctly, start the server once manually to trigger the model download:
+
+```bash
+llama-server -hf unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL -c 32000 -ngl 99
+```
+
+Wait until the server prints `listening`, then close it. After that the app can manage the server automatically.
+
+If `llama-server --version` gives an error, restart your computer and try the commands above again.
 
 #### Enabling GPU on Windows (NVIDIA)
 
