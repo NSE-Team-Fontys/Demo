@@ -75,6 +75,8 @@ def _tag(group: str) -> str:
         return "[NAME]"
     if label == "private_address":
         return "[LOCATION]"
+    if any(k in label for k in ("health", "medical", "condition", "diagnosis", "illness", "disease", "disability", "medication")):
+        return "[HEALTH]"
     return "[PII]"
 
 
@@ -86,6 +88,8 @@ def _config_allows(config: Optional[dict], tag: str) -> bool:
     if tag == "[LOCATION]":
         return bool(config.get("locations", True))
     if tag == "[PII]":
+        return bool(config.get("pii", True))
+    if tag == "[HEALTH]":
         return bool(config.get("pii", True))
     return True
 

@@ -256,11 +256,11 @@ def process_file_with_layers(
         _save_checkpoint(df, meta, sep)
 
     # --- Count what was masked (tags inserted into output) ---
-    _TAG_RE = re.compile(r'\[(NAME|PII|LOCATION|TITLE)\]')
+    _TAG_RE = re.compile(r'\[(NAME|PII|LOCATION|TITLE|HEALTH)\]')
     total_cells = 0
     affected_cells = 0
     total_entities = 0
-    tag_counts = {"NAME": 0, "PII": 0, "LOCATION": 0, "TITLE": 0}
+    tag_counts = {"NAME": 0, "PII": 0, "LOCATION": 0, "TITLE": 0, "HEALTH": 0}
 
     for col in columns_to_anonymize:
         if col in df.columns:
@@ -285,15 +285,40 @@ def process_file_with_layers(
 
     from .layers.layer1_presidio import collect_presidio_spans
     from .layers.privacy_pipeline import _filter_spans, unload_all_layer_models
+    try:
+        from .layers.layer2_eu_pii import eu_pii_collect_batch, ensure_eu_pii_available
+        ensure_eu_pii_available()
+        _eu_pii_ok = True
+    except Exception as e:
+        logger.info("EU-PII unavailable for verification (%s) — HEALTH samples will be empty.", e)
+        _eu_pii_ok = False
 
     layer_config = {"names": True, "locations": True, "pii": True, "titles": True}
-    missed_counts = {"NAME": 0, "PII": 0, "LOCATION": 0, "TITLE": 0}
-    missed_samples = {"NAME": [], "PII": [], "LOCATION": [], "TITLE": []}
-    removed_samples = {"NAME": [], "PII": [], "LOCATION": [], "TITLE": []}
+    missed_counts = {"NAME": 0, "PII": 0, "LOCATION": 0, "TITLE": 0, "HEALTH": 0}
+    missed_samples = {"NAME": [], "PII": [], "LOCATION": [], "TITLE": [], "HEALTH": []}
+    removed_samples = {"NAME": [], "PII": [], "LOCATION": [], "TITLE": [], "HEALTH": []}
 
     for col in columns_to_anonymize:
         if col not in df.columns:
             continue
+
+        # Batch EU-PII spans for the whole column at once (transformer hates row-by-row)
+        col_eu_spans_by_idx: dict[int, list] = {}
+        if _eu_pii_ok and col in original_texts:
+            col_indices: list[int] = []
+            col_texts: list[str] = []
+            for idx in range(len(df)):
+                ov = original_texts[col].iloc[idx]
+                if isinstance(ov, str) and ov.strip():
+                    col_indices.append(idx)
+                    col_texts.append(ov)
+            if col_texts:
+                try:
+                    batched = eu_pii_collect_batch(col_texts, layer_config)
+                    col_eu_spans_by_idx = dict(zip(col_indices, batched))
+                except Exception as e:
+                    logger.warning("EU-PII verification batch failed for column '%s': %s", col, e)
+
         for idx in range(len(df)):
             original_val = original_texts.get(col, pd.Series(dtype=str)).iloc[idx] if col in original_texts else None
             anonymized_val = df[col].iloc[idx]
@@ -301,15 +326,25 @@ def process_file_with_layers(
             if pd.isna(original_val) or not isinstance(original_val, str) or not original_val.strip():
                 continue
 
-            # Detect on clean original text, then apply the same filters as the main pipeline
+            # Combine Presidio + EU-PII spans so HEALTH (and other layer-2-only entities) are attributed.
             raw_spans = collect_presidio_spans(original_val, layer_config)
+            raw_spans = list(raw_spans) + list(col_eu_spans_by_idx.get(idx, []))
             filtered_spans = _filter_spans(original_val, raw_spans, layer_config)
             for start, end, tag in filtered_spans:
                 key = tag.strip("[]")
                 if key not in missed_counts:
                     continue
                 entity_text = original_val[start:end]
-                if isinstance(anonymized_val, str) and entity_text.lower() in anonymized_val.lower():
+                # Skip subword/fragment artifacts emitted by HF tokenizers
+                # (e.g. "HD" from "ADHD", "stoor" from "stoornis").
+                if len(entity_text.strip()) < 3:
+                    continue
+                # Word-boundary match avoids substring false positives like
+                # "burn" being found inside "[HEALTH] burn-out".
+                survived = isinstance(anonymized_val, str) and bool(
+                    re.search(rf"\b{re.escape(entity_text)}\b", anonymized_val, re.IGNORECASE)
+                )
+                if survived:
                     missed_counts[key] += 1
                     if entity_text not in missed_samples[key]:
                         missed_samples[key].append(entity_text)
@@ -364,6 +399,13 @@ def run_check_stream(original_path: str, anonymized_path: str, columns: list, se
     """
     from .layers.layer1_presidio import collect_presidio_spans
     from .layers.privacy_pipeline import _filter_spans
+    try:
+        from .layers.layer2_eu_pii import eu_pii_collect_batch, ensure_eu_pii_available
+        ensure_eu_pii_available()
+        _eu_pii_ok = True
+    except Exception as e:
+        logger.info("EU-PII unavailable for verification (%s) — HEALTH samples will be empty.", e)
+        _eu_pii_ok = False
 
     yield json.dumps({"status": "progress", "message": "Bestanden inlezen...", "progress": 5}) + "\n"
 
@@ -383,11 +425,11 @@ def run_check_stream(original_path: str, anonymized_path: str, columns: list, se
     yield json.dumps({"status": "progress", "message": f"{total_rows} rijen gevonden. Tags tellen...", "progress": 10}) + "\n"
 
     # Count tags in anonymized output
-    _TAG_RE = re.compile(r'\[(NAME|PII|LOCATION|TITLE)\]')
+    _TAG_RE = re.compile(r'\[(NAME|PII|LOCATION|TITLE|HEALTH)\]')
     total_cells = 0
     affected_cells = 0
     total_entities = 0
-    tag_counts = {"NAME": 0, "PII": 0, "LOCATION": 0, "TITLE": 0}
+    tag_counts = {"NAME": 0, "PII": 0, "LOCATION": 0, "TITLE": 0, "HEALTH": 0}
 
     for col in valid_cols:
         for val in df_anon[col]:
@@ -404,9 +446,9 @@ def run_check_stream(original_path: str, anonymized_path: str, columns: list, se
     yield json.dumps({"status": "progress", "message": "Presidio verificatie uitvoeren op originele tekst...", "progress": 20}) + "\n"
 
     layer_config = {"names": True, "locations": True, "pii": True, "titles": True}
-    missed_counts = {"NAME": 0, "PII": 0, "LOCATION": 0, "TITLE": 0}
-    missed_samples = {"NAME": [], "PII": [], "LOCATION": [], "TITLE": []}
-    removed_samples = {"NAME": [], "PII": [], "LOCATION": [], "TITLE": []}
+    missed_counts = {"NAME": 0, "PII": 0, "LOCATION": 0, "TITLE": 0, "HEALTH": 0}
+    missed_samples = {"NAME": [], "PII": [], "LOCATION": [], "TITLE": [], "HEALTH": []}
+    removed_samples = {"NAME": [], "PII": [], "LOCATION": [], "TITLE": [], "HEALTH": []}
 
     for col_idx, col in enumerate(valid_cols):
         base_progress = 20 + int(75 * (col_idx / len(valid_cols)))
@@ -416,6 +458,23 @@ def run_check_stream(original_path: str, anonymized_path: str, columns: list, se
             "progress": base_progress,
         }) + "\n"
 
+        # Batch EU-PII spans for the whole column (transformer hates row-by-row).
+        col_eu_spans_by_idx: dict[int, list] = {}
+        if _eu_pii_ok:
+            col_indices: list[int] = []
+            col_texts: list[str] = []
+            for idx in range(total_rows):
+                ov = df_original[col].iloc[idx]
+                if isinstance(ov, str) and ov.strip():
+                    col_indices.append(idx)
+                    col_texts.append(ov)
+            if col_texts:
+                try:
+                    batched = eu_pii_collect_batch(col_texts, layer_config)
+                    col_eu_spans_by_idx = dict(zip(col_indices, batched))
+                except Exception as e:
+                    logger.warning("EU-PII verification batch failed for column '%s': %s", col, e)
+
         for idx in range(total_rows):
             original_val = df_original[col].iloc[idx]
             anonymized_val = df_anon[col].iloc[idx]
@@ -424,13 +483,23 @@ def run_check_stream(original_path: str, anonymized_path: str, columns: list, se
                 continue
 
             raw_spans = collect_presidio_spans(original_val, layer_config)
+            raw_spans = list(raw_spans) + list(col_eu_spans_by_idx.get(idx, []))
             filtered_spans = _filter_spans(original_val, raw_spans, layer_config)
             for start, end, tag in filtered_spans:
                 key = tag.strip("[]")
                 if key not in missed_counts:
                     continue
                 entity_text = original_val[start:end]
-                if isinstance(anonymized_val, str) and entity_text.lower() in anonymized_val.lower():
+                # Skip subword/fragment artifacts emitted by HF tokenizers
+                # (e.g. "HD" from "ADHD", "stoor" from "stoornis").
+                if len(entity_text.strip()) < 3:
+                    continue
+                # Word-boundary match avoids substring false positives like
+                # "burn" being found inside "[HEALTH] burn-out".
+                survived = isinstance(anonymized_val, str) and bool(
+                    re.search(rf"\b{re.escape(entity_text)}\b", anonymized_val, re.IGNORECASE)
+                )
+                if survived:
                     missed_counts[key] += 1
                     if entity_text not in missed_samples[key]:
                         missed_samples[key].append(entity_text)

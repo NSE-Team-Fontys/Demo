@@ -1,6 +1,6 @@
 # Utilities (`src/utils`)
 
-The `utils` module provides shared, low-level technical infrastructure and helper functions consumed across the entire analytical pipeline (e.g., anonymization, embedding, generation). It is built to ensure consistent file IO, heuristic parsing, and optimal hardware acceleration routing for large language models and encodings.
+The `utils` module provides shared, low-level technical infrastructure and helper functions consumed across the analytical pipeline. It is built to ensure consistent file IO, heuristic parsing, and optimal hardware acceleration routing for PyTorch-backed anonymization, embedding, and reranking models.
 
 ## Core Components
 
@@ -20,7 +20,7 @@ This script manages robust, fault-tolerant dataset ingestion. Because survey dat
 
 ### `model_device.py`
 
-This is the central hardware acceleration router for PyTorch and `sentence_transformers`. It ensures that embedding computations (`02_embedding`), cross-encoder reranking (`03_retrieval`), and local generation pipelines operate on the fastest silicon available on the host machine.
+This is the central hardware acceleration router for PyTorch and `sentence_transformers`. It ensures that embedding computations (`02_embedding`) and cross-encoder reranking (`03_retrieval`) operate on the fastest silicon available on the host machine. Stage `04_generation` now uses an external llama.cpp server, so it is configured through `src.config.settings` rather than this PyTorch device router.
 
 *   **Auto-Detection Hardware Cascading**:
     `get_model_device()` implements a cascade fallback:

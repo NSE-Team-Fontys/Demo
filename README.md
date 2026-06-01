@@ -48,6 +48,112 @@ npm run dev
 
 Vite usually runs on `http://localhost:5173`.
 
+### llama.cpp (Required for Insights)
+
+The generation stage uses `llama-server` for local LLM inference. The app can start and stop the server automatically — you do not need to run it manually.
+
+#### macOS
+
+```bash
+brew install llama.cpp
+```
+tail -f logs/llama-server.log
+#### Linux
+
+```bash
+git clone https://github.com/ggerganov/llama.cpp
+cd llama.cpp
+make
+# Add the build output directory to your PATH
+```
+
+#### Windows (Build from Source with CUDA)
+
+To build `llama.cpp` from source with GPU support on Windows, you must have the **NVIDIA CUDA Toolkit**, **Visual Studio C++ Build Tools**, and **CMake** installed.
+
+1. **Install CMake** (if not already installed):
+   Open PowerShell and run:
+   ```powershell
+   winget install --id Kitware.CMake -e --source winget
+   ```
+   *Restart your PowerShell/terminal after installing.*
+
+2. **Clone the repository**:
+   ```powershell
+   git clone https://github.com/ggerganov/llama.cpp
+   cd llama.cpp
+   ```
+
+3. **Configure the build for CUDA**:
+   ```powershell
+   cmake -B build -DGGML_CUDA=ON
+   ```
+
+4. **Compile the server**:
+   ```powershell
+   cmake --build build --config Release -j
+   ```
+   *This compiles `llama-server.exe` into the `build\bin\Release` directory.*
+
+5. **Configure your environment**:
+   Point your `.env` file to the newly compiled binary and set the GPU layers:
+   ```env
+   LLAMA_CPP_SERVER_BIN=build\bin\Release\llama-server.exe
+   LLAMA_CPP_N_GPU_LAYERS=99
+   ```
+
+#### Enabling GPU on Windows (NVIDIA)
+
+Set `LLAMA_CPP_N_GPU_LAYERS=99` in your `.env` so the app offloads all layers to the GPU when it auto-starts the server:
+
+```env
+LLAMA_CPP_N_GPU_LAYERS=99
+```
+
+Without this the server runs on CPU only. With an RTX 4050 (6 GB VRAM) and the default E4B model (~5 GB), all layers fit in VRAM and generation runs at ~30 tokens/second instead of ~5 tokens/second on CPU.
+
+To verify the GPU is being used, check the llama-server startup log for a line like:
+
+```
+I device_info:
+I   - CUDA0   : NVIDIA GeForce RTX 4050 ...
+```
+
+If only `CPU` appears, the CUDA DLLs are missing (see step 2 above).
+
+#### Optional: point to a specific binary
+
+If `llama-server` is not on your PATH, set `LLAMA_CPP_SERVER_BIN` in your `.env`:
+
+```env
+LLAMA_CPP_SERVER_BIN=C:\tools\llama.cpp\llama-server.exe
+```
+
+#### How the app starts the server
+
+When you click **Generate Insights** in the UI with **"Start llama-server if needed"** enabled, the app will:
+
+1. Check that `llama-server` is on your PATH (or at `LLAMA_CPP_SERVER_BIN`).
+2. Launch `llama-server -hf unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL -c 32000 -ngl 99` (with `-ngl` if `LLAMA_CPP_N_GPU_LAYERS` is set).
+3. On first run, llama-server downloads the model (~5 GB) from Hugging Face automatically.
+4. After startup it connects on `http://127.0.0.1:8080` (configurable via `LLAMA_CPP_BASE_URL`).
+5. After generation it shuts down the server and unloads the model.
+
+To run the server manually instead, start it before clicking Generate and leave the checkbox unchecked:
+
+```powershell
+llama-server -hf unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL -c 32000 -ngl 99
+```
+
+### Presidio (Layer 1) GPU acceleration
+
+Layer 1 uses spaCy and follows the same `MODEL_DEVICE` setting as the rest of the pipeline. The required accelerators are pinned in `requirements.txt` with platform markers, so `pip install -r requirements.txt` is enough:
+
+- **NVIDIA CUDA (Windows/Linux):** `cupy-cuda12x` plus the self-contained NVIDIA CUDA 12.x runtime DLL wheels (`nvidia-cuda-nvrtc-cu12`, `nvidia-cuda-runtime-cu12`, `nvidia-cublas-cu12`) are pinned in `requirements.txt`. The DLL wheels add ~660 MB to a fresh install but make GPU activation reliable even when no system CUDA Toolkit is present or `CUDA_PATH` is unset.
+- **Apple Silicon (macOS):** `thinc-apple-ops` is installed automatically.
+
+Look for `Presidio spaCy running on GPU (cuda:0)` in the server logs to confirm the GPU is active. If you see `spaCy could not activate CUDA — falling back to CPU`, re-run `pip install -r requirements.txt` and restart the Flask backend.
+
 ## Environment
 
 Create `.env` in the project root when you need Hugging Face downloads:
@@ -71,9 +177,27 @@ RERANKER_MODEL=zeroentropy/zerank-2-reranker
 RERANKER_CANDIDATE_MULTIPLIER=5
 RERANKER_MAX_CANDIDATES=100
 LLM_CONTEXT_DOCUMENTS=100
+HIERARCHICAL_RAG_BATCH_DOCUMENTS=60
+HIERARCHICAL_RAG_MAX_DOCUMENTS=0
+DEFAULT_LLM_PROVIDER=llama.cpp
+DEFAULT_LLM_MODEL=unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL
+LLAMA_CPP_BASE_URL=http://127.0.0.1:8080
+LLAMA_CPP_API_KEY=no-key
+LLAMA_CPP_SERVER_BIN=C:\tools\llama.cpp\llama-server.exe
+LLAMA_CPP_N_GPU_LAYERS=99
 ```
 
+For theme insight generation, the important hierarchical RAG limit is
+`HIERARCHICAL_RAG_BATCH_DOCUMENTS`. The default is `60`, so each map-step
+small summary reads up to 60 answers. `RERANKER_MAX_CANDIDATES` still exists,
+but it applies to ad-hoc vector query/reranking endpoints, not to the number of
+answers analyzed for a theme insight. `LLM_CONTEXT_DOCUMENTS` is retained for
+legacy/single-prompt compatibility and cache invalidation; it is no longer the
+main cap for hierarchical theme summaries.
+
 `MODEL_DEVICE=auto` prefers CUDA, then Apple MPS, then CPU. On a Mac, set `MODEL_DEVICE=mps` to force the PyTorch-backed anonymization layer onto the Apple GPU. Presidio/spaCy still runs on CPU; the EU-PII / Transformer layer is the part that can use MPS.
+
+llama.cpp generation tuning is model-specific and lives in `src/pipeline/04_generation/llama_cpp_models.py`.
 
 ## Architecture
 
@@ -106,7 +230,8 @@ src/
 │   │   └── query_cli.py          # CLI helper for local vector search
 │   └── 04_generation/
 │       ├── service.py            # Insight generation orchestration
-│       ├── llm_clients.py        # Ollama client and llama.cpp provider interface
+│       ├── llm_clients.py        # Local LLM runtime clients
+│       ├── llama_cpp_models.py   # llama.cpp Gemma GGUF model registry
 │       ├── prompts.py            # Prompt construction and JSON parsing
 │       ├── cache.py              # Insight cache policy
 │       └── insight_metrics.py    # Subtheme mention metrics
@@ -126,12 +251,12 @@ flowchart LR
     studentData["NSE-style CSV or Excel survey export"]
     app["NSE Privacy-First Insights Demo"]
     hf["Hugging Face Hub"]
-    ollama["Local Ollama"]
+    llama["Local llama.cpp"]
 
     user -->|"Uploads data, selects columns/layers, explores dashboard"| app
     studentData -->|"Raw open-text answers + metadata"| app
     app -->|"Optional first-time model downloads"| hf
-    app -->|"Local summary generation"| ollama
+    app -->|"Local summary generation"| llama
     app -->|"Anonymized aggregates, vector search, summaries"| user
 ```
 
@@ -148,7 +273,7 @@ flowchart TB
     chroma["ChromaDB\nsurvey_vector_db/"]
     cache["Insight Cache\ngemma_cache.json"]
     files["Local files\ndata/temp_upload.*\ndata/anonymized_survey.csv"]
-    ollama["Ollama API\nlocalhost:11434"]
+    llama["llama.cpp API\nlocalhost:8080"]
 
     browser -->|"REST + NDJSON streams"| flask
     flask --> anonymization
@@ -160,7 +285,7 @@ flowchart TB
     embedding -->|"documents + embeddings + metadata"| chroma
     retrieval -->|"query/filter/rerank"| chroma
     generation -->|"retrieved context"| retrieval
-    generation -->|"local prompts"| ollama
+    generation -->|"local prompts"| llama
     generation -->|"cached summaries"| cache
 ```
 
@@ -313,22 +438,27 @@ Module ownership:
 - API route: `src/api/insight_routes.py`
 - Stage service: `src/pipeline/04_generation/service.py`
 - Local LLM clients: `src/pipeline/04_generation/llm_clients.py`
+- llama.cpp model registry: `src/pipeline/04_generation/llama_cpp_models.py`
 - Prompt construction: `src/pipeline/04_generation/prompts.py`
 - Cache policy: `src/pipeline/04_generation/cache.py`
 - Subtheme metrics: `src/pipeline/04_generation/insight_metrics.py`
 
 Behavior:
 
-- Uses local Ollama at `http://localhost:11434`.
-- Checks Ollama availability and selected model before generation.
-- If the model is missing, generation fails unless model download is enabled in the UI.
-- Retrieves and reranks context before building the prompt.
-- Sends up to `LLM_CONTEXT_DOCUMENTS` reranked answers to the LLM. The default is `100`.
+- Uses local llama.cpp at `http://127.0.0.1:8080` by default.
+- Checks llama.cpp availability and the selected Gemma GGUF model before generation.
+- Supports these Unsloth dynamic Q4 model ids: `unsloth/gemma-4-E2B-it-GGUF:UD-Q4_K_XL`, `unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL`, `unsloth/gemma-4-26B-A4B-it-GGUF:UD-Q4_K_M`, and `unsloth/gemma-4-31B-it-GGUF:UD-Q4_K_XL`.
+- Uses semantic hierarchical RAG for theme insights instead of fixing answers to their original survey question.
+- First applies metadata filters, then compares every remaining answer with every theme embedding and assigns each answer to the closest theme.
+- Splits the assigned answers into map batches of `HIERARCHICAL_RAG_BATCH_DOCUMENTS` answers. The default is `60` answers per small summary.
+- Generates one JSON summary per batch, then sends those batch summaries into a final reduce prompt that produces the dashboard insight.
+- `HIERARCHICAL_RAG_MAX_DOCUMENTS=0` means no artificial document cap; set it above `0` to sample only the closest assigned answers during testing.
 - Successful summaries are cached in `gemma_cache.json`.
+- Cache entries include the applied filters, so a summary for all students is separate from a summary for only ICT students.
 - Failed generations are not cached as successful insights.
 - `/api/themes-overview` returns cached insight cards and uses Stage 03 retrieval for filtered theme frequencies.
 
-`src/pipeline/04_generation/llm_clients.py` contains the provider abstraction. Ollama is implemented; llama.cpp has a placeholder client so the API routes do not need to change when llama.cpp support is added.
+`src/pipeline/04_generation/llm_clients.py` contains the local llama.cpp client used by the generation routes.
 
 ## API Route Map
 
@@ -407,7 +537,7 @@ __pycache__/
 - Keep static constants, theme definitions, path definitions, and env defaults in `src/config`.
 - Keep shared parsers and small helpers in `src/utils`.
 - Do not commit `.env`, generated CSVs, ChromaDB files, reports, checkpoints, or model cache files.
-- If you add llama.cpp support, implement it behind `src/pipeline/04_generation/llm_clients.py` so API routes remain unchanged.
+- Keep llama.cpp support behind `src/pipeline/04_generation/llm_clients.py` and `llama_cpp_models.py` so API routes remain unchanged.
 - If you add Hierarchical RAG, put retrieval strategy code behind `src/pipeline/03_retrieval` so API routes remain unchanged.
 - If you change metadata handling, keep canonical dashboard keys stable: `institution`, `academic_year`, `location`, `programme`, `study_mode`, `cohort`.
 
@@ -415,7 +545,7 @@ __pycache__/
 
 ### Model Downloads Are Slow
 
-First runs may download Hugging Face or Ollama models. Add `HF_TOKEN` for better Hugging Face rate limits.
+First runs may download Hugging Face models through llama.cpp. Add `HF_TOKEN` for better Hugging Face rate limits.
 
 ### Flask Loads Twice
 
@@ -431,11 +561,11 @@ Rebuild the vector database after changing metadata mappings. Filter options com
 
 ### Insight Generation Fails
 
-Check Ollama:
+Check llama.cpp:
 
 ```bash
-ollama list
-ollama pull gemma4:e4b
+llama-server
+llama-server -hf unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL
 ```
 
-Or enable model download in the UI.
+For multiple selectable models, use llama.cpp router mode. Start `llama-server` without a model, cache the Unsloth dynamic Q4 model ids you want with `llama-server -hf <repo>:<quant>`, then restart the router.

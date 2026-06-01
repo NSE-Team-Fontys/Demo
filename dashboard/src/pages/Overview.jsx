@@ -112,8 +112,15 @@ export default function Overview() {
   const themes = useMemo(() => {
     return baseThemes.map(t => {
       const dynamic = dynamicThemesData[t.name]
-      if (dynamic && typeof dynamic.frequency === 'number') {
-        return { ...t, percentage: dynamic.frequency }
+      if (dynamic) {
+        return {
+          ...t,
+          percentage: typeof dynamic.frequency === 'number' ? dynamic.frequency : t.percentage,
+          aiSummary: dynamic.summary || t.aiSummary,
+          subthemes: dynamic.subthemes?.length > 0 ? dynamic.subthemes : t.subthemes,
+          quotes: dynamic.quotes?.length > 0 ? dynamic.quotes : t.quotes,
+          cachedInsight: { ...dynamic, status: 'success' },
+        }
       }
       return t
     })

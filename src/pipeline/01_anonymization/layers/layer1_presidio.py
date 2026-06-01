@@ -13,6 +13,8 @@ from presidio_anonymizer.entities import OperatorConfig
 from langdetect import detect
 from langdetect.lang_detect_exception import LangDetectException
 
+from src.utils.model_device import describe_model_device, get_model_device
+
 from .layer2_text_norm import normalize_for_ner
 from .layer_utils import extend_name_spans_for_tussenvoegsels
 
@@ -132,8 +134,8 @@ PRESIDIO_OPERATORS = {
     "STUDENT_NUMBER": OperatorConfig("replace", {"new_value": "[PII]"}),
     "USERNAME": OperatorConfig("replace", {"new_value": "[PII]"}),
     "OBFUSCATED_EMAIL": OperatorConfig("replace", {"new_value": "[PII]"}),
-    "BUILDING_OR_ROOM": OperatorConfig("replace", {"new_value": "[PII]"}),
-    "FLOOR_REFERENCE": OperatorConfig("replace", {"new_value": "[LOCATION]"}),
+    "BUILDING_OR_ROOM": OperatorConfig("keep"),
+    "FLOOR_REFERENCE": OperatorConfig("keep"),
     "TEACHER_NAME_CONTEXT": OperatorConfig("replace", {"new_value": "[NAME]"}),
     "NL_BSN": OperatorConfig("replace", {"new_value": "[PII]"}),
     "DUTCH_POSTCODE": OperatorConfig("replace", {"new_value": "[LOCATION]"}),
@@ -194,12 +196,57 @@ def _ensure_spacy_models() -> None:
         logger.info("Installed spaCy model: %s", model_name)
 
 
+def _init_spacy_device() -> str:
+    """
+    Activate the same device that get_model_device() picked for the rest
+    of the pipeline. Must be called BEFORE any spaCy model is loaded.
+    Returns the device that was actually activated.
+    """
+    import spacy
+
+    device = get_model_device()
+
+    if device == "cuda":
+        try:
+            from thinc.api import use_pytorch_for_gpu_memory
+            use_pytorch_for_gpu_memory()
+        except Exception as e:
+            logger.warning("use_pytorch_for_gpu_memory failed: %s", e)
+        activated = spacy.prefer_gpu()
+        if not activated:
+            logger.warning(
+                "spaCy could not activate CUDA — falling back to CPU. "
+                "Check that cupy-cuda12x is installed in this interpreter "
+                "(`python -c \"import cupy; print(cupy.__version__)\"`) and "
+                "that the CUDA major version matches your driver."
+            )
+            return "cpu"
+        logger.info("Presidio spaCy running on %s", describe_model_device("cuda"))
+        return "cuda"
+
+    if device == "mps":
+        try:
+            import thinc_apple_ops  # noqa: F401
+            logger.info("Presidio spaCy running with thinc-apple-ops (Apple Accelerate).")
+        except ImportError:
+            logger.info(
+                "Presidio spaCy running on CPU (Mac). "
+                "Install 'thinc-apple-ops' for an Apple-Silicon speedup."
+            )
+        return "mps"
+
+    spacy.require_cpu()
+    logger.info("Presidio spaCy running on CPU.")
+    return "cpu"
+
+
 def _build_analyzer() -> AnalyzerEngine:
     """
     Build an AnalyzerEngine with spaCy NL+EN models.
     This demo is configured to ALWAYS use the spaCy NLP engine for best NER quality.
     """
     _ensure_spacy_models()
+    _init_spacy_device()
     provider = NlpEngineProvider(
         nlp_configuration={
             "nlp_engine_name": "spacy",
@@ -254,12 +301,13 @@ def build_presidio_operators(config: Optional[dict] = None) -> dict:
         ops["TEACHER_NAME_CONTEXT"] = OperatorConfig("keep")
     if config.get("locations", True):
         ops["LOCATION"] = OperatorConfig("replace", {"new_value": "[LOCATION]"})
-        ops["FLOOR_REFERENCE"] = OperatorConfig("replace", {"new_value": "[LOCATION]"})
         ops["DUTCH_POSTCODE"] = OperatorConfig("replace", {"new_value": "[LOCATION]"})
     else:
         ops["LOCATION"] = OperatorConfig("keep")
-        ops["FLOOR_REFERENCE"] = OperatorConfig("keep")
         ops["DUTCH_POSTCODE"] = OperatorConfig("keep")
+    # Buildings and floors are always kept — Fontys wants to see which building is mentioned.
+    ops["BUILDING_OR_ROOM"] = OperatorConfig("keep")
+    ops["FLOOR_REFERENCE"] = OperatorConfig("keep")
     if config.get("titles", True):
         ops["DUTCH_HONORIFIC"] = OperatorConfig("replace", {"new_value": "[TITLE]"})
     else:
@@ -271,7 +319,6 @@ def build_presidio_operators(config: Optional[dict] = None) -> dict:
             "STUDENT_NUMBER",
             "USERNAME",
             "OBFUSCATED_EMAIL",
-            "BUILDING_OR_ROOM",
             "NL_BSN",
             "DUTCH_PHONE",
         ):
@@ -283,7 +330,6 @@ def build_presidio_operators(config: Optional[dict] = None) -> dict:
             "STUDENT_NUMBER",
             "USERNAME",
             "OBFUSCATED_EMAIL",
-            "BUILDING_OR_ROOM",
             "NL_BSN",
             "DUTCH_PHONE",
         ):
@@ -360,7 +406,6 @@ def presidio_masking_spec() -> dict:
             "STUDENT_NUMBER",
             "USERNAME",
             "OBFUSCATED_EMAIL",
-            "BUILDING_OR_ROOM",
             "NL_BSN",
             "DUTCH_PHONE",
         ],

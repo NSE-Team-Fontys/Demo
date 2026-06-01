@@ -3,7 +3,7 @@ from importlib import import_module
 
 from src.config.paths import VECTOR_DB_PATH
 from src.config.settings import RERANKER_CANDIDATE_MULTIPLIER, RERANKER_MAX_CANDIDATES
-from src.config.themes import METADATA_ALIASES, THEME_DEFINITIONS, THEMES_LIST
+from src.config.themes import METADATA_ALIASES, THEME_EMBEDDING_DEFINITIONS, THEMES_LIST
 
 embedding_models = import_module("src.pipeline.02_embedding.embedding_models")
 reranker_models = import_module("src.pipeline.03_retrieval.reranker_models")
@@ -74,7 +74,7 @@ def get_theme_embedding_model(model_id: str | None = None):
 
 
 def theme_query_text(theme_name: str) -> str:
-    definition = THEME_DEFINITIONS.get(theme_name)
+    definition = THEME_EMBEDDING_DEFINITIONS.get(theme_name)
     return f"{theme_name}. {definition}" if definition else theme_name
 
 
@@ -348,6 +348,106 @@ def theme_distribution(collection, model_id: str | None = None, where_filter=Non
         "counts": counts,
         "percentages": percentages_from_counts(counts),
         "total_docs": total_docs,
+    }
+
+
+def collect_theme_documents(
+    collection,
+    theme_name: str,
+    *,
+    filters: dict | None = None,
+    model_id: str | None = None,
+) -> dict:
+    """
+    Collect the filtered documents whose nearest theme query is the requested theme.
+
+    This intentionally does not bind responses to the survey question they came from.
+    Each answer is compared against every theme definition and assigned to the closest
+    theme in embedding space, so off-topic-but-useful student comments can move to the
+    theme they actually discuss.
+    """
+    where_filter = build_where_filter(filters or {})
+    if where_filter:
+        matching_docs = collection.get(where=where_filter)
+        total_docs = (
+            len(matching_docs["ids"])
+            if matching_docs and matching_docs.get("ids")
+            else 0
+        )
+    else:
+        total_docs = collection.count()
+
+    counts = {theme: 0 for theme in THEMES_LIST}
+    if total_docs <= 0:
+        return {
+            "frequency": 0,
+            "vector_relevant_count": 0,
+            "total_filtered_documents": 0,
+            "documents": [],
+            "metadatas": [],
+            "distances": [],
+            "counts": counts,
+            "percentages": percentages_from_counts(counts),
+        }
+
+    selected_model = model_id or collection_embedding_model(collection)
+    theme_embeddings = get_theme_query_embeddings(selected_model)
+    best_by_doc = {}
+    target_docs = {}
+
+    for candidate_theme in THEMES_LIST:
+        include = (
+            ["documents", "metadatas", "distances"]
+            if candidate_theme == theme_name
+            else ["distances"]
+        )
+        results = collection.query(
+            query_embeddings=[theme_embeddings[candidate_theme]],
+            n_results=total_docs,
+            where=where_filter,
+            include=include,
+        )
+        ids = results.get("ids", [[]])[0] if results.get("ids") else []
+        distances = results.get("distances", [[]])[0] if results.get("distances") else []
+
+        if candidate_theme == theme_name:
+            documents = results.get("documents", [[]])[0] if results.get("documents") else []
+            metadatas = (
+                results.get("metadatas", [[]])[0] if results.get("metadatas") else []
+            )
+            if len(metadatas) < len(documents):
+                metadatas = list(metadatas) + [{} for _ in range(len(documents) - len(metadatas))]
+            for doc_id, doc, meta, distance in zip(ids, documents, metadatas, distances):
+                target_docs[doc_id] = {
+                    "document": doc,
+                    "metadata": meta,
+                    "distance": distance,
+                }
+
+        for doc_id, distance in zip(ids, distances):
+            current = best_by_doc.get(doc_id)
+            if current is None or distance < current[0]:
+                best_by_doc[doc_id] = (distance, candidate_theme)
+
+    selected_rows = []
+    for doc_id, (distance, assigned_theme) in best_by_doc.items():
+        counts[assigned_theme] += 1
+        if assigned_theme == theme_name and doc_id in target_docs:
+            row = dict(target_docs[doc_id])
+            row["distance"] = distance
+            selected_rows.append(row)
+
+    selected_rows.sort(key=lambda row: row["distance"])
+    percentages = percentages_from_counts(counts)
+    return {
+        "frequency": percentages.get(theme_name, 0),
+        "vector_relevant_count": counts.get(theme_name, 0),
+        "total_filtered_documents": total_docs,
+        "documents": [row["document"] for row in selected_rows],
+        "metadatas": [row["metadata"] for row in selected_rows],
+        "distances": [row["distance"] for row in selected_rows],
+        "counts": counts,
+        "percentages": percentages,
     }
 
 

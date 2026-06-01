@@ -320,7 +320,7 @@ export default function ViewMorePage() {
                 {loadingLive && (
                   <span className="flex items-center gap-1.5 text-xs font-semibold text-white/80">
                     <span className="w-2 h-2 rounded-full bg-white/80 animate-pulse" />
-                    Querying VectorDB
+                    Loading insights
                   </span>
                 )}
               </div>
@@ -334,7 +334,7 @@ export default function ViewMorePage() {
               <div className="flex items-center justify-between gap-3 mb-4">
                 <div className="flex items-center gap-2">
                   <span className="material-symbols-outlined text-blue-600">psychology</span>
-                  <h2 className="text-sm font-bold text-blue-900">Gemma 4 Live Insights</h2>
+                  <h2 className="text-sm font-bold text-blue-900">Gemma 4 Insights</h2>
                 </div>
               </div>
 
