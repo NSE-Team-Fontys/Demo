@@ -79,6 +79,7 @@ To build `llama.cpp` from source with GPU support on Windows, you must have the 
    *Restart your PowerShell/terminal after installing.*
 
 2. **Clone the repository**:
+   Open a terminal in the root folder of this project (the `Demo` directory) and run:
    ```powershell
    git clone https://github.com/ggerganov/llama.cpp
    cd llama.cpp
@@ -96,9 +97,9 @@ To build `llama.cpp` from source with GPU support on Windows, you must have the 
    *This compiles `llama-server.exe` into the `build\bin\Release` directory.*
 
 5. **Configure your environment**:
-   Point your `.env` file to the newly compiled binary and set the GPU layers:
+   Since you cloned it inside the project, point your `.env` file to the compiled binary inside the `llama.cpp` folder and set the GPU layers:
    ```env
-   LLAMA_CPP_SERVER_BIN=build\bin\Release\llama-server.exe
+   LLAMA_CPP_SERVER_BIN=llama.cpp\build\bin\Release\llama-server.exe
    LLAMA_CPP_N_GPU_LAYERS=99
    ```
 
