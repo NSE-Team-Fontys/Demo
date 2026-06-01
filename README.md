@@ -84,6 +84,24 @@ LLAMA_CPP_SERVER_BIN=C:\tools\llama.cpp\llama-server.exe
 LLAMA_CPP_N_GPU_LAYERS=99
 ```
 
+#### Verify the installation
+
+After installing, run:
+
+```bash
+llama-server --version
+```
+
+If the version prints correctly, start the server once manually to trigger the model download:
+
+```bash
+llama-server -hf unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL -c 32000 -ngl 99
+```
+
+Wait until the server prints `listening`, then close it. After that the app can manage the server automatically.
+
+If `llama-server --version` gives an error, restart your computer and try the commands above again.
+
 #### Enabling GPU on Windows (NVIDIA)
 
 Set `LLAMA_CPP_N_GPU_LAYERS=99` in your `.env` so the app offloads all layers to the GPU when it auto-starts the server:
