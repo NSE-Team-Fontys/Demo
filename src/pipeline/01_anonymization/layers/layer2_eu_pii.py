@@ -64,13 +64,26 @@ def ensure_eu_pii_available() -> None:
         )
 
 
-def _eu_pii_tag(entity_group: str) -> str:
+def _is_numeric_or_id(text: str) -> bool:
+    """Return True if the span is a number, phone number, or alphanumeric ID (e.g. 287066633, TK-20241026, S2020177)."""
+    cleaned = text.strip()
+    if not cleaned:
+        return False
+    digits = sum(c.isdigit() for c in cleaned)
+    return digits > 0 and digits / len(cleaned) > 0.6
+
+
+def _eu_pii_tag(entity_group: str, span_text: str = "") -> str:
     label = (entity_group or "").upper()
     if any(k in label for k in ("NAME", "PERSON", "FIRSTNAME", "LASTNAME", "SURNAME", "GIVENNAME")):
         return "[NAME]"
     if any(k in label for k in ("CITY", "ADDRESS", "STREET", "LOCATION", "ZIPCODE", "POSTAL", "STATE", "COUNTRY", "REGION")):
         return "[LOCATION]"
     if any(k in label for k in ("HEALTH", "MEDICAL", "CONDITION", "DIAGNOSIS", "ILLNESS", "DISEASE", "DISABILITY", "MEDICATION")):
+        # Numbers, phone numbers, and alphanumeric IDs are PII, not health information.
+        # The NER model picks up surrounding context and misattributes IDs near health terms.
+        if span_text and _is_numeric_or_id(span_text):
+            return "[PII]"
         return "[HEALTH]"
     return "[PII]"
 
@@ -101,7 +114,7 @@ def _apply_entities(text: str, entities: list, config: Optional[dict]) -> str:
         if not span.strip() or len(span) < 2:
             continue
         label = ent.get("entity_group", "")
-        tag = _eu_pii_tag(label)
+        tag = _eu_pii_tag(label, span)
         if not _config_allows_tag(config, tag):
             continue
 
@@ -141,7 +154,7 @@ def eu_pii_collect_batch(texts: list, config: Optional[dict] = None) -> list:
             span_text = text[ent["start"] : ent["end"]]
             if not span_text.strip() or len(span_text) < 2:
                 continue
-            tag = _eu_pii_tag(ent.get("entity_group", ""))
+            tag = _eu_pii_tag(ent.get("entity_group", ""), span_text)
             if not _config_allows_tag(config, tag):
                 continue
             spans.append((ent["start"], ent["end"], tag))
