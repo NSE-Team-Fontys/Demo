@@ -29,12 +29,17 @@ def _select_theme_documents(
     query: str,
     *,
     allow_model_download: bool,
+    where_filter=None,
 ):
     embedding_model = retrieval.collection_embedding_model(collection)
     model = retrieval.get_theme_embedding_model(embedding_model)
     query_embedding = model.encode(query, normalize_embeddings=True)
-    total_docs = collection.count()
-    distribution = retrieval.theme_distribution(collection, embedding_model)
+    if where_filter:
+        matching = collection.get(where=where_filter)
+        total_docs = len(matching["ids"]) if matching and matching.get("ids") else 0
+    else:
+        total_docs = collection.count()
+    distribution = retrieval.theme_distribution(collection, embedding_model, where_filter=where_filter)
     retrieval_k = min(
         max(20 * RERANKER_CANDIDATE_MULTIPLIER, 20),
         max(total_docs, 1),
@@ -44,6 +49,7 @@ def _select_theme_documents(
     results = collection.query(
         query_embeddings=[query_embedding.tolist()],
         n_results=retrieval_k,
+        where=where_filter,
         include=["documents", "distances"],
     )
 
@@ -77,10 +83,46 @@ def generate_theme_summary(
     ollama_model: str,
     allow_model_download: bool,
     provider: str = "ollama",
+    filters: dict | None = None,
 ) -> dict:
     theme_search_query = retrieval.theme_query_text(theme_name) if theme_name else theme_query
     if not theme_search_query:
         raise ValueError("No query provided")
+
+    where_filter = retrieval.build_where_filter(filters) if filters else None
+
+    # When filters are active: fast filtered vector query, reuse cached LLM content
+    if where_filter:
+        collection = retrieval.get_collection()
+        selected = _select_theme_documents(
+            collection,
+            theme_name,
+            theme_search_query,
+            allow_model_download=allow_model_download,
+            where_filter=where_filter,
+        )
+        relevant_docs = selected["relevant_docs"]
+        real_quotes = relevant_docs[:3] if len(relevant_docs) >= 3 else relevant_docs
+        cache = load_cache()
+        cached = cache.get(theme_name, {})
+        return {
+            "status": "success",
+            "theme": theme_name,
+            "frequency": selected["frequency"],
+            "document_count": len(relevant_docs),
+            "vector_relevant_count": selected["vector_relevant_count"],
+            "summary": cached.get("summary", ""),
+            "sentiments": cached.get("sentiments", []),
+            "positive_comments": cached.get("positive_comments", [])[:3],
+            "critical_comments": cached.get("critical_comments", [])[:3],
+            "student_suggestions": cached.get("student_suggestions", [])[:3],
+            "subthemes": cached.get("subthemes", []),
+            "subtheme_mentions": insight_metrics.subtheme_mention_rows(
+                cached.get("subthemes", []), relevant_docs
+            ),
+            "quotes": real_quotes,
+            "filtered": True,
+        }
 
     cache = load_cache()
     if theme_name in cache:
@@ -105,6 +147,7 @@ def generate_theme_summary(
         theme_name,
         theme_search_query,
         allow_model_download=allow_model_download,
+        where_filter=None,
     )
     relevant_docs = selected["relevant_docs"]
     llm_docs = selected["llm_docs"]

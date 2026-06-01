@@ -10,12 +10,15 @@ generation = import_module("src.pipeline.04_generation.service")
 def theme_summary():
     try:
         data = request.get_json(silent=True) or {}
+        raw_filters = data.get("filters") or {}
+        filters = {k: v for k, v in raw_filters.items() if v} if raw_filters else None
         payload = generation.generate_theme_summary(
             theme_name=data.get("theme", ""),
             theme_query=data.get("query", ""),
             ollama_model=data.get("ollama_model", "gemma4:e4b"),
             allow_model_download=bool(data.get("allow_model_download", False)),
             provider=data.get("provider", "ollama"),
+            filters=filters or None,
         )
         return jsonify(payload)
     except ValueError as exc:
