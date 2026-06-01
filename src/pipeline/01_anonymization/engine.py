@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import re
 from pathlib import Path
@@ -19,6 +20,7 @@ from . import checkpoints, reporting
 from src.utils.file_parsers import detect_sep, read_dataframe
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
+logger = logging.getLogger(__name__)
 
 # Chunk size for span collection + masking (Layer 2 HF batching).
 # Default 512 for betere throughput; override via ANONYMIZE_BATCH_SIZE indien nodig.
@@ -47,6 +49,7 @@ def process_file_with_layers(
     columns_to_anonymize: list,
     layers: list,
     sep: str = None,
+    run_verification: bool = True,
 ):
     is_xlsx = Path(input_path).suffix.lower() in (".xlsx", ".xls")
     if not is_xlsx and sep is None:
@@ -91,6 +94,7 @@ def process_file_with_layers(
         "sep": sep,
         "selected_columns": columns_to_anonymize,
         "selected_layers": layers,
+        "run_verification": run_verification,
         "completed_columns": list(completed_columns),
     }
 
@@ -276,6 +280,55 @@ def process_file_with_layers(
                         tag_counts[tag] += 1
 
     df.to_csv(output_path, sep=sep, index=False)
+
+    if not run_verification:
+        missed_counts = {"NAME": 0, "PII": 0, "LOCATION": 0, "TITLE": 0, "HEALTH": 0}
+        missed_samples = {"NAME": [], "PII": [], "LOCATION": [], "TITLE": [], "HEALTH": []}
+        removed_samples = {"NAME": [], "PII": [], "LOCATION": [], "TITLE": [], "HEALTH": []}
+
+        _write_report(
+            input_path=input_path,
+            output_path=output_path,
+            columns=columns_to_anonymize,
+            layers=layers,
+            total_rows=total_rows,
+            total_cells=total_cells,
+            affected_cells=affected_cells,
+            total_entities=total_entities,
+            tag_counts=tag_counts,
+            missed_counts=missed_counts,
+            missed_samples=missed_samples,
+            removed_samples=removed_samples,
+            verification_skipped=True,
+        )
+        from .layers.privacy_pipeline import unload_all_layer_models
+        unload_all_layer_models(layers)
+        _clear_checkpoint()
+
+        yield (
+            json.dumps(
+                {
+                    "status": "success",
+                    "message": "Anonymization complete",
+                    "rows_processed": total_rows,
+                    "columns_anonymized": columns_to_anonymize,
+                    "progress": 100,
+                    "verification_skipped": True,
+                    "stats": {
+                        "total_cells": total_cells,
+                        "affected_cells": affected_cells,
+                        "total_entities": total_entities,
+                        "tag_counts": tag_counts,
+                        "missed_counts": missed_counts,
+                        "missed_samples": missed_samples,
+                        "removed_samples": removed_samples,
+                        "verification_skipped": True,
+                    },
+                }
+            )
+            + "\n"
+        )
+        return
 
     # --- Verification: detect entities in ORIGINAL text, check if they survived in output ---
     yield (

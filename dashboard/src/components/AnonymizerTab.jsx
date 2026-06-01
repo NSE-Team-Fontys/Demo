@@ -11,6 +11,7 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
   const [preview, setPreview] = useState([]);
   const [progress, setProgress] = useState(0);
   const [showStats, setShowStats] = useState(true);
+  const [runVerification, setRunVerification] = useState(true);
   const [expandedCategory, setExpandedCategory] = useState(null);
 
   // Real-time stream states
@@ -45,6 +46,7 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
         missed_counts: lastReport.missed_counts,
         missed_samples: lastReport.missed_samples,
         removed_samples: lastReport.removed_samples,
+        verification_skipped: lastReport.verification_skipped,
       },
     });
     setShowStats(true);
@@ -199,9 +201,10 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
     );
   };
 
-  const handleAnonymize = async (overrideColumns = null, overrideLayers = null) => {
+  const handleAnonymize = async (overrideColumns = null, overrideLayers = null, overrideVerification = null) => {
     const cols = overrideColumns ?? selectedColumns;
     const lyrs = overrideLayers ?? selectedLayers;
+    const verify = overrideVerification ?? runVerification;
 
     if (cols.length === 0) {
       setResult({ error: 'Select at least one column' });
@@ -227,7 +230,8 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           selected_columns: cols,
-          selected_layers: lyrs
+          selected_layers: lyrs,
+          run_verification: verify
         })
       });
 
@@ -332,7 +336,7 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
                       Negeren
                     </button>
                     <button
-                      onClick={() => handleAnonymize(checkpoint.total_columns, checkpoint.selected_layers)}
+                      onClick={() => handleAnonymize(checkpoint.total_columns, checkpoint.selected_layers, runVerification)}
                       className="px-5 py-2 bg-amber-500 text-white text-sm font-bold rounded-lg shadow-sm hover:bg-amber-600 transition-all"
                     >
                       Verdergaan
@@ -586,12 +590,12 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
 
               <button
                 type="button"
-                onClick={() => setShowStats(prev => !prev)}
-                className={`px-5 py-3 rounded-xl font-bold border transition-all text-sm flex items-center gap-2 ${showStats ? 'bg-emerald-50 border-emerald-300 text-emerald-700' : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300'}`}
-                title="Show anonymization percentage after processing"
+                onClick={() => setRunVerification(prev => !prev)}
+                className={`px-5 py-3 rounded-xl font-bold border transition-all text-sm flex items-center gap-2 ${runVerification ? 'bg-emerald-50 border-emerald-300 text-emerald-700' : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300'}`}
+                title="Run Presidio verification after anonymization"
               >
-                <span>{showStats ? '📊' : '📊'}</span>
-                {showStats ? 'Stats: On' : 'Stats: Off'}
+                <span>🔍</span>
+                {runVerification ? 'Verify: On' : 'Verify: Off'}
               </button>
 
               <button
@@ -708,9 +712,13 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
                 <div className="flex items-center justify-between pb-3 border-b border-gray-100">
                   <div className="flex items-center gap-2">
                     <span className="text-xl">🔍</span>
-                    <h3 className="font-bold text-gray-800">Anonymization Verification</h3>
+                    <h3 className="font-bold text-gray-800">
+                      {result.stats.verification_skipped ? 'Anonymized Masks' : 'Anonymization Verification'}
+                    </h3>
                   </div>
-                  {Object.values(result.stats.missed_counts ?? {}).every(v => v === 0)
+                  {result.stats.verification_skipped
+                    ? <span className="text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200 px-3 py-1 rounded-full">Verification skipped</span>
+                    : Object.values(result.stats.missed_counts ?? {}).every(v => v === 0)
                     ? <span className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full">All clear ✓</span>
                     : <span className="text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1 rounded-full">⚠ Possible leaks</span>
                   }
@@ -728,6 +736,7 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
                     const missed         = result.stats.missed_counts?.[key] ?? 0;
                     const missedSamples  = result.stats.missed_samples?.[key] ?? [];
                     const removedSamples = result.stats.removed_samples?.[key] ?? [];
+                    const verificationSkipped = Boolean(result.stats.verification_skipped);
                     const clean          = missed === 0;
                     const removedOpen    = expandedCategory === `${key}-removed`;
                     const missedOpen     = expandedCategory === `${key}-missed`;
@@ -758,7 +767,11 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
                           </div>
 
                           <div className="flex items-center gap-3 shrink-0 text-sm">
-                            {removed > 0 ? (
+                            {verificationSkipped ? (
+                              <span className={`font-bold ${removed > 0 ? `text-${color}-700` : 'text-gray-400'}`}>
+                                {removed} mask{removed === 1 ? '' : 's'}
+                              </span>
+                            ) : removed > 0 ? (
                               <button
                                 type="button"
                                 onClick={() => setExpandedCategory(removedOpen ? null : `${key}-removed`)}
@@ -791,7 +804,7 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
                         </div>
 
                         {/* Removed samples panel */}
-                        {removedOpen && (
+                        {!verificationSkipped && removedOpen && (
                           <div className={`border-t border-${color}-100 bg-white px-4 py-3 space-y-2`}>
                             <p className={`text-xs font-bold text-${color}-700 uppercase tracking-wider mb-2`}>
                               Removed — {removedSamples.length} unique
@@ -811,7 +824,7 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
                         )}
 
                         {/* Missed samples panel */}
-                        {missedOpen && (
+                        {!verificationSkipped && missedOpen && (
                           <div className="border-t border-amber-200 bg-white px-4 py-3 space-y-2">
                             <p className="text-xs font-bold text-amber-700 uppercase tracking-wider mb-2">
                               Possibly missed — {missedSamples.length} unique
@@ -836,7 +849,15 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
 
                 <div className="flex items-center gap-3 p-3 bg-gray-50 border border-gray-100 rounded-xl text-sm text-gray-500">
                   <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                  Checked <strong className="text-gray-700">{result.stats.total_cells}</strong> cells — <strong className="text-gray-700">{result.stats.total_entities}</strong> entities removed. Output was re-scanned to detect remaining leaks.
+                  {result.stats.verification_skipped ? (
+                    <>
+                      Scanned <strong className="text-gray-700">{result.stats.total_cells}</strong> cells for inserted masks — <strong className="text-gray-700">{result.stats.total_entities}</strong> masks found. Presidio verification was skipped.
+                    </>
+                  ) : (
+                    <>
+                      Checked <strong className="text-gray-700">{result.stats.total_cells}</strong> cells — <strong className="text-gray-700">{result.stats.total_entities}</strong> entities removed. Output was re-scanned to detect remaining leaks.
+                    </>
+                  )}
                 </div>
               </div>
             )}

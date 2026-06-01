@@ -34,7 +34,11 @@ def inspect_uploaded_file(file) -> dict:
     }
 
 
-def anonymize_uploaded_file(selected_columns: list, selected_layers: list):
+def anonymize_uploaded_file(
+    selected_columns: list,
+    selected_layers: list,
+    run_verification: bool = True,
+):
     upload_path = get_upload_path()
     if not upload_path:
         raise FileNotFoundError("No file uploaded")
@@ -47,7 +51,8 @@ def anonymize_uploaded_file(selected_columns: list, selected_layers: list):
 
     print(
         f"[ANONYMIZE] Columns: {selected_columns} | "
-        f"Layers: {selected_layers} | sep={repr(sep)}"
+        f"Layers: {selected_layers} | "
+        f"run_verification={run_verification} | sep={repr(sep)}"
     )
     return _engine.process_file_with_layers(
         str(input_file),
@@ -55,6 +60,7 @@ def anonymize_uploaded_file(selected_columns: list, selected_layers: list):
         selected_columns,
         selected_layers,
         sep=sep,
+        run_verification=run_verification,
     )
 
 

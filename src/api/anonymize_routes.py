@@ -23,6 +23,7 @@ def anonymize():
         stream = service.anonymize_uploaded_file(
             data.get("selected_columns", []),
             data.get("selected_layers", ["presidio", "eu-pii"]),
+            data.get("run_verification", True),
         )
         return Response(stream, mimetype="application/x-ndjson")
     except FileNotFoundError as exc:

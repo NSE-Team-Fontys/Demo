@@ -20,6 +20,7 @@ def write_report(
     missed_counts: dict,
     missed_samples: dict,
     removed_samples: dict,
+    verification_skipped: bool = False,
 ) -> None:
     lines = []
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -46,27 +47,32 @@ def write_report(
     for tag, count in tag_counts.items():
         lines.append(f"  [{tag}]  {count}")
     lines.append("")
-    lines.append("--- Verification (Presidio re-scan on original) ---")
-    lines.append("Entities still present in output (potential misses):")
+    if verification_skipped:
+        lines.append("--- Verification ---")
+        lines.append("Skipped by user. Report contains only inserted anonymization masks.")
+        lines.append("")
+    else:
+        lines.append("--- Verification (Presidio re-scan on original) ---")
+        lines.append("Entities still present in output (potential misses):")
 
-    any_missed = False
-    for tag, count in missed_counts.items():
-        if count:
-            any_missed = True
-            lines.append(f"  [{tag}]  {count} possibly missed:")
-            for sample in missed_samples.get(tag, []):
-                lines.append(f"    - {sample}")
-    if not any_missed:
-        lines.append("  (none)")
+        any_missed = False
+        for tag, count in missed_counts.items():
+            if count:
+                any_missed = True
+                lines.append(f"  [{tag}]  {count} possibly missed:")
+                for sample in missed_samples.get(tag, []):
+                    lines.append(f"    - {sample}")
+        if not any_missed:
+            lines.append("  (none)")
 
-    lines.append("")
-    lines.append("Entities successfully removed:")
-    for tag, samples in removed_samples.items():
-        if samples:
-            lines.append(f"  [{tag}]  {len(samples)} unique:")
-            for sample in samples:
-                lines.append(f"    - {sample}")
-    lines.append("")
+        lines.append("")
+        lines.append("Entities successfully removed:")
+        for tag, samples in removed_samples.items():
+            if samples:
+                lines.append(f"  [{tag}]  {len(samples)} unique:")
+                for sample in samples:
+                    lines.append(f"    - {sample}")
+        lines.append("")
 
     try:
         REPORT_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -85,6 +91,7 @@ def write_report(
             "missed_counts": missed_counts,
             "missed_samples": missed_samples,
             "removed_samples": removed_samples,
+            "verification_skipped": verification_skipped,
         }
         REPORT_JSON.write_text(
             json.dumps(stats_payload, ensure_ascii=False, indent=2),
