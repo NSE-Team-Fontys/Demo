@@ -1,7 +1,8 @@
-import { useMemo } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { Link, NavLink, useLocation, useParams } from 'react-router-dom'
 import { getFilteredThemes } from '../data/themes'
 import { useThemeSummary } from '../hooks/useThemeSummary'
+import FilterDropdown from '../components/FilterDropdown'
 
 function StatTile({ icon, label, value, helper }) {
   return (
@@ -184,6 +185,27 @@ export default function ViewMorePage() {
   const { id } = useParams()
   const location = useLocation()
 
+  const [filters, setFilters] = useState({
+    jaar: 'All', sector: 'All', opleiding: 'All', studievorm: 'All', taal: 'All',
+  })
+
+  const [filterOptions, setFilterOptions] = useState({
+    academic_years: [], sectors: [], programmes: [], study_modes: [], languages: [],
+  })
+
+  useEffect(() => {
+    fetch('http://localhost:5001/api/filter-options')
+      .then(r => r.json())
+      .then(data => { if (data.status === 'success') setFilterOptions(data.options) })
+      .catch(() => {})
+  }, [])
+
+  const [filteredPercentage, setFilteredPercentage] = useState(null)
+
+  function setFilter(key, value) {
+    setFilters(prev => ({ ...prev, [key]: value }))
+  }
+
   const fallbackTheme = useMemo(() => {
     const themes = getFilteredThemes({
       jaar: 'All',
@@ -196,7 +218,24 @@ export default function ViewMorePage() {
   }, [id])
 
   const theme = location.state?.theme?.id === id ? location.state.theme : fallbackTheme
-  const { liveData, loadingLive } = useThemeSummary(theme)
+  const { liveData, loadingLive } = useThemeSummary(theme, filters)
+
+  useEffect(() => {
+    if (!theme) return
+    const params = new URLSearchParams()
+    if (filters.jaar !== 'All') params.append('academic_year', filters.jaar)
+    if (filters.sector !== 'All') params.append('sector', filters.sector)
+    if (filters.opleiding !== 'All') params.append('programme', filters.opleiding)
+    if (filters.studievorm !== 'All') params.append('study_mode', filters.studievorm)
+    if (filters.taal !== 'All') params.append('language', filters.taal)
+    fetch(`http://localhost:5001/api/themes-overview?${params}`)
+      .then(r => r.json())
+      .then(data => {
+        const d = data[theme.name]
+        setFilteredPercentage(d && typeof d.frequency === 'number' ? d.frequency : null)
+      })
+      .catch(() => setFilteredPercentage(null))
+  }, [filters, theme?.name])
 
   const comments = liveData?.quotes?.length > 0 ? liveData.quotes : theme?.quotes ?? []
   const subthemes = liveData?.subthemes?.length > 0 ? liveData.subthemes : theme?.subthemes ?? []
@@ -231,6 +270,32 @@ export default function ViewMorePage() {
           <span className="material-symbols-outlined text-base">arrow_back</span>
           Back to overview
         </NavLink>
+
+        {/* ── Filters bar ── */}
+        <div className="relative z-20 bg-surface-container-lowest/85 glass-panel shadow-editorial rounded-2xl px-5 py-4 mb-6">
+          <div className="flex flex-wrap md:flex-nowrap gap-3 flex-1">
+            <div className="flex-1 min-w-[130px]">
+              <FilterDropdown icon="calendar_today" label="Academic Year" value={filters.jaar}
+                options={['All', ...filterOptions.academic_years]} onChange={(v) => setFilter('jaar', v)} />
+            </div>
+            <div className="flex-1 min-w-[130px]">
+              <FilterDropdown icon="category" label="Sector" value={filters.sector}
+                options={['All', ...filterOptions.sectors]} onChange={(v) => setFilter('sector', v)} />
+            </div>
+            <div className="flex-1 min-w-[130px]">
+              <FilterDropdown icon="school" label="Programme" value={filters.opleiding}
+                options={['All', ...filterOptions.programmes]} onChange={(v) => setFilter('opleiding', v)} />
+            </div>
+            <div className="flex-1 min-w-[130px]">
+              <FilterDropdown icon="history_edu" label="Study Mode" value={filters.studievorm}
+                options={['All', ...filterOptions.study_modes]} onChange={(v) => setFilter('studievorm', v)} />
+            </div>
+            <div className="flex-1 min-w-[130px]">
+              <FilterDropdown icon="translate" label="Language" value={filters.taal}
+                options={['All', ...filterOptions.languages]} onChange={(v) => setFilter('taal', v)} />
+            </div>
+          </div>
+        </div>
 
         <section
           className="rounded-2xl overflow-hidden shadow-ambient border border-outline-variant/10 text-white"
@@ -335,7 +400,7 @@ export default function ViewMorePage() {
             <StatTile
               icon="bar_chart"
               label="Relevant responses"
-              value={`${theme.percentage}%`}
+              value={`${filteredPercentage ?? theme.percentage}%`}
               helper="Share of responses associated with this theme."
             />
 

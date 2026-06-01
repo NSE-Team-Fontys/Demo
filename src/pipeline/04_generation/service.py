@@ -154,87 +154,6 @@ def _generate_hierarchical_json(
     )
 
 
-def _empty_theme_payload(
-    theme_name: str,
-    selected: dict,
-    *,
-    filters: dict,
-    provider: str,
-    llm_model: str,
-    llm_generation_settings: dict | None,
-) -> dict:
-    return {
-        "status": "success",
-        "theme": theme_name,
-        "frequency": selected["frequency"],
-        "document_count": selected["source_document_count"],
-        "vector_relevant_count": selected["vector_relevant_count"],
-        "total_filtered_documents": selected["total_filtered_documents"],
-        "llm_document_count": 0,
-        "hierarchical_document_count": 0,
-        "hierarchical_batch_documents": HIERARCHICAL_RAG_BATCH_DOCUMENTS,
-        "rag_strategy": HIERARCHICAL_RAG_STRATEGY,
-        "filters_applied": filters,
-        "cache_version": INSIGHT_CACHE_VERSION,
-        "llm_context_documents": LLM_CONTEXT_DOCUMENTS,
-        "llm_provider": provider,
-        "llm_model": llm_model,
-        "llm_generation_settings": llm_generation_settings,
-        "reranker": retrieval.current_reranker_id(),
-        "summary": "No responses were semantically assigned to this theme.",
-        "sentiments": [],
-        "positive_comments": [],
-        "critical_comments": [],
-        "student_suggestions": [],
-        "subthemes": [],
-        "subtheme_mentions": [],
-        "quotes": [],
-    }
-
-
-def _theme_payload_from_parsed(
-    theme_name: str,
-    selected: dict,
-    parsed: dict,
-    *,
-    filters: dict,
-    provider: str,
-    llm_model: str,
-    llm_generation_settings: dict | None,
-) -> dict:
-    relevant_docs = selected["relevant_docs"]
-    sentiments = parsed.get("sentiments", [])
-    return {
-        "status": "success",
-        "theme": theme_name,
-        "frequency": selected["frequency"],
-        "document_count": selected["source_document_count"],
-        "vector_relevant_count": selected["vector_relevant_count"],
-        "total_filtered_documents": selected["total_filtered_documents"],
-        "llm_document_count": selected["analyzed_document_count"],
-        "hierarchical_document_count": selected["analyzed_document_count"],
-        "hierarchical_batch_documents": HIERARCHICAL_RAG_BATCH_DOCUMENTS,
-        "rag_strategy": HIERARCHICAL_RAG_STRATEGY,
-        "filters_applied": filters,
-        "cache_version": INSIGHT_CACHE_VERSION,
-        "llm_context_documents": LLM_CONTEXT_DOCUMENTS,
-        "llm_provider": provider,
-        "llm_model": llm_model,
-        "llm_generation_settings": llm_generation_settings,
-        "reranker": retrieval.current_reranker_id(),
-        "summary": parsed.get("summary", "Summary could not be parsed."),
-        "sentiments": sentiments,
-        "positive_comments": parsed.get("positive_comments", [])[:3],
-        "critical_comments": parsed.get("critical_comments", [])[:3],
-        "student_suggestions": parsed.get("student_suggestions", [])[:3],
-        "subthemes": parsed.get("subthemes", []),
-        "subtheme_mentions": insight_metrics.subtheme_mention_rows(
-            parsed.get("subthemes", []), relevant_docs
-        ),
-        "quotes": relevant_docs[:3],
-    }
-
-
 def _generate_theme_payload(
     *,
     client,
@@ -342,6 +261,87 @@ def generate_theme_summary(
         return response_data
     finally:
         client.unload(llm_model)
+
+
+def _empty_theme_payload(
+    theme_name: str,
+    selected: dict,
+    *,
+    filters: dict,
+    provider: str,
+    llm_model: str,
+    llm_generation_settings: dict | None,
+) -> dict:
+    return {
+        "status": "success",
+        "theme": theme_name,
+        "frequency": selected["frequency"],
+        "document_count": selected["source_document_count"],
+        "vector_relevant_count": selected["vector_relevant_count"],
+        "total_filtered_documents": selected["total_filtered_documents"],
+        "llm_document_count": 0,
+        "hierarchical_document_count": 0,
+        "hierarchical_batch_documents": HIERARCHICAL_RAG_BATCH_DOCUMENTS,
+        "rag_strategy": HIERARCHICAL_RAG_STRATEGY,
+        "filters_applied": filters,
+        "cache_version": INSIGHT_CACHE_VERSION,
+        "llm_context_documents": LLM_CONTEXT_DOCUMENTS,
+        "llm_provider": provider,
+        "llm_model": llm_model,
+        "llm_generation_settings": llm_generation_settings,
+        "reranker": retrieval.current_reranker_id(),
+        "summary": "No responses were semantically assigned to this theme.",
+        "sentiments": [],
+        "positive_comments": [],
+        "critical_comments": [],
+        "student_suggestions": [],
+        "subthemes": [],
+        "subtheme_mentions": [],
+        "quotes": [],
+    }
+
+
+def _theme_payload_from_parsed(
+    theme_name: str,
+    selected: dict,
+    parsed: dict,
+    *,
+    filters: dict,
+    provider: str,
+    llm_model: str,
+    llm_generation_settings: dict | None,
+) -> dict:
+    relevant_docs = selected["relevant_docs"]
+    sentiments = parsed.get("sentiments", [])
+    return {
+        "status": "success",
+        "theme": theme_name,
+        "frequency": selected["frequency"],
+        "document_count": selected["source_document_count"],
+        "vector_relevant_count": selected["vector_relevant_count"],
+        "total_filtered_documents": selected["total_filtered_documents"],
+        "llm_document_count": selected["analyzed_document_count"],
+        "hierarchical_document_count": selected["analyzed_document_count"],
+        "hierarchical_batch_documents": HIERARCHICAL_RAG_BATCH_DOCUMENTS,
+        "rag_strategy": HIERARCHICAL_RAG_STRATEGY,
+        "filters_applied": filters,
+        "cache_version": INSIGHT_CACHE_VERSION,
+        "llm_context_documents": LLM_CONTEXT_DOCUMENTS,
+        "llm_provider": provider,
+        "llm_model": llm_model,
+        "llm_generation_settings": llm_generation_settings,
+        "reranker": retrieval.current_reranker_id(),
+        "summary": parsed.get("summary", "Summary could not be parsed."),
+        "sentiments": sentiments,
+        "positive_comments": parsed.get("positive_comments", [])[:3],
+        "critical_comments": parsed.get("critical_comments", [])[:3],
+        "student_suggestions": parsed.get("student_suggestions", [])[:3],
+        "subthemes": parsed.get("subthemes", []),
+        "subtheme_mentions": insight_metrics.subtheme_mention_rows(
+            parsed.get("subthemes", []), relevant_docs
+        ),
+        "quotes": relevant_docs[:3],
+    }
 
 
 def precompute_insights_stream(

@@ -168,6 +168,13 @@ METADATA_COLS = {
     "Studiejaar volgens instelling",
     "Kunstopleiding",
     "Afstandsonderwijs",
+    "Label1",
+    "Label2",
+    "Label3",
+    "Label4",
+    "Label5",
+    "Label6",
+    "Label7",
 }
 
 METADATA_ALIASES = {
@@ -175,8 +182,10 @@ METADATA_ALIASES = {
     "academic_year": ["academic_year", "jaar"],
     "location": ["location"],
     "programme": ["programme", "leerroute_track", "actuele opleidingsnaam volgens rio"],
-    "study_mode": ["study_mode", "type student", "opleidingsvorm (vt dt du)"],
+    "study_mode": ["study_mode", "Type Student", "Opleidingsvorm (vt dt du)"],
     "cohort": ["cohort", "studiejaar volgens instelling"],
+    "sector": ["sector", "Label3"],
+    "language": ["language", "Label5"],
 }
 
 SOURCE_METADATA_ALIASES = {
@@ -197,12 +206,17 @@ SOURCE_METADATA_ALIASES = {
         "Actuele Opleidingsnaam volgens RIO",
     ],
     "study_mode": [
-        "study_mode",
-        "Type Student",
         "Opleidingsvorm (vt dt du)",
+        "study_mode",
     ],
     "cohort": [
         "cohort",
         "Studiejaar volgens instelling",
+    ],
+    "sector": [
+        "Label3",
+    ],
+    "language": [
+        "Label5",
     ],
 }

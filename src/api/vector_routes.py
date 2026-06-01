@@ -85,6 +85,8 @@ def _filters_from_args(all_value: str) -> dict:
         "programme",
         "study_mode",
         "cohort",
+        "sector",
+        "language",
     ]:
         value = request.args.get(key)
         if value and value != all_value:

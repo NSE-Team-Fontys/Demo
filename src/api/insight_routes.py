@@ -12,6 +12,8 @@ llama_cpp_models = import_module("src.pipeline.04_generation.llama_cpp_models")
 def theme_summary():
     try:
         data = request.get_json(silent=True) or {}
+        raw_filters = data.get("filters") or {}
+        filters = {k: v for k, v in raw_filters.items() if v} if raw_filters else None
         payload = generation.generate_theme_summary(
             theme_name=data.get("theme", ""),
             theme_query=data.get("query", ""),
@@ -80,6 +82,8 @@ def get_themes_overview():
         "programme",
         "study_mode",
         "cohort",
+        "sector",
+        "language",
     ]:
         value = request.args.get(key)
         if value and value != "All":

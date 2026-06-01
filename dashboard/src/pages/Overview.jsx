@@ -54,6 +54,8 @@ export default function Overview() {
     opleiding: 'All',
     studievorm: 'All',
     cohort: 'All',
+    sector: 'All',
+    taal: 'All',
   })
 
   // Fetch filter options on mount
@@ -62,7 +64,9 @@ export default function Overview() {
     locations: [],
     programmes: [],
     study_modes: [],
-    cohorts: []
+    cohorts: [],
+    sectors: [],
+    languages: [],
   });
 
   useEffect(() => {
@@ -96,6 +100,8 @@ export default function Overview() {
     if (filters.opleiding !== 'All') params.append('programme', filters.opleiding);
     if (filters.studievorm !== 'All') params.append('study_mode', filters.studievorm);
     if (filters.cohort !== 'All') params.append('cohort', filters.cohort);
+    if (filters.sector !== 'All') params.append('sector', filters.sector);
+    if (filters.taal !== 'All') params.append('language', filters.taal);
 
     fetch(`http://localhost:5001/api/themes-overview?${params}`)
       .then(r => r.json())
@@ -147,58 +153,51 @@ export default function Overview() {
 
       {/* ── Filters bar ── */}
       <div className="relative z-20 bg-surface-container-lowest/85 glass-panel shadow-editorial rounded-2xl px-5 py-4">
-        <div className="flex flex-col md:flex-row md:items-center gap-4">
-          <div className="flex flex-wrap md:flex-nowrap gap-3 flex-1">
-            <div className="flex-1 min-w-[130px]">
-              <FilterDropdown
-                icon="calendar_today"
-                label="Academic Year"
-                value={filters.jaar}
-                options={['All', ...filterOptions.academic_years]}
-                onChange={(v) => setFilter('jaar', v)}
-              />
-            </div>
-            <div className="flex-1 min-w-[130px]">
-              <FilterDropdown
-                icon="location_on"
-                label="Location"
-                value={filters.locatie}
-                options={['All', ...filterOptions.locations]}
-                onChange={(v) => setFilter('locatie', v)}
-              />
-            </div>
-            <div className="flex-1 min-w-[130px]">
-              <FilterDropdown
-                icon="school"
-                label="Programme"
-                value={filters.opleiding}
-                options={['All', ...filterOptions.programmes]}
-                onChange={(v) => setFilter('opleiding', v)}
-              />
-            </div>
-            <div className="flex-1 min-w-[130px]">
-              <FilterDropdown
-                icon="history_edu"
-                label="Study Mode"
-                value={filters.studievorm}
-                options={['All', ...filterOptions.study_modes]}
-                onChange={(v) => setFilter('studievorm', v)}
-              />
-            </div>
-            <div className="flex-1 min-w-[130px]">
-              <FilterDropdown
-                icon="group"
-                label="Cohort"
-                value={filters.cohort}
-                options={['All', ...filterOptions.cohorts]}
-                onChange={(v) => setFilter('cohort', v)}
-              />
-            </div>
+        <div className="flex flex-wrap md:flex-nowrap gap-3 flex-1">
+          <div className="flex-1 min-w-[130px]">
+            <FilterDropdown
+              icon="calendar_today"
+              label="Academic Year"
+              value={filters.jaar}
+              options={['All', ...filterOptions.academic_years]}
+              onChange={(v) => setFilter('jaar', v)}
+            />
           </div>
-
-          {/* Live / Offline badge */}
-          <div className="shrink-0">
-            <DataSourceBadge isLive={isLive} loading={loading} onRefresh={refresh} />
+          <div className="flex-1 min-w-[130px]">
+            <FilterDropdown
+              icon="category"
+              label="Sector"
+              value={filters.sector}
+              options={['All', ...filterOptions.sectors]}
+              onChange={(v) => setFilter('sector', v)}
+            />
+          </div>
+          <div className="flex-1 min-w-[130px]">
+            <FilterDropdown
+              icon="school"
+              label="Programme"
+              value={filters.opleiding}
+              options={['All', ...filterOptions.programmes]}
+              onChange={(v) => setFilter('opleiding', v)}
+            />
+          </div>
+          <div className="flex-1 min-w-[130px]">
+            <FilterDropdown
+              icon="history_edu"
+              label="Study Mode"
+              value={filters.studievorm}
+              options={['All', ...filterOptions.study_modes]}
+              onChange={(v) => setFilter('studievorm', v)}
+            />
+          </div>
+          <div className="flex-1 min-w-[130px]">
+            <FilterDropdown
+              icon="translate"
+              label="Language"
+              value={filters.taal}
+              options={['All', ...filterOptions.languages]}
+              onChange={(v) => setFilter('taal', v)}
+            />
           </div>
         </div>
       </div>

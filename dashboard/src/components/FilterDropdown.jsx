@@ -49,6 +49,7 @@ export default function FilterDropdown({ icon, label, value, options, onChange }
 
       {open && (
         <div className="absolute left-0 right-0 top-full mt-1 bg-surface-container-lowest rounded-xl shadow-ambient border border-outline-variant/20 z-50 overflow-hidden">
+          <div className="overflow-y-auto max-h-[360px] overscroll-contain">
           {options.map((opt) => (
             <button
               key={opt}
@@ -65,6 +66,7 @@ export default function FilterDropdown({ icon, label, value, options, onChange }
               )}
             </button>
           ))}
+          </div>
         </div>
       )}
     </div>
