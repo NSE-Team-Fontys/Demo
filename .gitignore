@@ -25,6 +25,7 @@ __pycache__/
 *.egg-info/
 .eggs/
 .python-version
+!.python-version
 venv/
 ENV/
 env/
@@ -73,3 +74,4 @@ survey_vector_db/
 
 # Local data files
 data/
+.python-version

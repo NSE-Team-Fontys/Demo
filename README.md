@@ -16,13 +16,17 @@ The project is built for demos and applied research, not production deployment.
 
 ### Backend
 
+Use Python 3.12 for the backend on MAC. Python 3.14 is too new for some of the
+NLP dependencies in `requirements.txt` and may try to compile packages such as
+`thinc-apple-ops` from source.
+
 macOS/Linux:
 
 ```bash
 cd /path/to/Demo
-python -m venv .venv
+python3.12 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 python app.py
 ```
 
