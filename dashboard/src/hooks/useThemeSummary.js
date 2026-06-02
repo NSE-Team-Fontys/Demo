@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
+import { CITY_TO_BRIN } from '../constants/locations'
 
 function buildApiFilters(filters = {}) {
   const map = {
     academic_year: filters.jaar,
-    sector: filters.sector,
+    location: filters.locatie ? CITY_TO_BRIN[filters.locatie] || filters.locatie : undefined,
     programme: filters.opleiding,
     study_mode: filters.studievorm,
     language: filters.taal,
@@ -25,7 +26,8 @@ export function useThemeSummary(theme, filters = {}) {
     }
 
     let isMounted = true
-    if (theme.cachedInsight?.summary) {
+    const hasActiveFilters = Object.keys(buildApiFilters(filters)).length > 0
+    if (!hasActiveFilters && theme.cachedInsight?.summary) {
       setLiveData(theme.cachedInsight)
       setLoadingLive(false)
       return () => {
@@ -45,6 +47,7 @@ export function useThemeSummary(theme, filters = {}) {
             theme: theme.name,
             query: theme.name,
             filters: Object.keys(apiFilters).length > 0 ? apiFilters : undefined,
+            allow_model_download: true,
           }),
         })
         const data = await res.json()

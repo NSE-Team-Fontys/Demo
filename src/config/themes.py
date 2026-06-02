@@ -180,7 +180,7 @@ METADATA_COLS = {
 METADATA_ALIASES = {
     "institution": ["institution", "actuele naam instelling volgens rio"],
     "academic_year": ["academic_year", "jaar"],
-    "location": ["location"],
+    "location": ["location", "actuele brin-volgnummer volgens rio"],
     "programme": ["programme", "leerroute_track", "actuele opleidingsnaam volgens rio"],
     "study_mode": ["study_mode", "Type Student", "Opleidingsvorm (vt dt du)"],
     "cohort": ["cohort", "studiejaar volgens instelling"],
@@ -199,6 +199,7 @@ SOURCE_METADATA_ALIASES = {
     ],
     "location": [
         "location",
+        "Actuele BRIN-volgnummer volgens RIO",
     ],
     "programme": [
         "programme",

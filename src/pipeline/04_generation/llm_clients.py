@@ -206,7 +206,6 @@ class LlamaCppClient:
             )
         except Exception:
             pass
-        self._stop_managed_server()
 
     @classmethod
     def _stop_managed_server(cls) -> None:
