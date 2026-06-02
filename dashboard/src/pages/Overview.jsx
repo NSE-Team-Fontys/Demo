@@ -9,6 +9,7 @@ import ComparisonMiniChart from '../components/ComparisonMiniChart'
 import FilterDropdown from '../components/FilterDropdown'
 import { LayoutGroup } from 'framer-motion'
 import { useVectorDB } from '../context/VectorDBContext'
+import { CITY_TO_BRIN, LOCATION_OPTIONS } from '../constants/locations'
 
 // ── Live/Offline status badge ─────────────────────────────────────────────────
 function DataSourceBadge({ isLive, loading, onRefresh }) {
@@ -96,11 +97,10 @@ export default function Overview() {
   useEffect(() => {
     const params = new URLSearchParams();
     if (filters.jaar !== 'All') params.append('academic_year', filters.jaar);
-    if (filters.locatie !== 'All') params.append('location', filters.locatie);
+    if (filters.locatie !== 'All') params.append('location', CITY_TO_BRIN[filters.locatie] || filters.locatie);
     if (filters.opleiding !== 'All') params.append('programme', filters.opleiding);
     if (filters.studievorm !== 'All') params.append('study_mode', filters.studievorm);
     if (filters.cohort !== 'All') params.append('cohort', filters.cohort);
-    if (filters.sector !== 'All') params.append('sector', filters.sector);
     if (filters.taal !== 'All') params.append('language', filters.taal);
 
     fetch(`http://localhost:5001/api/themes-overview?${params}`)
@@ -142,6 +142,12 @@ export default function Overview() {
     setFilters((prev) => ({ ...prev, [key]: value }))
   }
 
+  function clearFilters() {
+    setFilters({ jaar: 'All', locatie: 'All', opleiding: 'All', studievorm: 'All', cohort: 'All', taal: 'All' })
+  }
+
+  const hasActiveFilters = Object.values(filters).some((v) => v !== 'All')
+
   function handleThemeClick(theme) {
     setActiveId((prev) => (prev === theme.id ? null : theme.id))
   }
@@ -165,11 +171,11 @@ export default function Overview() {
           </div>
           <div className="flex-1 min-w-[130px]">
             <FilterDropdown
-              icon="category"
-              label="Sector"
-              value={filters.sector}
-              options={['All', ...filterOptions.sectors]}
-              onChange={(v) => setFilter('sector', v)}
+              icon="location_on"
+              label="Location"
+              value={filters.locatie}
+              options={LOCATION_OPTIONS}
+              onChange={(v) => setFilter('locatie', v)}
             />
           </div>
           <div className="flex-1 min-w-[130px]">
@@ -200,9 +206,16 @@ export default function Overview() {
             />
           </div>
         </div>
+        {hasActiveFilters && (
+          <button
+            onClick={clearFilters}
+            className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-on-surface-variant hover:text-primary transition-colors"
+          >
+            <span className="material-symbols-outlined text-sm">filter_alt_off</span>
+            Clear all filters
+          </button>
+        )}
       </div>
-
-      {/* ── Dashboard grid ── */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-8 items-start">
 
         {/* Left/center — bento + charts */}
@@ -230,6 +243,7 @@ export default function Overview() {
                     size={theme.size}
                     isActive={activeId === theme.id}
                     onClick={() => handleThemeClick(theme)}
+                    filters={filters}
                   />
                 ))}
               </div>

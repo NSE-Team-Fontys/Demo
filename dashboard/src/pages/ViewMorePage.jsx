@@ -3,6 +3,7 @@ import { Link, NavLink, useLocation, useParams } from 'react-router-dom'
 import { getFilteredThemes } from '../data/themes'
 import { useThemeSummary } from '../hooks/useThemeSummary'
 import FilterDropdown from '../components/FilterDropdown'
+import { CITY_TO_BRIN, LOCATION_OPTIONS } from '../constants/locations'
 
 function StatTile({ icon, label, value, helper }) {
   return (
@@ -185,12 +186,19 @@ export default function ViewMorePage() {
   const { id } = useParams()
   const location = useLocation()
 
-  const [filters, setFilters] = useState({
-    jaar: 'All', sector: 'All', opleiding: 'All', studievorm: 'All', taal: 'All',
+  const [filters, setFilters] = useState(() => {
+    const sf = location.state?.filters
+    return {
+      jaar: sf?.jaar ?? 'All',
+      locatie: sf?.locatie ?? 'All',
+      opleiding: sf?.opleiding ?? 'All',
+      studievorm: sf?.studievorm ?? 'All',
+      taal: sf?.taal ?? 'All',
+    }
   })
 
   const [filterOptions, setFilterOptions] = useState({
-    academic_years: [], sectors: [], programmes: [], study_modes: [], languages: [],
+    academic_years: [], programmes: [], study_modes: [], languages: [],
   })
 
   useEffect(() => {
@@ -205,6 +213,12 @@ export default function ViewMorePage() {
   function setFilter(key, value) {
     setFilters(prev => ({ ...prev, [key]: value }))
   }
+
+  function clearFilters() {
+    setFilters({ jaar: 'All', locatie: 'All', opleiding: 'All', studievorm: 'All', taal: 'All' })
+  }
+
+  const hasActiveFilters = Object.values(filters).some((v) => v !== 'All')
 
   const fallbackTheme = useMemo(() => {
     const themes = getFilteredThemes({
@@ -224,7 +238,7 @@ export default function ViewMorePage() {
     if (!theme) return
     const params = new URLSearchParams()
     if (filters.jaar !== 'All') params.append('academic_year', filters.jaar)
-    if (filters.sector !== 'All') params.append('sector', filters.sector)
+    if (filters.locatie !== 'All') params.append('location', CITY_TO_BRIN[filters.locatie] || filters.locatie)
     if (filters.opleiding !== 'All') params.append('programme', filters.opleiding)
     if (filters.studievorm !== 'All') params.append('study_mode', filters.studievorm)
     if (filters.taal !== 'All') params.append('language', filters.taal)
@@ -237,15 +251,18 @@ export default function ViewMorePage() {
       .catch(() => setFilteredPercentage(null))
   }, [filters, theme?.name])
 
-  const comments = liveData?.quotes?.length > 0 ? liveData.quotes : theme?.quotes ?? []
-  const subthemes = liveData?.subthemes?.length > 0 ? liveData.subthemes : theme?.subthemes ?? []
-  const summary = liveData?.summary || theme?.aiSummary
-  const positiveComments = liveData?.positive_comments?.length > 0 ? liveData.positive_comments : []
-  const criticalComments = liveData?.critical_comments?.length > 0 ? liveData.critical_comments : []
-  const studentSuggestions = liveData?.student_suggestions?.length > 0 ? liveData.student_suggestions : []
+  const hasLlmError = !!liveData?.error
+  const effectiveData = hasLlmError ? theme?.cachedInsight : liveData
+
+  const comments = effectiveData?.quotes?.length > 0 ? effectiveData.quotes : theme?.quotes ?? []
+  const subthemes = effectiveData?.subthemes?.length > 0 ? effectiveData.subthemes : theme?.subthemes ?? []
+  const summary = effectiveData?.summary || theme?.aiSummary
+  const positiveComments = effectiveData?.positive_comments?.length > 0 ? effectiveData.positive_comments : []
+  const criticalComments = effectiveData?.critical_comments?.length > 0 ? effectiveData.critical_comments : []
+  const studentSuggestions = effectiveData?.student_suggestions?.length > 0 ? effectiveData.student_suggestions : []
   const chartRows = buildSubthemeRows(
     subthemes,
-    liveData?.subtheme_mentions,
+    effectiveData?.subtheme_mentions,
     [...comments, ...positiveComments, ...criticalComments, ...studentSuggestions],
   )
 
@@ -279,8 +296,8 @@ export default function ViewMorePage() {
                 options={['All', ...filterOptions.academic_years]} onChange={(v) => setFilter('jaar', v)} />
             </div>
             <div className="flex-1 min-w-[130px]">
-              <FilterDropdown icon="category" label="Sector" value={filters.sector}
-                options={['All', ...filterOptions.sectors]} onChange={(v) => setFilter('sector', v)} />
+              <FilterDropdown icon="location_on" label="Location" value={filters.locatie}
+                options={LOCATION_OPTIONS} onChange={(v) => setFilter('locatie', v)} />
             </div>
             <div className="flex-1 min-w-[130px]">
               <FilterDropdown icon="school" label="Programme" value={filters.opleiding}
@@ -295,6 +312,15 @@ export default function ViewMorePage() {
                 options={['All', ...filterOptions.languages]} onChange={(v) => setFilter('taal', v)} />
             </div>
           </div>
+          {hasActiveFilters && (
+            <button
+              onClick={clearFilters}
+              className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-on-surface-variant hover:text-primary transition-colors"
+            >
+              <span className="material-symbols-outlined text-sm">filter_alt_off</span>
+              Clear all filters
+            </button>
+          )}
         </div>
 
         <section
@@ -344,10 +370,19 @@ export default function ViewMorePage() {
                   <div className="h-3 bg-blue-200/50 rounded animate-pulse w-11/12" />
                   <div className="h-3 bg-blue-200/50 rounded animate-pulse w-4/6" />
                 </div>
-              ) : liveData?.error ? (
-                <div className="p-3 bg-red-50 text-red-700 text-sm rounded-xl border border-red-200">
-                  {liveData.error}
-                </div>
+              ) : hasLlmError ? (
+                <>
+                  <div className="p-3 bg-amber-50 text-amber-800 text-xs rounded-xl border border-amber-200 mb-3">
+                    LLM offline — showing unfiltered cached insights. Start llama-server to generate filtered analysis.
+                  </div>
+                  {summary ? (
+                    <p className="text-sm md:text-base text-blue-900 leading-relaxed bg-white/60 p-4 rounded-xl border border-blue-100/60">
+                      {summary}
+                    </p>
+                  ) : (
+                    <p className="text-sm text-blue-900/60 italic">No cached summary available.</p>
+                  )}
+                </>
               ) : (
                 <p className="text-sm md:text-base text-blue-900 leading-relaxed bg-white/60 p-4 rounded-xl border border-blue-100/60">
                   {summary}

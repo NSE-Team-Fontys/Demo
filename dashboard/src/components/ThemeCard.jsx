@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 
-export default function ThemeCard({ theme, isActive, onClick, size }) {
+export default function ThemeCard({ theme, isActive, onClick, size, filters }) {
   const activeCls = isActive
     ? 'ring-2 ring-primary scale-[1.02] shadow-ambient bg-blue-50/50'
     : 'hover:scale-[1.02] hover:shadow-ambient bg-white'
@@ -35,7 +35,7 @@ export default function ThemeCard({ theme, isActive, onClick, size }) {
           )}
           <Link
             to={`/thema/${theme.id}`}
-            state={{ theme }}
+            state={{ theme, filters }}
             onClick={(e) => { e.stopPropagation(); window.scrollTo(0, 0) }}
             className="text-xs font-semibold text-primary/70 hover:text-primary mt-2 inline-block"
           >
