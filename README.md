@@ -71,7 +71,7 @@ make
 # Add the build output directory to your PATH
 ```
 
-#### Windows (Build from Source with CUDA)
+#### Windows (Build from Source with CUDA) USE TERMINAL
 
 To build `llama.cpp` from source with GPU support on Windows, you must have the **NVIDIA CUDA Toolkit**, **Visual Studio C++ Build Tools**, and **CMake** installed.
 
@@ -82,22 +82,25 @@ To build `llama.cpp` from source with GPU support on Windows, you must have the 
    ```
    *Restart your PowerShell/terminal after installing.*
 
-2. **Clone the repository**:
-   Open a terminal in the root folder of this project (the `Demo` directory) and run:
-   ```powershell
-   git clone https://github.com/ggerganov/llama.cpp
-   cd llama.cpp
-   ```
+2. **Install Nvidia CUDA toolkit** (if not already installed):
+https://developer.nvidia.com/cuda-downloads?target_os=Windows
 
-3. **Configure the build for CUDA**:
-   ```powershell
-   cmake -B build -DGGML_CUDA=ON
-   ```
+3. **Clone the repository and build llama.cpp**
 
-4. **Compile the server**:
-   ```powershell
-   cmake --build build --config Release -j
-   ```
+1: Run the below command to clone the official repository or alternatively get it from the download page.
+
+git clone https://github.com/ggerganov/llama.cpp
+cd llama.cpp
+2: Now build llama.cpp:
+
+mkdir build
+cd build
+
+cmake -B build -DGGML_CUDA=ON
+cmake --build build --config Release
+Once the build has completed, you will find your executable files usually in:
+
+.\build\bin\Release\
    *This compiles `llama-server.exe` into the `build\bin\Release` directory.*
 
 5. **Configure your environment**:
@@ -106,7 +109,8 @@ To build `llama.cpp` from source with GPU support on Windows, you must have the 
    LLAMA_CPP_SERVER_BIN=llama.cpp\build\bin\Release\llama-server.exe
    LLAMA_CPP_N_GPU_LAYERS=99
    ```
-
+6. **Unified Memory**
+The environment variable GGML_CUDA_ENABLE_UNIFIED_MEMORY=1 can be used to enable unified memory in Linux. This allows swapping to system RAM instead of crashing when the GPU VRAM is exhausted. In Windows this setting is available in the NVIDIA control panel as System Memory Fallback.
 #### Verify the installation
 
 After installing, run:
