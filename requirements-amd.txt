@@ -1,0 +1,6 @@
+-r requirements-common.txt
+
+# Install the ROCm-enabled PyTorch build for the exact AMD GPU and OS before
+# this file. The existing ROCm build satisfies this dependency without pulling
+# in the NVIDIA-only CuPy and CUDA runtime packages from requirements.txt.
+torch

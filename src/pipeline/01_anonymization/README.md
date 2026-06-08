@@ -35,7 +35,7 @@ The pipeline maintains memory of certain extracted entities across the document 
 3. Iterating per targeted column, applying chunked batching.
 4. Each chunk delegates to `privacy_pipeline.py` where:
    - Layer 1 models examine the batch.
-   - Layer 2 models (usually placed on MPS/CUDA devices) are fed the batch.
+   - Layer 2 models (usually placed on MPS, NVIDIA CUDA, or AMD ROCm devices) are fed the batch.
    - Spans are aggregated, and texts are updated.
 5. Every *N* batches, a checkpoint is committed to disk safely.
 6. Upon finishing all columns, `reporting.py` compiles the run details, and `checkpoints.py` clears out temporary states.

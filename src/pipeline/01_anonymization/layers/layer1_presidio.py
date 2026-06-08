@@ -13,7 +13,7 @@ from presidio_anonymizer.entities import OperatorConfig
 from langdetect import detect
 from langdetect.lang_detect_exception import LangDetectException
 
-from src.utils.model_device import describe_model_device, get_model_device
+from src.utils.model_device import describe_model_device, get_model_device, is_rocm_pytorch
 
 from .layer2_text_norm import normalize_for_ner
 from .layer_utils import extend_name_spans_for_tussenvoegsels
@@ -214,12 +214,19 @@ def _init_spacy_device() -> str:
             logger.warning("use_pytorch_for_gpu_memory failed: %s", e)
         activated = spacy.prefer_gpu()
         if not activated:
-            logger.warning(
-                "spaCy could not activate CUDA — falling back to CPU. "
-                "Check that cupy-cuda12x is installed in this interpreter "
-                "(`python -c \"import cupy; print(cupy.__version__)\"`) and "
-                "that the CUDA major version matches your driver."
-            )
+            if is_rocm_pytorch():
+                logger.warning(
+                    "spaCy could not activate a ROCm-capable CuPy backend; "
+                    "Presidio is falling back to CPU. The PyTorch-backed "
+                    "anonymization layer remains on the AMD GPU."
+                )
+            else:
+                logger.warning(
+                    "spaCy could not activate CUDA; falling back to CPU. "
+                    "Check that cupy-cuda12x is installed in this interpreter "
+                    "(`python -c \"import cupy; print(cupy.__version__)\"`) and "
+                    "that the CUDA major version matches your driver."
+                )
             return "cpu"
         logger.info("Presidio spaCy running on %s", describe_model_device("cuda"))
         return "cuda"
@@ -411,4 +418,3 @@ def presidio_masking_spec() -> dict:
         ],
         "[TITLE]": ["DUTCH_HONORIFIC"],
     }
-

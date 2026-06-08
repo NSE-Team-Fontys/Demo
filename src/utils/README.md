@@ -24,11 +24,11 @@ This is the central hardware acceleration router for PyTorch and `sentence_trans
 
 *   **Auto-Detection Hardware Cascading**:
     `get_model_device()` implements a cascade fallback:
-    1.  **NVIDIA GPUs**: Checks `torch.cuda.is_available()`.
+    1.  **NVIDIA CUDA or AMD ROCm GPUs**: Checks `torch.cuda.is_available()`. PyTorch intentionally exposes ROCm/HIP devices through the same `cuda` API and device string.
     2.  **Apple Silicon (MPS)**: Injects safe checks to evaluate if the `mps` backend is built and ready, allowing M1/M2/M3 chips to accelerate heavy transformer workloads natively.
     3.  **CPU Fallback**: Defaults to `cpu` if no dedicated accelerator is found.
 *   **Environment Variable Overrides**:
-    The auto-detection can be manually clamped by setting the `MODEL_DEVICE` environment variable (e.g., `MODEL_DEVICE=cpu` or `MODEL_DEVICE=cuda:0`), which is heavily utilized in containerized orchestrations to strictly monitor resource consumption.
+    The auto-detection can be manually clamped by setting the `MODEL_DEVICE` environment variable (e.g., `MODEL_DEVICE=cpu`, `MODEL_DEVICE=cuda:0`, or `MODEL_DEVICE=rocm`). The `rocm` and `hip` aliases are normalized to PyTorch's required `cuda` device string.
 *   **Pipeline Normalization (`get_pipeline_device`)**:
     HuggingFace standard pipelines strictly demand integer configurations (e.g., `0` for CUDA device 0) or specific PyTorch classes (`torch.device('mps')`) rather than generic string descriptors. This transformer function patches those inconsistencies automatically. 
 
@@ -38,4 +38,4 @@ This is the central hardware acceleration router for PyTorch and `sentence_trans
 
 | Environment Variable | Supported Values | Fallback | Purpose |
 | :--- | :--- | :--- | :--- |
-| `MODEL_DEVICE` | `auto`, `cuda`, `mps`, `cpu` | `auto` | Forces the machine learning pipeline into a specific processing architecture. |
+| `MODEL_DEVICE` | `auto`, `cuda`, `rocm`, `hip`, `mps`, `cpu` | `auto` | Forces the machine learning pipeline into a specific processing architecture. |

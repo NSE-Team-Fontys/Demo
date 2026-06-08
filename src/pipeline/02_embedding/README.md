@@ -12,7 +12,7 @@ It is structured to be memory-efficient, resumable, and capable of streaming rea
 This module manages the instantiation and caching of the embedding models. 
 - **Default Model:** `Octen/Octen-Embedding-0.6B`
 - **Supported framework:** Uses `SentenceTransformer`.
-- **Environment & Inference context:** Dynamically checks device availability (MPS/CUDA/CPU) via `src.utils.model_device` and respects environment variables like `HF_HUB_OFFLINE` to enforce offline execution using locally cached weights.
+- **Environment & Inference context:** Dynamically checks device availability (MPS/NVIDIA CUDA/AMD ROCm/CPU) via `src.utils.model_device` and respects environment variables like `HF_HUB_OFFLINE` to enforce offline execution using locally cached weights.
 - It leverages an `lru_cache` to keep models in memory without multiple allocations across requests.
 
 ### 2. `vector_builder.py`

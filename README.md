@@ -30,6 +30,9 @@ python -m pip install -r requirements.txt
 python app.py
 ```
 
+AMD ROCm users should install the matching ROCm PyTorch build first and use
+`requirements-amd.txt` instead, as described under PyTorch GPU acceleration.
+
 Windows PowerShell:
 
 ```powershell
@@ -172,14 +175,55 @@ To run the server manually instead, start it before clicking Generate and leave 
 llama-server -hf unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL -c 32000 -ngl 99
 ```
 
-### Presidio (Layer 1) GPU acceleration
+### PyTorch GPU acceleration
 
-Layer 1 uses spaCy and follows the same `MODEL_DEVICE` setting as the rest of the pipeline. The required accelerators are pinned in `requirements.txt` with platform markers, so `pip install -r requirements.txt` is enough:
+The EU-PII anonymization layer, embeddings, and reranker use PyTorch through the shared `MODEL_DEVICE` router.
+
+- **NVIDIA CUDA:** install a PyTorch CUDA wheel matching the host driver/runtime. `MODEL_DEVICE=auto` or `MODEL_DEVICE=cuda` selects it.
+- **AMD ROCm/HIP:** install the ROCm-enabled PyTorch build listed for your exact OS and GPU in AMD's [current PyTorch compatibility documentation](https://rocm.docs.amd.com/en/latest/compatibility/ml-compatibility/pytorch-compatibility.html). Then use `MODEL_DEVICE=auto` or `MODEL_DEVICE=rocm`.
+- **Apple Silicon:** the standard macOS PyTorch wheel includes MPS. Use `MODEL_DEVICE=mps`.
+
+PyTorch intentionally exposes AMD ROCm devices through `torch.cuda`, so the application still passes the device string `cuda` to Transformers and SentenceTransformers. No model or anonymization logic changes are required.
+
+Verify an AMD installation before starting the backend:
+
+```bash
+python -c "import torch; print('available=', torch.cuda.is_available(), 'hip=', torch.version.hip, 'device=', torch.cuda.get_device_name(0) if torch.cuda.is_available() else None)"
+```
+
+The output must show `available=True`, a non-empty `hip=` version, and the AMD GPU name. The backend log will then identify `AMD GPU (ROCm/HIP ... via cuda:0)`.
+
+AMD support depends on AMD's current compatibility matrix. On Windows, only the combinations in AMD's [Windows support matrix](https://rocm.docs.amd.com/projects/radeon-ryzen/en/latest/docs/compatibility/compatibilityrad/windows/windows_compatibility.html) are supported.
+
+In a fresh virtual environment, install AMD's ROCm-enabled PyTorch build first using the command for the exact GPU and OS. Then install the application dependencies without the NVIDIA-only packages:
+
+```bash
+python -m pip install -r requirements-amd.txt
+```
+
+Installing PyTorch first is important because `sentence-transformers` also depends on it. The ROCm build then satisfies that dependency instead of pip selecting a generic build.
+
+### Presidio (Layer 1) acceleration
+
+Layer 1 uses spaCy and follows the same `MODEL_DEVICE` setting as the rest of the pipeline:
 
 - **NVIDIA CUDA (Windows/Linux):** `cupy-cuda12x` plus the self-contained NVIDIA CUDA 12.x runtime DLL wheels (`nvidia-cuda-nvrtc-cu12`, `nvidia-cuda-runtime-cu12`, `nvidia-cublas-cu12`) are pinned in `requirements.txt`. The DLL wheels add ~660 MB to a fresh install but make GPU activation reliable even when no system CUDA Toolkit is present or `CUDA_PATH` is unset.
 - **Apple Silicon (macOS):** `thinc-apple-ops` is installed automatically.
+- **AMD ROCm/HIP:** the default spaCy installation does not provide a dependable packaged ROCm backend. Presidio therefore runs on CPU while the PyTorch-backed EU-PII layer runs on the AMD GPU. This fallback does not disable AMD acceleration for the rest of the pipeline.
 
-Look for `Presidio spaCy running on GPU (cuda:0)` in the server logs to confirm the GPU is active. If you see `spaCy could not activate CUDA — falling back to CPU`, re-run `pip install -r requirements.txt` and restart the Flask backend.
+On NVIDIA, look for `Presidio spaCy running on NVIDIA GPU (CUDA via cuda:0)` in the server logs. If spaCy cannot activate CUDA, re-run `pip install -r requirements.txt` and restart the Flask backend. On AMD, a Presidio CPU fallback is expected unless a compatible ROCm CuPy build was installed separately.
+
+### llama.cpp on AMD
+
+Generation uses an external `llama-server`, independent of `MODEL_DEVICE`. Build the included `llama.cpp` checkout with its HIP backend:
+
+```bash
+cd llama.cpp
+cmake -S . -B build -DGGML_HIP=ON -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release
+```
+
+Set `LLAMA_CPP_SERVER_BIN` to the resulting `llama-server` and keep `LLAMA_CPP_N_GPU_LAYERS=99`. For unsupported ROCm configurations, llama.cpp also provides a Vulkan backend using `-DGGML_VULKAN=ON`.
 
 ## Environment
 
@@ -195,7 +239,7 @@ Useful optional variables:
 
 ```env
 ANONYMIZE_BATCH_SIZE=512
-MODEL_DEVICE=mps
+MODEL_DEVICE=auto
 PYTORCH_ENABLE_MPS_FALLBACK=1
 LAYER2_FP16=1
 DISABLE_SPACY_MODEL_AUTO_INSTALL=1
@@ -222,7 +266,7 @@ answers analyzed for a theme insight. `LLM_CONTEXT_DOCUMENTS` is retained for
 legacy/single-prompt compatibility and cache invalidation; it is no longer the
 main cap for hierarchical theme summaries.
 
-`MODEL_DEVICE=auto` prefers CUDA, then Apple MPS, then CPU. On a Mac, set `MODEL_DEVICE=mps` to force the PyTorch-backed anonymization layer onto the Apple GPU. Presidio/spaCy still runs on CPU; the EU-PII / Transformer layer is the part that can use MPS.
+`MODEL_DEVICE=auto` prefers an available PyTorch CUDA/ROCm device, then Apple MPS, then CPU. Use `MODEL_DEVICE=rocm` to require an AMD ROCm PyTorch build or `MODEL_DEVICE=mps` to force Apple MPS. Presidio/spaCy may use a different backend from the PyTorch EU-PII layer as described above.
 
 llama.cpp generation tuning is model-specific and lives in `src/pipeline/04_generation/llama_cpp_models.py`.
 
