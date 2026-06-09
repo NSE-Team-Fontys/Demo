@@ -16,7 +16,11 @@ from langdetect.lang_detect_exception import LangDetectException
 from src.utils.model_device import describe_model_device, get_model_device, is_rocm_pytorch
 
 from .layer2_text_norm import normalize_for_ner
-from .layer_utils import extend_name_spans_for_tussenvoegsels
+from .layer_utils import (
+    extend_name_spans_for_tussenvoegsels,
+    is_plausible_name_span,
+    is_plausible_location_span,
+)
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -127,7 +131,9 @@ PRESIDIO_PATTERN_DEFINITIONS = [
 
 PRESIDIO_OPERATORS = {
     "PERSON": OperatorConfig("replace", {"new_value": "[NAME]"}),
-    "NRP": OperatorConfig("replace", {"new_value": "[NAME]"}),
+    # NRP = Nationality / Religion / Political group.
+    # These are special-category personal data under GDPR Art. 9 — tag as [PII].
+    "NRP": OperatorConfig("replace", {"new_value": "[PII]"}),
     "LOCATION": OperatorConfig("replace", {"new_value": "[LOCATION]"}),
     "EMAIL_ADDRESS": OperatorConfig("replace", {"new_value": "[PII]"}),
     "PHONE_NUMBER": OperatorConfig("replace", {"new_value": "[PII]"}),
@@ -157,8 +163,17 @@ def unload_models() -> None:
 
 _SPACY_NL_MODEL = "nl_core_news_lg"
 _SPACY_EN_MODEL = "en_core_web_lg"
+_SPACY_DE_MODEL = "de_core_news_lg"
 _SPACY_NL_WHL = "https://github.com/explosion/spacy-models/releases/download/nl_core_news_lg-3.8.0/nl_core_news_lg-3.8.0-py3-none-any.whl"
 _SPACY_EN_WHL = "https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.8.0/en_core_web_lg-3.8.0-py3-none-any.whl"
+_SPACY_DE_WHL = "https://github.com/explosion/spacy-models/releases/download/de_core_news_lg-3.8.0/de_core_news_lg-3.8.0-py3-none-any.whl"
+
+# Minimum Presidio score for a PERSON span to be kept.
+# Spans below this are low-confidence guesses — e.g. capitalised nouns or
+# adjectives that the NER model cannot rule out as names.
+# Raise to reduce false positives; lower to catch more edge-case names.
+# Override via env var: PRESIDIO_MIN_SCORE=0.7
+_PRESIDIO_MIN_SCORE = float(os.environ.get("PRESIDIO_MIN_SCORE", "0.6"))
 
 
 def _spacy_model_installed(name: str) -> bool:
@@ -185,6 +200,8 @@ def _ensure_spacy_models() -> None:
         missing.append((_SPACY_NL_MODEL, _SPACY_NL_WHL))
     if not _spacy_model_installed(_SPACY_EN_MODEL):
         missing.append((_SPACY_EN_MODEL, _SPACY_EN_WHL))
+    if not _spacy_model_installed(_SPACY_DE_MODEL):
+        missing.append((_SPACY_DE_MODEL, _SPACY_DE_WHL))
 
     if not missing:
         return
@@ -260,13 +277,14 @@ def _build_analyzer() -> AnalyzerEngine:
             "models": [
                 {"lang_code": "nl", "model_name": _SPACY_NL_MODEL},
                 {"lang_code": "en", "model_name": _SPACY_EN_MODEL},
+                {"lang_code": "de", "model_name": _SPACY_DE_MODEL},
             ],
         }
     )
     nlp_engine = provider.create_engine()
-    analyzer = AnalyzerEngine(nlp_engine=nlp_engine, supported_languages=["nl", "en"])
+    analyzer = AnalyzerEngine(nlp_engine=nlp_engine, supported_languages=["nl", "en", "de"])
     register_custom_presidio_recognizers(analyzer)
-    logger.info("Presidio spaCy engines loaded (nl_core_news_lg + en_core_web_lg).")
+    logger.info("Presidio spaCy engines loaded (nl_core_news_lg + en_core_web_lg + de_core_news_lg).")
     return analyzer
 
 
@@ -300,12 +318,14 @@ def build_presidio_operators(config: Optional[dict] = None) -> dict:
     # match privacy_officer intent: allow toggles
     if config.get("names", True):
         ops["PERSON"] = OperatorConfig("replace", {"new_value": "[NAME]"})
-        ops["NRP"] = OperatorConfig("replace", {"new_value": "[NAME]"})
         ops["TEACHER_NAME_CONTEXT"] = OperatorConfig("replace", {"new_value": "[NAME]"})
     else:
         ops["PERSON"] = OperatorConfig("keep")
-        ops["NRP"] = OperatorConfig("keep")
         ops["TEACHER_NAME_CONTEXT"] = OperatorConfig("keep")
+    if config.get("pii", True):
+        ops["NRP"] = OperatorConfig("replace", {"new_value": "[PII]"})
+    else:
+        ops["NRP"] = OperatorConfig("keep")
     if config.get("locations", True):
         ops["LOCATION"] = OperatorConfig("replace", {"new_value": "[LOCATION]"})
         ops["DUTCH_POSTCODE"] = OperatorConfig("replace", {"new_value": "[LOCATION]"})
@@ -355,6 +375,8 @@ def ensure_presidio_available() -> None:
         ) from e
 
 
+
+
 def collect_presidio_spans(text: str, config: Optional[dict] = None) -> list[tuple[int, int, str]]:
     """
     Run Presidio analysis on length-preserving normalized text and return (start, end, tag).
@@ -366,7 +388,7 @@ def collect_presidio_spans(text: str, config: Optional[dict] = None) -> list[tup
     try:
         try:
             lang = detect(text)
-            if lang not in ("nl", "en"):
+            if lang not in ("nl", "en", "de"):
                 lang = "nl"
         except LangDetectException:
             lang = "nl"
@@ -378,6 +400,21 @@ def collect_presidio_spans(text: str, config: Optional[dict] = None) -> list[tup
             op = ops.get(result.entity_type) or ops.get("DEFAULT")
             if op and op.operator_name == "replace":
                 tag = op.params.get("new_value", "[PII]")
+                span_text = text[result.start:result.end]
+                if tag == "[NAME]":
+                    if result.score < _PRESIDIO_MIN_SCORE:
+                        logger.debug("Rejected low-score NAME span %r (score=%.2f)", span_text, result.score)
+                        continue
+                    if not is_plausible_name_span(span_text):
+                        logger.debug("Rejected implausible NAME span: %r", span_text)
+                        continue
+                elif tag == "[LOCATION]":
+                    if result.score < _PRESIDIO_MIN_SCORE:
+                        logger.debug("Rejected low-score LOCATION span %r (score=%.2f)", span_text, result.score)
+                        continue
+                    if not is_plausible_location_span(span_text):
+                        logger.debug("Rejected implausible LOCATION span: %r", span_text)
+                        continue
                 spans.append((result.start, result.end, tag))
         return extend_name_spans_for_tussenvoegsels(text, spans)
     except Exception as e:

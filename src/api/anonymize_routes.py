@@ -4,6 +4,7 @@ from flask import Blueprint, Response, jsonify, request
 
 anonymize_bp = Blueprint("anonymize", __name__)
 service = import_module("src.pipeline.01_anonymization.service")
+_blocklist_mod = import_module("src.pipeline.01_anonymization.blocklist")
 
 
 @anonymize_bp.route("/api/inspect-file", methods=["POST"])
@@ -64,3 +65,16 @@ def anonymize_report():
 @anonymize_bp.route("/api/checkpoint-status", methods=["GET"])
 def checkpoint_status():
     return jsonify(service.checkpoint_status_payload())
+
+
+@anonymize_bp.route("/api/word-blocklist", methods=["GET"])
+def get_word_blocklist():
+    return jsonify({"words": _blocklist_mod.load_blocklist()})
+
+
+@anonymize_bp.route("/api/word-blocklist", methods=["POST"])
+def set_word_blocklist():
+    data = request.get_json(silent=True) or {}
+    words = [w for w in data.get("words", []) if isinstance(w, str) and w.strip()]
+    _blocklist_mod.save_blocklist(words)
+    return jsonify({"words": _blocklist_mod.load_blocklist()})
