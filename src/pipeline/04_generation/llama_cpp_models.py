@@ -81,11 +81,21 @@ class LlamaCppModel:
     @property
     def download_command(self) -> str:
         return " ".join(
-            ["llama-server", "-hf", self.llama_server_model_id, *self.generation.server_args]
+            [
+                "llama-server",
+                "-hf",
+                self.llama_server_model_id,
+                *self.generation.server_args,
+            ]
         )
 
     def server_command(self, server_bin: str) -> list[str]:
-        return [server_bin, "-hf", self.llama_server_model_id, *self.generation.server_args]
+        return [
+            server_bin,
+            "-hf",
+            self.llama_server_model_id,
+            *self.generation.server_args,
+        ]
 
     def chat_completion_payload(self, prompt: str) -> dict[str, Any]:
         return self.generation.chat_completion_payload(self.id, prompt)
@@ -160,9 +170,7 @@ GEMMA_LLAMA_CPP_MODELS = (
     ),
 )
 
-LLAMA_CPP_MODEL_REGISTRY = {
-    model.id: model for model in GEMMA_LLAMA_CPP_MODELS
-}
+LLAMA_CPP_MODEL_REGISTRY = {model.id: model for model in GEMMA_LLAMA_CPP_MODELS}
 
 LLAMA_CPP_MODEL_ALIASES = {
     "gemma4:e2b": "unsloth/gemma-4-E2B-it-GGUF:UD-Q4_K_XL",
