@@ -161,9 +161,11 @@ LLAMA_CPP_SERVER_BIN=C:\tools\llama.cpp\llama-server.exe
 
 #### How the app starts the server
 
-When **"Start llama-server if needed"** is enabled, selecting a model in the
-dashboard starts it immediately. Clicking **Generate Insights** also checks the
-selected model before generation. The app will:
+The backend starts without loading a llama.cpp model, leaving GPU memory free
+for anonymization and embedding. When **"Start llama-server if needed"** is
+enabled, selecting a model in Generate Insights starts it immediately. Clicking
+**Generate Insights** also checks and starts the selected model when needed. The
+app will:
 
 1. Check that `llama-server` is on your PATH (or at `LLAMA_CPP_SERVER_BIN`).
 2. Launch `llama-server -hf <selected-model> -c 32000 -ngl auto`.
