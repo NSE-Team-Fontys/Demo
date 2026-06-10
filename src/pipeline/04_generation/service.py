@@ -43,12 +43,15 @@ def _normalized_filters(filters: dict | None) -> dict:
     }
 
 
-def _cache_key(theme_name: str, filters: dict | None = None) -> str:
+def _cache_key(theme_name: str, filters: dict | None = None, theme_query: str | None = None) -> str:
     normalized = _normalized_filters(filters)
+    key = theme_name
+    if theme_query and theme_query != theme_name:
+        key = f"{theme_name}::subquery={theme_query}"
     if not normalized:
-        return theme_name
+        return key
     filters_json = json.dumps(normalized, sort_keys=True, separators=(",", ":"))
-    return f"{theme_name}::filters={filters_json}"
+    return f"{key}::filters={filters_json}"
 
 
 def _cache_filters_match(cached_data: dict | None, filters: dict | None) -> bool:
@@ -89,14 +92,24 @@ def _select_theme_documents(
     theme_name: str,
     *,
     filters: dict | None = None,
+    theme_query: str | None = None,
 ):
     embedding_model = retrieval.collection_embedding_model(collection)
-    collected = retrieval.collect_theme_documents(
-        collection,
-        theme_name,
-        filters=_normalized_filters(filters),
-        model_id=embedding_model,
-    )
+    if theme_query and theme_query != theme_name:
+        collected = retrieval.collect_documents_by_query(
+            collection,
+            theme_query,
+            filters=_normalized_filters(filters),
+            model_id=embedding_model,
+            n_results=HIERARCHICAL_RAG_MAX_DOCUMENTS or 500,
+        )
+    else:
+        collected = retrieval.collect_theme_documents(
+            collection,
+            theme_name,
+            filters=_normalized_filters(filters),
+            model_id=embedding_model,
+        )
     selected_docs = collected["documents"]
     if HIERARCHICAL_RAG_MAX_DOCUMENTS > 0:
         selected_docs = selected_docs[:HIERARCHICAL_RAG_MAX_DOCUMENTS]
@@ -164,8 +177,9 @@ def _generate_theme_payload(
     llm_model: str,
     llm_generation_settings: dict | None,
     custom_prompt: str = "",
+    theme_query: str | None = None,
 ) -> dict:
-    selected = _select_theme_documents(collection, theme_name, filters=filters)
+    selected = _select_theme_documents(collection, theme_name, filters=filters, theme_query=theme_query)
     relevant_docs = selected["relevant_docs"]
     if not relevant_docs:
         return _empty_theme_payload(
@@ -208,25 +222,30 @@ def generate_theme_summary(
     provider = str(provider or DEFAULT_LLM_PROVIDER).strip()
     filters = _normalized_filters(filters)
     llm_generation_settings = _model_generation_settings(provider, llm_model)
-    theme_search_query = retrieval.theme_query_text(theme_name) if theme_name else theme_query
-    if not theme_search_query:
+    is_subquery = theme_query and theme_query != theme_name
+    if not theme_name and not theme_query:
         raise ValueError("No query provided")
 
     cache = load_cache()
-    cached_response = _cached_dashboard_response(
-        cache,
-        theme_name,
-        filters=filters,
-        llm_provider=provider,
-        llm_model=llm_model,
-        llm_generation_settings=llm_generation_settings,
-        match_llm_identity=True,
-    )
-    if cached_response is not None:
-        print(f"[LLM] Returning cached summary for: {theme_name}")
-        return cached_response
-    cache_key = _cache_key(theme_name, filters)
-    if cache_key in cache:
+    cache_key = _cache_key(theme_name, filters, theme_query if is_subquery else None)
+    if not is_subquery:
+        cached_response = _cached_dashboard_response(
+            cache,
+            theme_name,
+            filters=filters,
+            llm_provider=provider,
+            llm_model=llm_model,
+            llm_generation_settings=llm_generation_settings,
+            match_llm_identity=True,
+        )
+        if cached_response is not None:
+            print(f"[LLM] Returning cached summary for: {theme_name}")
+            return cached_response
+    elif cache_key in cache:
+        print(f"[LLM] Returning cached subquery summary for: {theme_query}")
+        return cache[cache_key]
+
+    if cache_key in cache and not is_subquery:
         print(
             f"[LLM] Cached summary for {theme_name} is missing current "
             "dashboard fields; regenerating."
@@ -234,7 +253,8 @@ def generate_theme_summary(
 
     client = get_llm_client(provider)
     try:
-        print(f"[LLM] Cache miss - generating summary for: {theme_name}")
+        label = theme_query if is_subquery else theme_name
+        print(f"[LLM] Cache miss - generating summary for: {label}")
         client.ensure_model_available(llm_model, allow_download=allow_model_download)
 
         collection = retrieval.get_collection()
@@ -246,6 +266,7 @@ def generate_theme_summary(
             provider=provider,
             llm_model=llm_model,
             llm_generation_settings=llm_generation_settings,
+            theme_query=theme_query if is_subquery else None,
         )
         print(
             f"[LLM] Hierarchical RAG analyzed "

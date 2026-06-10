@@ -371,6 +371,40 @@ export default function ViewMorePage() {
   const theme = location.state?.theme?.id === id ? location.state.theme : fallbackTheme
   const { liveData, loadingLive } = useThemeSummary(theme, filters)
 
+  const [subthemeLiveData, setSubthemeLiveData] = useState(null)
+  const [loadingSubtheme, setLoadingSubtheme] = useState(false)
+
+  useEffect(() => {
+    if (!decodedSubtheme || !theme) {
+      setSubthemeLiveData(null)
+      return
+    }
+    let isMounted = true
+    setLoadingSubtheme(true)
+    setSubthemeLiveData(null)
+    const apiFilters = {}
+    if (filters.jaar !== 'All') apiFilters.academic_year = filters.jaar
+    if (filters.locatie !== 'All') apiFilters.location = CITY_TO_BRIN[filters.locatie] || filters.locatie
+    if (filters.opleiding !== 'All') apiFilters.programme = filters.opleiding
+    if (filters.studievorm !== 'All') apiFilters.study_mode = filters.studievorm
+    if (filters.taal !== 'All') apiFilters.language = filters.taal
+    fetch('http://localhost:5001/api/theme-summary', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        theme: theme.name,
+        query: decodedSubtheme,
+        filters: Object.keys(apiFilters).length > 0 ? apiFilters : undefined,
+        allow_model_download: true,
+      }),
+    })
+      .then((r) => r.json())
+      .then((data) => { if (isMounted && data.status === 'success') setSubthemeLiveData(data) })
+      .catch(() => {})
+      .finally(() => { if (isMounted) setLoadingSubtheme(false) })
+    return () => { isMounted = false }
+  }, [decodedSubtheme, theme?.id, theme?.name, JSON.stringify(filters)])
+
   useEffect(() => {
     if (!theme) return
     const params = new URLSearchParams()
@@ -399,15 +433,28 @@ export default function ViewMorePage() {
 
     const cached = effectiveData || theme
 
-    if (decodedSubtheme && cached.subtheme_data && cached.subtheme_data[decodedSubtheme]) {
-      const subData = cached.subtheme_data[decodedSubtheme]
+    if (decodedSubtheme && subthemeLiveData) {
       return {
         isSubtheme: true,
         name: decodedSubtheme,
-        summary: subData.summary,
-        subthemes: subData.subthemes || [],
-        subtheme_mentions: subData.subtheme_mentions || [],
-        quotes: subData.quotes || [],
+        summary: subthemeLiveData.summary,
+        subthemes: subthemeLiveData.subthemes || [],
+        subtheme_mentions: subthemeLiveData.subtheme_mentions || [],
+        quotes: subthemeLiveData.quotes || [],
+        positive_comments: subthemeLiveData.positive_comments || [],
+        critical_comments: subthemeLiveData.critical_comments || [],
+        student_suggestions: subthemeLiveData.student_suggestions || [],
+      }
+    }
+
+    if (decodedSubtheme && !subthemeLiveData) {
+      return {
+        isSubtheme: true,
+        name: decodedSubtheme,
+        summary: null,
+        subthemes: [],
+        subtheme_mentions: [],
+        quotes: [],
         positive_comments: [],
         critical_comments: [],
         student_suggestions: [],
@@ -437,7 +484,7 @@ export default function ViewMorePage() {
       critical_comments: criticalComments,
       student_suggestions: studentSuggestions,
     }
-  }, [theme, effectiveData, decodedSubtheme])
+  }, [theme, effectiveData, decodedSubtheme, subthemeLiveData])
 
   if (!theme) {
     return (
@@ -572,7 +619,7 @@ export default function ViewMorePage() {
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
-                {loadingLive && (
+                {(loadingLive || loadingSubtheme) && (
                   <span className="flex items-center gap-1.5 text-xs font-semibold text-white/80">
                     <span className="w-2 h-2 rounded-full bg-white/80 animate-pulse" />
                     Loading insights
