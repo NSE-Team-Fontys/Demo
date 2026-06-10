@@ -45,6 +45,7 @@ htmlcov/
 **/*.sqlite3
 *.db
 *.log
+*.pid
 *.cache
 *.pyc
 gemma_cache.json

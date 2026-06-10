@@ -11,6 +11,7 @@ from .embedding_models import (
     DEFAULT_EMBEDDING_MODEL,
     describe_embedding_runtime,
     load_embedding_model,
+    unload_embedding_models,
 )
 from src.utils.model_device import describe_model_device, get_model_device
 from src.utils.file_parsers import detect_sep, is_questionnaire_column
@@ -118,40 +119,44 @@ def build_vector_db(csv_path="data/anonymized_output.csv", db_path="./survey_vec
     device = get_model_device()
     print(f"Loading embedding model on {describe_model_device(device)}...")
     model = load_embedding_model(EMBEDDING_MODEL)
-    embeddings = model.encode(
-        df_combined['answer'].tolist(), 
-        batch_size=BATCH_SIZE, 
-        show_progress_bar=True, 
-        normalize_embeddings=True
-    )
-
-    # 4. Store in ChromaDB
-    print(f"Writing to ChromaDB at '{db_path}'...")
-    client = chromadb.PersistentClient(path=db_path)
-    
     try:
-        client.delete_collection(COLLECTION)
-    except:
-        pass
-
-    collection = client.create_collection(
-        name=COLLECTION,
-        metadata={"hnsw:space": "cosine", "embedding_model": EMBEDDING_MODEL},
-    )
-
-    # Insert in batches
-    for start in range(0, len(df_combined), BATCH_SIZE):
-        end = min(start + BATCH_SIZE, len(df_combined))
-        batch = df_combined.iloc[start:end]
-
-        collection.add(
-            ids=[f"id_{i}" for i in batch.index],
-            embeddings=embeddings[start:end].tolist(),
-            documents=batch['answer'].tolist(),
-            metadatas=[{"question": str(row.get("question", "N/A"))} for _, row in batch.iterrows()]
+        embeddings = model.encode(
+            df_combined['answer'].tolist(),
+            batch_size=BATCH_SIZE,
+            show_progress_bar=True,
+            normalize_embeddings=True
         )
 
-    return {"status": "success", "rows_embedded": len(df_combined)}
+        # 4. Store in ChromaDB
+        print(f"Writing to ChromaDB at '{db_path}'...")
+        client = chromadb.PersistentClient(path=db_path)
+
+        try:
+            client.delete_collection(COLLECTION)
+        except:
+            pass
+
+        collection = client.create_collection(
+            name=COLLECTION,
+            metadata={"hnsw:space": "cosine", "embedding_model": EMBEDDING_MODEL},
+        )
+
+        # Insert in batches
+        for start in range(0, len(df_combined), BATCH_SIZE):
+            end = min(start + BATCH_SIZE, len(df_combined))
+            batch = df_combined.iloc[start:end]
+
+            collection.add(
+                ids=[f"id_{i}" for i in batch.index],
+                embeddings=embeddings[start:end].tolist(),
+                documents=batch['answer'].tolist(),
+                metadatas=[{"question": str(row.get("question", "N/A"))} for _, row in batch.iterrows()]
+            )
+
+        return {"status": "success", "rows_embedded": len(df_combined)}
+    finally:
+        model = None
+        unload_embedding_models()
 
 def build_vector_db_stream(
     csv_path="data/anonymized_survey.csv",
@@ -163,12 +168,13 @@ def build_vector_db_stream(
     if not os.path.exists(csv_path):
         yield json.dumps({"status": "error", "error": f"Input file {csv_path} not found. Please anonymize first."}) + "\n"
         return
-    
+
+    model = None
     try:
         CSV_SEP = detect_sep(csv_path)
         COLLECTION = 'survey_responses'
         EMBEDDING_MODEL = str(embedding_model or DEFAULT_EMBEDDING_MODEL).strip()
-        BATCH_SIZE = 50
+        BATCH_SIZE = 100
         if EMBEDDING_MODEL not in AVAILABLE_EMBEDDING_MODELS:
             supported = ", ".join(AVAILABLE_EMBEDDING_MODELS)
             yield json.dumps({
@@ -300,15 +306,6 @@ def build_vector_db_stream(
 
         _clear_vector_checkpoint()
 
-        del model
-        import gc
-        gc.collect()
-        import torch
-        if torch.backends.mps.is_available():
-            torch.mps.empty_cache()
-        elif torch.cuda.is_available():
-            torch.cuda.empty_cache()
-
         yield json.dumps({
             "status": "success",
             "message": "Vector DB built successfully",
@@ -319,3 +316,7 @@ def build_vector_db_stream(
 
     except Exception as e:
         yield json.dumps({"status": "error", "error": str(e)}) + "\n"
+    finally:
+        if model is not None:
+            model = None
+            unload_embedding_models()

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gc
 import os
 from functools import lru_cache
 
@@ -68,3 +69,19 @@ def load_embedding_model(model_id: str, allow_download: bool = True) -> Sentence
         local_files_only,
         _trust_remote_code_enabled(),
     )
+
+
+def unload_embedding_models() -> None:
+    """Release cached embedding models and return unused accelerator memory."""
+    _load_embedding_model_cached.cache_clear()
+    gc.collect()
+
+    try:
+        import torch
+    except ImportError:
+        return
+
+    if torch.backends.mps.is_available():
+        torch.mps.empty_cache()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
