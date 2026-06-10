@@ -23,8 +23,20 @@ class LlamaCppGenerationSettings:
         args: list[str] = []
         if self.context_size > 0:
             args.extend(["-c", str(self.context_size)])
-        if LLAMA_CPP_N_GPU_LAYERS > 0:
-            args.extend(["-ngl", str(LLAMA_CPP_N_GPU_LAYERS)])
+        if LLAMA_CPP_N_GPU_LAYERS in {"auto", "all"}:
+            args.extend(["-ngl", LLAMA_CPP_N_GPU_LAYERS])
+        else:
+            try:
+                gpu_layers = int(LLAMA_CPP_N_GPU_LAYERS)
+            except ValueError as exc:
+                raise ValueError(
+                    "LLAMA_CPP_N_GPU_LAYERS must be 'auto', 'all', or a non-negative integer."
+                ) from exc
+            if gpu_layers < 0:
+                raise ValueError(
+                    "LLAMA_CPP_N_GPU_LAYERS must be 'auto', 'all', or a non-negative integer."
+                )
+            args.extend(["-ngl", str(gpu_layers)])
         return args
 
     def chat_completion_payload(self, model_id: str, prompt: str) -> dict[str, Any]:

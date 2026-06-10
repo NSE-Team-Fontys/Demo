@@ -161,18 +161,20 @@ LLAMA_CPP_SERVER_BIN=C:\tools\llama.cpp\llama-server.exe
 
 #### How the app starts the server
 
-When you click **Generate Insights** in the UI with **"Start llama-server if needed"** enabled, the app will:
+When **"Start llama-server if needed"** is enabled, selecting a model in the
+dashboard starts it immediately. Clicking **Generate Insights** also checks the
+selected model before generation. The app will:
 
 1. Check that `llama-server` is on your PATH (or at `LLAMA_CPP_SERVER_BIN`).
-2. Launch `llama-server -hf unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL -c 32000 -ngl 99` (with `-ngl` if `LLAMA_CPP_N_GPU_LAYERS` is set).
+2. Launch `llama-server -hf <selected-model> -c 32000 -ngl auto`.
 3. On first run, llama-server downloads the model (~5 GB) from Hugging Face automatically.
 4. After startup it connects on `http://127.0.0.1:8080` (configurable via `LLAMA_CPP_BASE_URL`).
-5. After generation it shuts down the server and unloads the model.
+5. When another model is selected, stop the app-managed server and restart it with that model.
 
-To run the server manually instead, start it before clicking Generate and leave the checkbox unchecked:
+To run the server manually instead, start it before selecting the model and leave the checkbox unchecked:
 
 ```powershell
-llama-server -hf unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL -c 32000 -ngl 99
+llama-server -hf unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL -c 32000 -ngl auto
 ```
 
 ### PyTorch GPU acceleration
@@ -502,6 +504,8 @@ Endpoints:
 - `POST /api/precompute-insights`
 - `POST /api/theme-summary`
 - `POST /api/clear-cache`
+- `POST /api/llm-models/start`
+- `GET /api/llm-models`
 - `GET /api/themes-overview`
 
 Module ownership:
