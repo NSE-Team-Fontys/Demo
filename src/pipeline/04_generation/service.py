@@ -93,7 +93,9 @@ def _select_theme_documents(
     *,
     filters: dict | None = None,
     theme_query: str | None = None,
+    max_documents: int | None = None,
 ):
+    cap = max_documents if max_documents and max_documents > 0 else HIERARCHICAL_RAG_MAX_DOCUMENTS
     embedding_model = retrieval.collection_embedding_model(collection)
     if theme_query and theme_query != theme_name:
         collected = retrieval.collect_documents_by_query(
@@ -101,7 +103,7 @@ def _select_theme_documents(
             theme_query,
             filters=_normalized_filters(filters),
             model_id=embedding_model,
-            n_results=HIERARCHICAL_RAG_MAX_DOCUMENTS or 500,
+            n_results=cap or 500,
         )
     else:
         collected = retrieval.collect_theme_documents(
@@ -110,15 +112,15 @@ def _select_theme_documents(
             filters=_normalized_filters(filters),
             model_id=embedding_model,
         )
-    selected_docs = collected["documents"]
-    if HIERARCHICAL_RAG_MAX_DOCUMENTS > 0:
-        selected_docs = selected_docs[:HIERARCHICAL_RAG_MAX_DOCUMENTS]
+    all_docs = collected["documents"]
+    selected_docs = all_docs[:cap] if cap > 0 else all_docs
     return {
         "frequency": collected["frequency"],
         "vector_relevant_count": collected["vector_relevant_count"],
         "total_filtered_documents": collected["total_filtered_documents"],
         "relevant_docs": selected_docs,
-        "source_document_count": len(collected["documents"]),
+        "all_docs": all_docs,
+        "source_document_count": len(all_docs),
         "analyzed_document_count": len(selected_docs),
     }
 
@@ -178,8 +180,9 @@ def _generate_theme_payload(
     llm_generation_settings: dict | None,
     custom_prompt: str = "",
     theme_query: str | None = None,
+    max_documents: int | None = None,
 ) -> dict:
-    selected = _select_theme_documents(collection, theme_name, filters=filters, theme_query=theme_query)
+    selected = _select_theme_documents(collection, theme_name, filters=filters, theme_query=theme_query, max_documents=max_documents)
     relevant_docs = selected["relevant_docs"]
     if not relevant_docs:
         return _empty_theme_payload(
@@ -333,7 +336,9 @@ def _theme_payload_from_parsed(
     llm_generation_settings: dict | None,
 ) -> dict:
     relevant_docs = selected["relevant_docs"]
+    all_docs = selected.get("all_docs", relevant_docs)
     sentiments = parsed.get("sentiments", [])
+    subthemes = parsed.get("subthemes", [])
     return {
         "status": "success",
         "theme": theme_name,
@@ -357,11 +362,9 @@ def _theme_payload_from_parsed(
         "positive_comments": parsed.get("positive_comments", [])[:3],
         "critical_comments": parsed.get("critical_comments", [])[:3],
         "student_suggestions": parsed.get("student_suggestions", [])[:3],
-        "subthemes": parsed.get("subthemes", []),
-        "subtheme_mentions": insight_metrics.subtheme_mention_rows(
-            parsed.get("subthemes", []), relevant_docs
-        ),
-        "quotes": relevant_docs[:3],
+        "subthemes": subthemes,
+        "subtheme_mentions": insight_metrics.subtheme_mention_rows(subthemes, all_docs),
+        "quotes": all_docs,
     }
 
 
@@ -373,6 +376,7 @@ def precompute_insights_stream(
     allow_model_download: bool = False,
     provider: str = DEFAULT_LLM_PROVIDER,
     filters: dict | None = None,
+    max_documents: int | None = None,
 ):
     llm_model = str(llm_model or DEFAULT_LLM_MODEL).strip()
     provider = str(provider or DEFAULT_LLM_PROVIDER).strip()
@@ -484,6 +488,7 @@ def precompute_insights_stream(
                     llm_model=llm_model,
                     llm_generation_settings=llm_generation_settings,
                     custom_prompt=custom_prompt,
+                    max_documents=max_documents,
                 )
                 cache[_cache_key(theme_name, filters)] = response_data
             except Exception as exc:

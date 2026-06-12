@@ -47,6 +47,9 @@ def precompute_insights():
     if not themes:
         return jsonify({"error": "No themes provided"}), 400
 
+    raw_max = data.get("max_documents")
+    max_documents = int(raw_max) if raw_max and str(raw_max).isdigit() else None
+
     return Response(
         generation.precompute_insights_stream(
             themes=themes,
@@ -55,6 +58,7 @@ def precompute_insights():
             allow_model_download=bool(data.get("allow_model_download", False)),
             provider=data.get("provider", settings.DEFAULT_LLM_PROVIDER),
             filters=_filters_from_payload(data),
+            max_documents=max_documents,
         ),
         mimetype="application/x-ndjson",
     )

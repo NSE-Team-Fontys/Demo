@@ -76,7 +76,7 @@ export default function ThemeCard({ theme, size, filters }) {
                 {theme.icon}
               </span>
               <span className="text-xs font-semibold px-2 py-0.5 rounded bg-blue-50 text-primary border border-blue-100/50 w-fit">
-                {theme.percentage} comments
+                {theme.responseCount ?? theme.percentage} comments
               </span>
             </div>
             {/* SVG Pie Chart */}
@@ -129,7 +129,7 @@ export default function ThemeCard({ theme, size, filters }) {
           <div className="flex flex-col gap-1.5">
             <span className="material-symbols-outlined text-2xl text-primary">{theme.icon}</span>
             <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-50 text-primary border border-blue-100/50 w-fit">
-              {theme.percentage} comments
+              {theme.responseCount ?? theme.percentage} comments
             </span>
           </div>
           {/* Mini SVG Pie Chart */}

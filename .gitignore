@@ -45,7 +45,6 @@ htmlcov/
 **/*.sqlite3
 *.db
 *.log
-*.pid
 *.cache
 *.pyc
 gemma_cache.json
@@ -76,6 +75,6 @@ survey_vector_db/
 # Local data files
 data/
 
-# llama.cpp 
+# llama.cpp
 llama.cpp/
 .python-version

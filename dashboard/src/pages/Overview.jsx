@@ -116,6 +116,7 @@ export default function Overview() {
         return {
           ...t,
           percentage: typeof dynamic.frequency === 'number' ? dynamic.frequency : t.percentage,
+          responseCount: typeof dynamic.vector_relevant_count === 'number' ? dynamic.vector_relevant_count : null,
           aiSummary: dynamic.summary || t.aiSummary,
           subthemes: dynamic.subthemes?.length > 0 ? dynamic.subthemes : t.subthemes,
           quotes: dynamic.quotes?.length > 0 ? dynamic.quotes : t.quotes,

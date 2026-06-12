@@ -30,6 +30,8 @@ export default function InsightGenerator({ onComplete }) {
   const [showPromptEditor, setShowPromptEditor] = useState(false);
   const [clearCache, setClearCache] = useState(false);
   const [allowModelDownload, setAllowModelDownload] = useState(true);
+  const [maxDocuments, setMaxDocuments] = useState(240);
+  const [totalDocs, setTotalDocs] = useState(null);
   const [modelActivation, setModelActivation] = useState({
     status: 'idle',
     modelId: null,
@@ -45,6 +47,13 @@ export default function InsightGenerator({ onComplete }) {
       logRef.current.scrollTop = logRef.current.scrollHeight;
     }
   }, [logs]);
+
+  useEffect(() => {
+    fetch('http://localhost:5001/api/vector-stats')
+      .then(r => r.json())
+      .then(data => { if (data.total_documents > 0) setTotalDocs(data.total_documents) })
+      .catch(() => {})
+  }, []);
 
   const selectAndStartModel = async (model) => {
     setSelectedModel(model.id);
@@ -140,7 +149,8 @@ export default function InsightGenerator({ onComplete }) {
           llm_model: selectedModel,
           provider: LLM_PROVIDER,
           custom_prompt: customPrompt !== DEFAULT_PROMPT ? customPrompt : '',
-          allow_model_download: allowModelDownload
+          allow_model_download: allowModelDownload,
+          max_documents: maxDocuments,
         })
       });
 
@@ -360,6 +370,28 @@ export default function InsightGenerator({ onComplete }) {
                     <p className="text-xs text-gray-500">When enabled, selecting a Gemma model starts or switches llama-server. The model downloads automatically from Hugging Face the first time.</p>
                   </div>
                 </label>
+
+                <div className="p-3 rounded-xl border-2 border-gray-100 bg-white space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium text-gray-700">Documents analysed per theme</p>
+                    <span className="text-sm font-bold text-primary tabular-nums">{maxDocuments}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={60}
+                    max={totalDocs ?? 600}
+                    step={60}
+                    value={maxDocuments}
+                    onChange={(e) => setMaxDocuments(Number(e.target.value))}
+                    className="w-full accent-primary"
+                  />
+                  <div className="flex justify-between text-[10px] text-gray-400 font-medium">
+                    <span>60 (fast)</span>
+                    <span>240 (default)</span>
+                    <span>{totalDocs ? `${totalDocs} (all)` : '...'}</span>
+                  </div>
+                  <p className="text-xs text-gray-500">Higher = more accurate LLM summary, longer generation time.</p>
+                </div>
               </div>
             </div>
           </div>
@@ -369,7 +401,7 @@ export default function InsightGenerator({ onComplete }) {
             <div className="text-sm text-gray-600 flex items-center gap-2">
               <span className="font-semibold text-gray-800">{activeModel?.name}</span>
               <span className="text-gray-300">•</span>
-              <span className="text-gray-500">7 themes</span>
+              <span className="text-gray-500">7 themes · {maxDocuments} docs/theme</span>
               {clearCache && (
                 <>
                   <span className="text-gray-300">•</span>
