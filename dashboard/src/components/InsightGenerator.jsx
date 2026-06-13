@@ -32,6 +32,22 @@ export default function InsightGenerator({ onComplete }) {
   const [allowModelDownload, setAllowModelDownload] = useState(true);
   const [maxDocuments, setMaxDocuments] = useState(240);
   const [totalDocs, setTotalDocs] = useState(null);
+  const [filterDimensions, setFilterDimensions] = useState([]);
+  const [precacheSubthemes, setPrecacheSubthemes] = useState(false);
+  const [dimensionSizes, setDimensionSizes] = useState({
+    academic_year: 0,
+    location: 0,
+    programme: 0,
+    study_mode: 0,
+    language: 0,
+  });
+
+  // Seconds-per-insight rough estimate used for the time preview.
+  // Empirical: a full theme generation with llama.cpp on RTX 4050 takes ~45s for 240 docs.
+  const SECONDS_PER_INSIGHT = 45;
+  const THEME_COUNT = 7;
+  // Rough sub-theme multiplier: prompts typically yield 3-5 sub-themes per theme.
+  const SUBTHEMES_PER_THEME = 4;
   const [modelActivation, setModelActivation] = useState({
     status: 'idle',
     modelId: null,
@@ -54,6 +70,39 @@ export default function InsightGenerator({ onComplete }) {
       .then(data => { if (data.total_documents > 0) setTotalDocs(data.total_documents) })
       .catch(() => {})
   }, []);
+
+  useEffect(() => {
+    fetch('http://localhost:5001/api/filter-options')
+      .then(r => r.json())
+      .then(data => {
+        const opts = data?.options || {};
+        setDimensionSizes({
+          academic_year: (opts.academic_years || []).length,
+          location: (opts.locations || []).length,
+          programme: (opts.programmes || []).length,
+          study_mode: (opts.study_modes || []).length,
+          language: (opts.languages || []).length,
+        });
+      })
+      .catch(() => {});
+  }, []);
+
+  const toggleDimension = (key) => {
+    setFilterDimensions(prev =>
+      prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
+    );
+  };
+
+  const extraCombos = filterDimensions.reduce(
+    (acc, key) => acc * Math.max(dimensionSizes[key] || 0, 1),
+    filterDimensions.length > 0 ? 1 : 0
+  );
+  const extraThemeInsights = extraCombos * THEME_COUNT;
+  const extraSubthemeInsights = precacheSubthemes
+    ? extraThemeInsights * SUBTHEMES_PER_THEME
+    : 0;
+  const extraInsights = extraThemeInsights + extraSubthemeInsights;
+  const estimatedMinutes = Math.round((extraInsights * SECONDS_PER_INSIGHT) / 60);
 
   const selectAndStartModel = async (model) => {
     setSelectedModel(model.id);
@@ -151,6 +200,8 @@ export default function InsightGenerator({ onComplete }) {
           custom_prompt: customPrompt !== DEFAULT_PROMPT ? customPrompt : '',
           allow_model_download: allowModelDownload,
           max_documents: maxDocuments,
+          filter_dimensions: filterDimensions,
+          precache_subthemes: precacheSubthemes,
         })
       });
 
@@ -371,6 +422,91 @@ export default function InsightGenerator({ onComplete }) {
                   </div>
                 </label>
 
+                <div className="p-3 rounded-xl border-2 border-gray-100 bg-white space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium text-gray-700">Pre-cache filtered insights</p>
+                    <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Cross-product</span>
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    Generate an insight for every combination of the selected dimensions.
+                    Leave all unticked to only pre-cache the unfiltered baseline (recommended).
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { key: 'academic_year', label: 'Academic Year' },
+                      { key: 'location',      label: 'Location' },
+                      { key: 'programme',     label: 'Programme' },
+                      { key: 'study_mode',    label: 'Study Mode' },
+                      { key: 'language',      label: 'Language' },
+                    ].map(dim => {
+                      const size = dimensionSizes[dim.key] || 0;
+                      const active = filterDimensions.includes(dim.key);
+                      const disabled = size === 0;
+                      return (
+                        <button
+                          type="button"
+                          key={dim.key}
+                          disabled={disabled}
+                          onClick={() => toggleDimension(dim.key)}
+                          className={`text-left px-2.5 py-1.5 rounded-lg border-2 transition-colors text-xs ${
+                            active
+                              ? 'border-violet-500 bg-violet-50/60 text-violet-900'
+                              : disabled
+                                ? 'border-gray-100 bg-gray-50 text-gray-300 cursor-not-allowed'
+                                : 'border-gray-100 hover:border-gray-200 bg-white text-gray-700'
+                          }`}
+                        >
+                          <span className="font-semibold">{dim.label}</span>
+                          <span className="ml-1 text-[10px] text-gray-400">({size})</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <label
+                    onClick={() => setPrecacheSubthemes(v => !v)}
+                    className={`flex items-start gap-2 p-2 rounded-lg border-2 cursor-pointer transition-colors text-xs ${
+                      precacheSubthemes
+                        ? 'border-violet-500 bg-violet-50/60 text-violet-900'
+                        : 'border-gray-100 hover:border-gray-200 bg-white text-gray-700'
+                    }`}
+                  >
+                    <div className={`flex items-center justify-center w-4 h-4 mt-0.5 rounded flex-shrink-0 ${precacheSubthemes ? 'bg-violet-500' : 'border border-gray-300'}`}>
+                      {precacheSubthemes && (
+                        <svg className="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+                      )}
+                    </div>
+                    <div>
+                      <p className="font-semibold">Also pre-cache sub-theme drilldowns</p>
+                      <p className="text-[10px] text-gray-500 mt-0.5">
+                        Adds ~{SUBTHEMES_PER_THEME}× extra LLM calls per combo. Without this, drilldowns generate on-demand.
+                      </p>
+                    </div>
+                  </label>
+                  {filterDimensions.length > 0 && (
+                    <div className={`text-xs rounded-lg px-2.5 py-2 border space-y-0.5 ${
+                      extraInsights > 500
+                        ? 'border-red-200 bg-red-50 text-red-700'
+                        : extraInsights > 150
+                          ? 'border-amber-200 bg-amber-50 text-amber-700'
+                          : 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                    }`}>
+                      <div>
+                        <span className="font-bold">{extraCombos}</span> combos × {THEME_COUNT} themes ={' '}
+                        <span className="font-bold">{extraThemeInsights}</span> theme insights
+                      </div>
+                      {precacheSubthemes && (
+                        <div>
+                          + ~{SUBTHEMES_PER_THEME} sub-themes ={' '}
+                          <span className="font-bold">{extraSubthemeInsights}</span> sub-theme insights
+                        </div>
+                      )}
+                      <div className="text-gray-500">
+                        Total <span className="font-bold">{extraInsights}</span> extra calls · ~{estimatedMinutes} min
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 <div className="p-3 rounded-xl border-2 border-gray-100 bg-white space-y-2">
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-medium text-gray-700">Documents analysed per theme</p>
@@ -402,6 +538,14 @@ export default function InsightGenerator({ onComplete }) {
               <span className="font-semibold text-gray-800">{activeModel?.name}</span>
               <span className="text-gray-300">•</span>
               <span className="text-gray-500">7 themes · {maxDocuments} docs/theme</span>
+              {filterDimensions.length > 0 && (
+                <>
+                  <span className="text-gray-300">•</span>
+                  <span className="text-violet-600 font-medium text-xs">
+                    +{extraInsights} filtered insights (~{estimatedMinutes} min)
+                  </span>
+                </>
+              )}
               {clearCache && (
                 <>
                   <span className="text-gray-300">•</span>

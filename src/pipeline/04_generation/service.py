@@ -337,6 +337,7 @@ def _theme_payload_from_parsed(
 ) -> dict:
     relevant_docs = selected["relevant_docs"]
     all_docs = selected.get("all_docs", relevant_docs)
+    quotes = [doc for doc in all_docs if len(doc.strip()) > 1]
     sentiments = parsed.get("sentiments", [])
     subthemes = parsed.get("subthemes", [])
     return {
@@ -364,7 +365,7 @@ def _theme_payload_from_parsed(
         "student_suggestions": parsed.get("student_suggestions", [])[:3],
         "subthemes": subthemes,
         "subtheme_mentions": insight_metrics.subtheme_mention_rows(subthemes, all_docs),
-        "quotes": all_docs,
+        "quotes": quotes,
     }
 
 
@@ -377,10 +378,19 @@ def precompute_insights_stream(
     provider: str = DEFAULT_LLM_PROVIDER,
     filters: dict | None = None,
     max_documents: int | None = None,
+    filter_grid: list[dict] | None = None,
+    precache_subthemes: bool = False,
 ):
     llm_model = str(llm_model or DEFAULT_LLM_MODEL).strip()
     provider = str(provider or DEFAULT_LLM_PROVIDER).strip()
     filters = _normalized_filters(filters)
+    normalized_grid = [_normalized_filters(combo) for combo in (filter_grid or [])]
+    # Drop combos equal to the baseline so we don't duplicate work
+    baseline_key = json.dumps(filters, sort_keys=True)
+    normalized_grid = [
+        combo for combo in normalized_grid
+        if json.dumps(combo, sort_keys=True) != baseline_key
+    ]
     client = None
     try:
         llm_generation_settings = _model_generation_settings(provider, llm_model)
@@ -399,7 +409,7 @@ def precompute_insights_stream(
             )
             is not None
         }
-        if len(cached_theme_names) == len(themes):
+        if len(cached_theme_names) == len(themes) and not normalized_grid:
             for i, theme in enumerate(themes):
                 theme_name = theme.get("name")
                 yield json.dumps(
@@ -501,6 +511,132 @@ def precompute_insights_stream(
                 ) + "\n"
                 return
             save_cache(cache)
+
+        # Optional pre-cache pass: cross-product of filter combinations.
+        if normalized_grid:
+            total_combos = len(normalized_grid)
+            for combo_idx, combo in enumerate(normalized_grid):
+                combo_label = ", ".join(f"{k}={v}" for k, v in combo.items()) or "baseline"
+                for j, theme in enumerate(themes):
+                    theme_name = theme.get("name")
+                    overall_step = combo_idx * len(themes) + j
+                    overall_total = total_combos * len(themes)
+                    base_progress = int((overall_step / max(overall_total, 1)) * 100)
+
+                    if (
+                        _cached_dashboard_response(
+                            cache,
+                            theme_name,
+                            filters=combo,
+                            llm_provider=provider,
+                            llm_model=llm_model,
+                            llm_generation_settings=llm_generation_settings,
+                            match_llm_identity=True,
+                        )
+                        is not None
+                    ):
+                        yield json.dumps(
+                            {
+                                "status": "progress",
+                                "theme": theme_name,
+                                "progress": base_progress,
+                                "message": (
+                                    f"[combo {combo_idx + 1}/{total_combos}: {combo_label}] "
+                                    f"Cached: {theme_name}"
+                                ),
+                            }
+                        ) + "\n"
+                        continue
+
+                    yield json.dumps(
+                        {
+                            "status": "progress",
+                            "theme": theme_name,
+                            "progress": base_progress,
+                            "message": (
+                                f"[combo {combo_idx + 1}/{total_combos}: {combo_label}] "
+                                f"Generating {theme_name}..."
+                            ),
+                        }
+                    ) + "\n"
+
+                    try:
+                        response_data = _generate_theme_payload(
+                            client=client,
+                            collection=collection,
+                            theme_name=theme_name,
+                            filters=combo,
+                            provider=provider,
+                            llm_model=llm_model,
+                            llm_generation_settings=llm_generation_settings,
+                            custom_prompt=custom_prompt,
+                            max_documents=max_documents,
+                        )
+                        cache[_cache_key(theme_name, combo)] = response_data
+                    except Exception as exc:
+                        yield json.dumps(
+                            {
+                                "status": "progress",
+                                "theme": theme_name,
+                                "message": (
+                                    f"[combo {combo_idx + 1}/{total_combos}: {combo_label}] "
+                                    f"Skipped {theme_name}: {str(exc)}"
+                                ),
+                                "progress": base_progress,
+                            }
+                        ) + "\n"
+                        continue
+                    save_cache(cache)
+
+                    if precache_subthemes:
+                        subthemes = [
+                            str(s).strip()
+                            for s in (response_data.get("subthemes") or [])
+                            if str(s).strip() and str(s).strip() != theme_name
+                        ]
+                        for st_idx, subtheme in enumerate(subthemes):
+                            sub_key = _cache_key(theme_name, combo, subtheme)
+                            if sub_key in cache:
+                                continue
+                            yield json.dumps(
+                                {
+                                    "status": "progress",
+                                    "theme": theme_name,
+                                    "progress": base_progress,
+                                    "message": (
+                                        f"[combo {combo_idx + 1}/{total_combos}: {combo_label}] "
+                                        f"Sub-theme {st_idx + 1}/{len(subthemes)}: {subtheme}"
+                                    ),
+                                }
+                            ) + "\n"
+                            try:
+                                sub_data = _generate_theme_payload(
+                                    client=client,
+                                    collection=collection,
+                                    theme_name=theme_name,
+                                    filters=combo,
+                                    provider=provider,
+                                    llm_model=llm_model,
+                                    llm_generation_settings=llm_generation_settings,
+                                    custom_prompt=custom_prompt,
+                                    max_documents=max_documents,
+                                    theme_query=subtheme,
+                                )
+                                cache[sub_key] = sub_data
+                                save_cache(cache)
+                            except Exception as exc:
+                                yield json.dumps(
+                                    {
+                                        "status": "progress",
+                                        "theme": theme_name,
+                                        "message": (
+                                            f"[combo {combo_idx + 1}/{total_combos}: {combo_label}] "
+                                            f"Sub-theme skipped {subtheme}: {str(exc)}"
+                                        ),
+                                        "progress": base_progress,
+                                    }
+                                ) + "\n"
+                                continue
 
         yield json.dumps(
             {

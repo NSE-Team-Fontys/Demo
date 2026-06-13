@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from typing import Any
 
+import os
+
 from src.config.settings import LLAMA_CPP_N_GPU_LAYERS
 
 DEFAULT_QUANTIZATION = "UD-Q4_K_XL"
@@ -21,8 +23,10 @@ class LlamaCppGenerationSettings:
     @property
     def server_args(self) -> list[str]:
         args: list[str] = []
-        if self.context_size > 0:
-            args.extend(["-c", str(self.context_size)])
+        env_ctx = os.environ.get("LLAMA_ARG_CTX_SIZE")
+        ctx = int(env_ctx) if env_ctx and env_ctx.strip().isdigit() else self.context_size
+        if ctx > 0:
+            args.extend(["-c", str(ctx)])
         if LLAMA_CPP_N_GPU_LAYERS in {"auto", "all"}:
             args.extend(["-ngl", LLAMA_CPP_N_GPU_LAYERS])
         else:
