@@ -442,6 +442,13 @@ def precompute_insights_stream(
 
         collection = retrieval.get_collection()
 
+        # Total steps across baseline + every grid combo, so progress never resets.
+        total_passes = 1 + len(normalized_grid)
+        total_steps = len(themes) * total_passes
+
+        def _pct(step: float) -> int:
+            return min(99, int((step / max(total_steps, 1)) * 100))
+
         for i, theme in enumerate(themes):
             theme_name = theme.get("name")
 
@@ -461,7 +468,7 @@ def precompute_insights_stream(
                     {
                         "status": "progress",
                         "theme": theme_name,
-                        "progress": int(((i + 1) / len(themes)) * 100),
+                        "progress": _pct(i + 1),
                         "message": f"Loaded cached insights for {theme_name}",
                     }
                 ) + "\n"
@@ -471,7 +478,7 @@ def precompute_insights_stream(
                 {
                     "status": "progress",
                     "theme": theme_name,
-                    "progress": int((i / len(themes)) * 100),
+                    "progress": _pct(i),
                     "message": f"Collecting semantically assigned answers for {theme_name}...",
                 }
             ) + "\n"
@@ -480,7 +487,7 @@ def precompute_insights_stream(
                 {
                     "status": "progress",
                     "theme": theme_name,
-                    "progress": int(((i + 0.5) / len(themes)) * 100),
+                    "progress": _pct(i + 0.5),
                     "message": (
                         f"{llm_model} is generating hierarchical summary for "
                         f"{theme_name}..."
@@ -519,9 +526,9 @@ def precompute_insights_stream(
                 combo_label = ", ".join(f"{k}={v}" for k, v in combo.items()) or "baseline"
                 for j, theme in enumerate(themes):
                     theme_name = theme.get("name")
-                    overall_step = combo_idx * len(themes) + j
-                    overall_total = total_combos * len(themes)
-                    base_progress = int((overall_step / max(overall_total, 1)) * 100)
+                    # Step offset: baseline used steps 0..len(themes), grid continues from there.
+                    overall_step = len(themes) + combo_idx * len(themes) + j
+                    base_progress = _pct(overall_step)
 
                     if (
                         _cached_dashboard_response(

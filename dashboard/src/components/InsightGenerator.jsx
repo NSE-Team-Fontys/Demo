@@ -43,8 +43,8 @@ export default function InsightGenerator({ onComplete }) {
   });
 
   // Seconds-per-insight rough estimate used for the time preview.
-  // Empirical: a full theme generation with llama.cpp on RTX 4050 takes ~45s for 240 docs.
-  const SECONDS_PER_INSIGHT = 45;
+  // Empirical: measured 50–101s per call on RTX 4050 Laptop GPU, avg ~75s; using 90s to be conservative.
+  const SECONDS_PER_INSIGHT = 90;
   const THEME_COUNT = 7;
   // Rough sub-theme multiplier: prompts typically yield 3-5 sub-themes per theme.
   const SUBTHEMES_PER_THEME = 4;
