@@ -2,9 +2,19 @@ import chromadb
 from importlib import import_module
 
 from src.config.paths import VECTOR_DB_PATH
+from src.config.response_quality import (
+    LOW_INFORMATION_VALUE,
+    RESPONSE_QUALITY_METADATA_KEY,
+    is_low_information_response,
+)
 from src.config.settings import RERANKER_CANDIDATE_MULTIPLIER, RERANKER_MAX_CANDIDATES
-from src.config.themes import METADATA_ALIASES, THEME_EMBEDDING_DEFINITIONS, THEMES_LIST
-
+from src.config.themes import (
+    LOW_INFORMATION_THEME,
+    METADATA_ALIASES,
+    THEME_EMBEDDING_DEFINITIONS,
+    THEME_RETRIEVAL_PROMPT,
+    THEMES_LIST,
+)
 embedding_models = import_module("src.pipeline.02_embedding.embedding_models")
 reranker_models = import_module("src.pipeline.03_retrieval.reranker_models")
 
@@ -22,6 +32,9 @@ THEME_EMBEDDING_MODEL = DEFAULT_EMBEDDING_MODEL
 _theme_overview_cache = {}
 _theme_embedding_models = {}
 _theme_query_embeddings = {}
+SUBSTANTIVE_THEMES = tuple(
+    theme for theme in THEMES_LIST if theme != LOW_INFORMATION_THEME
+)
 
 
 def metadata_value(meta: dict, canonical_key: str):
@@ -47,6 +60,35 @@ def build_where_filter(filters: dict):
     if len(conditions) == 1:
         return conditions[0]
     return {"$and": conditions}
+
+
+def filtered_response_rows(collection, where_filter=None) -> list[dict]:
+    get_kwargs = {"include": ["documents", "metadatas"]}
+    if where_filter:
+        get_kwargs["where"] = where_filter
+    result = collection.get(**get_kwargs)
+    ids = result.get("ids") or []
+    documents = result.get("documents") or []
+    metadatas = result.get("metadatas") or []
+
+    rows = []
+    for index, doc_id in enumerate(ids):
+        document = documents[index] if index < len(documents) else ""
+        metadata = metadatas[index] if index < len(metadatas) else {}
+        metadata = metadata or {}
+        is_low_information = (
+            metadata.get(RESPONSE_QUALITY_METADATA_KEY) == LOW_INFORMATION_VALUE
+            or is_low_information_response(document)
+        )
+        rows.append(
+            {
+                "id": doc_id,
+                "document": str(document or ""),
+                "metadata": metadata,
+                "is_low_information": is_low_information,
+            }
+        )
+    return rows
 
 
 def clear_runtime_caches():
@@ -82,9 +124,15 @@ def get_theme_query_embeddings(model_id: str | None = None):
     selected_model = model_id or THEME_EMBEDDING_MODEL
     if selected_model not in _theme_query_embeddings:
         model = get_theme_embedding_model(selected_model)
+        theme_names = list(SUBSTANTIVE_THEMES)
+        embeddings = model.encode(
+            [theme_query_text(theme) for theme in theme_names],
+            prompt=THEME_RETRIEVAL_PROMPT,
+            normalize_embeddings=True,
+        )
         _theme_query_embeddings[selected_model] = {
-            theme: model.encode(theme_query_text(theme), normalize_embeddings=True).tolist()
-            for theme in THEMES_LIST
+            theme: embedding.tolist()
+            for theme, embedding in zip(theme_names, embeddings)
         }
     return _theme_query_embeddings[selected_model]
 
@@ -307,16 +355,8 @@ def percentages_from_counts(counts: dict[str, int]) -> dict[str, int]:
 
 
 def theme_distribution(collection, model_id: str | None = None, where_filter=None) -> dict:
-    if where_filter:
-        matching_docs = collection.get(where=where_filter)
-        total_docs = (
-            len(matching_docs["ids"])
-            if matching_docs and matching_docs.get("ids")
-            else 0
-        )
-    else:
-        total_docs = collection.count()
-
+    response_rows = filtered_response_rows(collection, where_filter)
+    total_docs = len(response_rows)
     counts = {theme: 0 for theme in THEMES_LIST}
     if total_docs <= 0:
         return {
@@ -325,9 +365,23 @@ def theme_distribution(collection, model_id: str | None = None, where_filter=Non
             "total_docs": 0,
         }
 
+    low_information_ids = {
+        row["id"] for row in response_rows if row["is_low_information"]
+    }
+    substantive_ids = {
+        row["id"] for row in response_rows if not row["is_low_information"]
+    }
+    counts[LOW_INFORMATION_THEME] = len(low_information_ids)
+    if not substantive_ids:
+        return {
+            "counts": counts,
+            "percentages": percentages_from_counts(counts),
+            "total_docs": total_docs,
+        }
+
     theme_embeddings = get_theme_query_embeddings(model_id)
     best_by_doc = {}
-    for theme_name in THEMES_LIST:
+    for theme_name in SUBSTANTIVE_THEMES:
         results = collection.query(
             query_embeddings=[theme_embeddings[theme_name]],
             n_results=total_docs,
@@ -337,6 +391,8 @@ def theme_distribution(collection, model_id: str | None = None, where_filter=Non
         ids = results.get("ids", [[]])[0] if results.get("ids") else []
         distances = results.get("distances", [[]])[0] if results.get("distances") else []
         for doc_id, distance in zip(ids, distances):
+            if doc_id not in substantive_ids:
+                continue
             current = best_by_doc.get(doc_id)
             if current is None or distance < current[0]:
                 best_by_doc[doc_id] = (distance, theme_name)
@@ -362,21 +418,14 @@ def collect_theme_documents(
     Collect the filtered documents whose nearest theme query is the requested theme.
 
     This intentionally does not bind responses to the survey question they came from.
-    Each answer is compared against every theme definition and assigned to the closest
-    theme in embedding space, so off-topic-but-useful student comments can move to the
-    theme they actually discuss.
+    Low-information answers are reserved for No Meaningful Response first. Each remaining
+    answer is compared against every substantive theme definition and assigned to the
+    closest theme in embedding space, so off-topic-but-useful student comments can move
+    to the theme they actually discuss.
     """
     where_filter = build_where_filter(filters or {})
-    if where_filter:
-        matching_docs = collection.get(where=where_filter)
-        total_docs = (
-            len(matching_docs["ids"])
-            if matching_docs and matching_docs.get("ids")
-            else 0
-        )
-    else:
-        total_docs = collection.count()
-
+    response_rows = filtered_response_rows(collection, where_filter)
+    total_docs = len(response_rows)
     counts = {theme: 0 for theme in THEMES_LIST}
     if total_docs <= 0:
         return {
@@ -390,12 +439,49 @@ def collect_theme_documents(
             "percentages": percentages_from_counts(counts),
         }
 
+    low_information_rows = [
+        row for row in response_rows if row["is_low_information"]
+    ]
+    low_information_ids = {row["id"] for row in low_information_rows}
+    substantive_ids = {
+        row["id"] for row in response_rows if not row["is_low_information"]
+    }
+    counts[LOW_INFORMATION_THEME] = len(low_information_rows)
+
+    if theme_name == LOW_INFORMATION_THEME:
+        frequency = int(round((len(low_information_rows) * 100) / total_docs))
+        percentages = {theme: 0 for theme in THEMES_LIST}
+        percentages[theme_name] = frequency
+        return {
+            "frequency": frequency,
+            "vector_relevant_count": counts[theme_name],
+            "total_filtered_documents": total_docs,
+            "documents": [row["document"] for row in low_information_rows],
+            "metadatas": [row["metadata"] for row in low_information_rows],
+            "distances": [0.0 for _ in low_information_rows],
+            "counts": counts,
+            "percentages": percentages,
+        }
+
+    if not substantive_ids:
+        percentages = percentages_from_counts(counts)
+        return {
+            "frequency": percentages.get(theme_name, 0),
+            "vector_relevant_count": 0,
+            "total_filtered_documents": total_docs,
+            "documents": [],
+            "metadatas": [],
+            "distances": [],
+            "counts": counts,
+            "percentages": percentages,
+        }
+
     selected_model = model_id or collection_embedding_model(collection)
     theme_embeddings = get_theme_query_embeddings(selected_model)
     best_by_doc = {}
     target_docs = {}
 
-    for candidate_theme in THEMES_LIST:
+    for candidate_theme in SUBSTANTIVE_THEMES:
         include = (
             ["documents", "metadatas", "distances"]
             if candidate_theme == theme_name
@@ -425,6 +511,8 @@ def collect_theme_documents(
                 }
 
         for doc_id, distance in zip(ids, distances):
+            if doc_id in low_information_ids or doc_id not in substantive_ids:
+                continue
             current = best_by_doc.get(doc_id)
             if current is None or distance < current[0]:
                 best_by_doc[doc_id] = (distance, candidate_theme)
@@ -461,15 +549,22 @@ def collect_documents_by_query(
 ) -> dict:
     """Direct vector search for a query string — used for subtheme drilldowns."""
     where_filter = build_where_filter(filters or {})
-    total_docs = collection.count()
+    response_rows = filtered_response_rows(collection, where_filter)
+    total_docs = len(response_rows)
     if total_docs <= 0:
         return {"frequency": 0, "vector_relevant_count": 0, "total_filtered_documents": 0, "documents": [], "metadatas": [], "distances": []}
+
+    substantive_ids = {
+        row["id"] for row in response_rows if not row["is_low_information"]
+    }
+    if not substantive_ids:
+        return {"frequency": 0, "vector_relevant_count": 0, "total_filtered_documents": total_docs, "documents": [], "metadatas": [], "distances": []}
 
     selected_model = model_id or collection_embedding_model(collection)
     model = get_theme_embedding_model(selected_model)
     query_embedding = model.encode(query_text, normalize_embeddings=True)
 
-    k = min(n_results, max(total_docs, 1))
+    k = min(max(n_results * 2, n_results), max(total_docs, 1))
     results = collection.query(
         query_embeddings=[query_embedding.tolist()],
         n_results=k,
@@ -479,14 +574,21 @@ def collect_documents_by_query(
     documents = results.get("documents", [[]])[0] if results.get("documents") else []
     metadatas = results.get("metadatas", [[]])[0] if results.get("metadatas") else []
     distances = results.get("distances", [[]])[0] if results.get("distances") else []
-    total_filtered = len(documents)
+    ids = results.get("ids", [[]])[0] if results.get("ids") else []
+    substantive_results = [
+        (document, metadata, distance)
+        for doc_id, document, metadata, distance in zip(
+            ids, documents, metadatas, distances
+        )
+        if doc_id in substantive_ids
+    ][:n_results]
     return {
         "frequency": 0,
-        "vector_relevant_count": total_filtered,
-        "total_filtered_documents": total_filtered,
-        "documents": documents,
-        "metadatas": metadatas,
-        "distances": distances,
+        "vector_relevant_count": len(substantive_results),
+        "total_filtered_documents": total_docs,
+        "documents": [row[0] for row in substantive_results],
+        "metadatas": [row[1] for row in substantive_results],
+        "distances": [row[2] for row in substantive_results],
     }
 
 

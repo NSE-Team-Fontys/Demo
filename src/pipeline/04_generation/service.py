@@ -1,6 +1,7 @@
 from importlib import import_module
 import json
 
+from src.config.themes import LOW_INFORMATION_THEME
 from src.config.settings import (
     DEFAULT_LLM_MODEL,
     DEFAULT_LLM_PROVIDER,
@@ -25,7 +26,14 @@ clear_insight_cache = cache_store.clear_insight_cache
 cache_matches_generation_settings = cache_store.cache_matches_generation_settings
 cache_has_full_dashboard_payload = cache_store.cache_has_full_dashboard_payload
 
-HIERARCHICAL_RAG_STRATEGY = "semantic_theme_map_reduce_v1"
+HIERARCHICAL_RAG_STRATEGY = "semantic_theme_map_reduce_v2"
+
+
+def _ensure_llm_eligible_theme(theme_name: str) -> None:
+    if theme_name == LOW_INFORMATION_THEME:
+        raise ValueError(
+            f"{LOW_INFORMATION_THEME} responses are excluded from LLM generation."
+        )
 
 
 def _model_generation_settings(provider: str, llm_model: str) -> dict | None:
@@ -182,6 +190,7 @@ def _generate_theme_payload(
     theme_query: str | None = None,
     max_documents: int | None = None,
 ) -> dict:
+    _ensure_llm_eligible_theme(theme_name)
     selected = _select_theme_documents(collection, theme_name, filters=filters, theme_query=theme_query, max_documents=max_documents)
     relevant_docs = selected["relevant_docs"]
     if not relevant_docs:
@@ -228,6 +237,7 @@ def generate_theme_summary(
     is_subquery = theme_query and theme_query != theme_name
     if not theme_name and not theme_query:
         raise ValueError("No query provided")
+    _ensure_llm_eligible_theme(theme_name)
 
     cache = load_cache()
     cache_key = _cache_key(theme_name, filters, theme_query if is_subquery else None)
@@ -381,6 +391,11 @@ def precompute_insights_stream(
     filter_grid: list[dict] | None = None,
     precache_subthemes: bool = False,
 ):
+    themes = [
+        theme
+        for theme in themes
+        if theme.get("name") != LOW_INFORMATION_THEME
+    ]
     llm_model = str(llm_model or DEFAULT_LLM_MODEL).strip()
     provider = str(provider or DEFAULT_LLM_PROVIDER).strip()
     filters = _normalized_filters(filters)

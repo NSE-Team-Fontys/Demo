@@ -9,6 +9,8 @@ Theme insight generation uses semantic assignment instead of hard-wiring each an
 
 Each answer is assigned to the closest theme in embedding space. For example, if a student writes about teachers inside a general programme-organization question, that answer can still be assigned to `Teachers`. This keeps the system flexible enough for human survey behavior while still giving every answer one primary theme for frequency counting.
 
+Before nearest-theme assignment, conservative whole-response matching reserves empty, placeholder, refusal, and generic Dutch, English, and German answers for `No Meaningful Response`. These responses remain embedded in ChromaDB, but the sink is routed deterministically rather than through a theme-query vector and is not sent to normal educational-theme generation. Responses such as `oké`, `no comment`, and `kein Kommentar` therefore cannot become evidence for `Teachers`.
+
 The retrieval helper for this is `collect_theme_documents()` in `src/pipeline/03_retrieval/service.py`. It returns the assigned documents, per-theme counts, percentages, and the total number of filtered documents.
 
 ### 2. Hierarchical Map-Reduce RAG

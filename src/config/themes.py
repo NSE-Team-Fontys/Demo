@@ -1,3 +1,11 @@
+LOW_INFORMATION_THEME = "No Meaningful Response"
+
+THEME_RETRIEVAL_PROMPT = (
+    "Instruct: Given an education feedback category, retrieve Dutch, English, "
+    "or German student survey responses whose primary topic belongs to that category\n"
+    "Query:"
+)
+
 THEMES_LIST = [
     "Content and Organisation",
     "Professional Practice",
@@ -6,6 +14,7 @@ THEMES_LIST = [
     "Examination & Assessment",
     "Engagement & Contact",
     "Special Circumstances",
+    LOW_INFORMATION_THEME,
 ]
 
 THEME_LLM_DEFINITIONS = {
@@ -106,44 +115,60 @@ THEME_EMBEDDING_DEFINITIONS = {
     "Content and Organisation": (
         "Inhoud en organisatie van de opleiding, curriculum, vakinhoud, modules, leerlijnen, "
         "rooster, planning, studielast, werkdruk, lesmateriaal, informatievoorziening, "
-        "opbouw van het programma, course structure, workload, timetable, study materials."
+        "opbouw van het programma, course structure, workload, timetable, study materials, "
+        "Inhalt und Organisation des Studiengangs, Lehrplan, Module, Stundenplan, Planung, "
+        "Arbeitsbelastung, Lernmaterialien."
     ),
 
     "Professional Practice": (
         "Beroepspraktijk, praktijkopdrachten, projecten, stages, werkveld, praktijkervaring, "
         "professionele vaardigheden, beroepsvaardigheden, samenwerken, toepassen in de praktijk, "
-        "arbeidsmarkt, employability, internships, professional skills, real-world application."
+        "arbeidsmarkt, employability, internships, professional skills, real-world application, "
+        "Berufspraxis, Praktikum, Projekte, Berufsfeld, Praxiserfahrung, berufliche Fähigkeiten, "
+        "Arbeitsmarkt."
     ),
 
     "Teachers": (
         "Docenten, leraren, lecturers, tutors, lesgeven, lessen, uitleg, vakinhoudelijke "
         "deskundigheid, didactiek, bereikbaarheid van docenten, communicatie tijdens de les, "
-        "enthousiasme, begeleiding in de les, feedback van docenten op vakken en opdrachten."
+        "enthousiasme, begeleiding in de les, feedback van docenten op vakken en opdrachten, "
+        "Lehrkräfte, Dozenten, Unterricht, Erklärung, Fachwissen, Didaktik, Erreichbarkeit, "
+        "Feedback der Lehrkräfte."
     ),
 
     "Support / Mentoring": (
         "Studiebegeleiding, mentoring, coaching, SLB, mentor, studiecoach, studentbegeleider, "
         "studieadviseur, persoonlijke begeleiding bij studievoortgang, voortgangsgesprekken, "
-        "hulp bij plannen, keuzes maken, motivatie, welzijnsgesprekken, academic advising."
+        "hulp bij plannen, keuzes maken, motivatie, welzijnsgesprekken, academic advising, "
+        "Studienberatung, Betreuung, Mentor, Studiencoach, persönliche Begleitung, "
+        "Studienfortschritt, Hilfe bei der Planung, Mentorengespräche, persönliche Beratung "
+        "außerhalb des Unterrichts, Erreichbarkeit des Mentors."
     ),
 
     "Examination & Assessment": (
         "Toetsing en beoordeling, tentamens, examens, toetsen, opdrachten beoordelen, cijfers, "
         "beoordelingscriteria, rubrics, nakijken, feedback op beoordeling, herkansingen, "
-        "deadlines voor toetsen, toetsprocedure, grading, assessment criteria."
+        "deadlines voor toetsen, toetsprocedure, grading, assessment criteria, Prüfungen, "
+        "Klausuren, Bewertung, Noten, Bewertungskriterien, Korrektur, Wiederholungsprüfungen."
     ),
 
     "Engagement & Contact": (
         "Betrokkenheid, contact, communicatie, interactie, participatie, inspraak, studentvoice, "
         "meedenken, responsiviteit, binding met de opleiding, gemeenschapsgevoel, contact met "
-        "medestudenten, samenwerking, student involvement, sense of community."
+        "medestudenten, samenwerking, student involvement, sense of community, Beteiligung, "
+        "Kontakt, Kommunikation, Mitbestimmung, Gemeinschaftsgefühl, Kommilitonen, Zusammenarbeit, "
+        "studentische Stimme, Feedback der Studierenden, gehört werden, Reaktion der Hochschule "
+        "auf studentisches Feedback."
     ),
 
     "Special Circumstances": (
         "Bijzondere omstandigheden, functiebeperking, beperking, handicap, ADHD, autisme, "
         "dyslexie, concentratieproblemen, mentale gezondheid, psychische klachten, stress, "
         "financiele zorgen, mantelzorg, topsport, werk naast studie, familieomstandigheden, "
-        "toegankelijkheid, voorzieningen, HEALTH, aanpassingen, extra tijd, accommodations."
+        "toegankelijkheid, voorzieningen, HEALTH, aanpassingen, extra tijd, accommodations, "
+        "besondere Umstände, Behinderung, ADHS, Autismus, Legasthenie, psychische Gesundheit, "
+        "finanzielle Sorgen, Pflegeverantwortung, Studium und Arbeit, Barrierefreiheit, "
+        "Nachteilsausgleich, zusätzliche Zeit."
     )
 
 }

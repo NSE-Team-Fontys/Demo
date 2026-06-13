@@ -20,6 +20,7 @@ This is the workhorse of the embedding process. It takes the text from the `.csv
 - **Batching & Streaming:** Defines a streaming generator function (`build_vector_db_stream`) that yields JSON strings, allowing an external caller (e.g., an API endpoint) to report real-time processing progress bars.
 - **Checkpointing / Resumption:** Handles partial state mapping. It saves local checkpoint files containing metadata about how many documents have been successfully indexed. If a large indexing run is interrupted, it detects the checkpoint file, validates the CSV modification state, and resumes indexing exactly where it left off, avoiding redundant computation.
 - **Metadata Management:** Extracts rich metadata (`build_metadata`) out of CSV rows (like question text and various aliases of demographic sources) and binds it to the vector payloads in ChromaDB for downstream filtering.
+- **Response Quality:** Labels conservative Dutch, English, and German filler responses such as `geen opmerkingen`, `no comment`, and `kein Kommentar` as `low_information` metadata. Retrieval reserves these responses for the `No Meaningful Response` sink theme.
 - **Cleanup:** Unloads models and explicitly clears PyTorch/MPS memory contexts upon completion to free up VRAM.
 
 ### 3. `service.py`

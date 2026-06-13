@@ -5,6 +5,12 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 import json
 
 from src.config.paths import VECTOR_CHECKPOINT
+from src.config.response_quality import (
+    LOW_INFORMATION_VALUE,
+    RESPONSE_QUALITY_METADATA_KEY,
+    RESPONSE_QUALITY_VERSION,
+    response_quality,
+)
 from src.config.themes import METADATA_COLS, SOURCE_METADATA_ALIASES
 from .embedding_models import (
     AVAILABLE_EMBEDDING_MODELS,
@@ -15,6 +21,9 @@ from .embedding_models import (
 )
 from src.utils.model_device import describe_model_device, get_model_device
 from src.utils.file_parsers import detect_sep, is_questionnaire_column
+
+
+VECTOR_SCHEMA_VERSION = 2
 
 
 def _load_vector_checkpoint(csv_path: str, embedding_model: str, selected_columns: list, db_path: str) -> int:
@@ -31,6 +40,8 @@ def _load_vector_checkpoint(csv_path: str, embedding_model: str, selected_column
         if meta.get("embedding_model") != embedding_model:
             return 0
         if meta.get("selected_columns") != selected_columns:
+            return 0
+        if meta.get("vector_schema_version") != VECTOR_SCHEMA_VERSION:
             return 0
         # Verify the ChromaDB collection still exists.
         try:
@@ -68,7 +79,10 @@ def _first_metadata_value(row, aliases):
 
 
 def build_metadata(row) -> dict:
-    meta = {"question": str(row.get("question", "N/A"))}
+    meta = {
+        "question": str(row.get("question", "N/A")),
+        RESPONSE_QUALITY_METADATA_KEY: response_quality(row.get("answer", "")),
+    }
     for canonical_key, aliases in METADATA_ALIASES.items():
         value = _first_metadata_value(row, aliases)
         if value:
@@ -106,7 +120,7 @@ def build_vector_db(csv_path="data/anonymized_output.csv", db_path="./survey_vec
         if question_col in df.columns:
             temp_df = df[df[question_col].notna()].copy()
             temp_df['question'] = question_col
-            temp_df['answer'] = temp_df[question_col]
+            temp_df['answer'] = temp_df[question_col].astype(str)
             all_records.append(temp_df)
     
     if not all_records:
@@ -138,7 +152,12 @@ def build_vector_db(csv_path="data/anonymized_output.csv", db_path="./survey_vec
 
         collection = client.create_collection(
             name=COLLECTION,
-            metadata={"hnsw:space": "cosine", "embedding_model": EMBEDDING_MODEL},
+            metadata={
+                "hnsw:space": "cosine",
+                "embedding_model": EMBEDDING_MODEL,
+                "vector_schema_version": VECTOR_SCHEMA_VERSION,
+                "response_quality_version": RESPONSE_QUALITY_VERSION,
+            },
         )
 
         # Insert in batches
@@ -150,10 +169,18 @@ def build_vector_db(csv_path="data/anonymized_output.csv", db_path="./survey_vec
                 ids=[f"id_{i}" for i in batch.index],
                 embeddings=embeddings[start:end].tolist(),
                 documents=batch['answer'].tolist(),
-                metadatas=[{"question": str(row.get("question", "N/A"))} for _, row in batch.iterrows()]
+                metadatas=[build_metadata(row) for _, row in batch.iterrows()]
             )
 
-        return {"status": "success", "rows_embedded": len(df_combined)}
+        low_information_count = sum(
+            response_quality(answer) == LOW_INFORMATION_VALUE
+            for answer in df_combined["answer"]
+        )
+        return {
+            "status": "success",
+            "rows_embedded": len(df_combined),
+            "low_information_responses": low_information_count,
+        }
     finally:
         model = None
         unload_embedding_models()
@@ -202,7 +229,7 @@ def build_vector_db_stream(
             if question_col in df.columns:
                 temp_df = df[df[question_col].notna()].copy()
                 temp_df['question'] = question_col
-                temp_df['answer'] = temp_df[question_col]
+                temp_df['answer'] = temp_df[question_col].astype(str)
                 all_records.append(temp_df)
 
         if not all_records:
@@ -243,7 +270,12 @@ def build_vector_db_stream(
             # Reuse the existing collection — do not delete it.
             collection = client.get_or_create_collection(
                 COLLECTION,
-                metadata={"hnsw:space": "cosine", "embedding_model": EMBEDDING_MODEL},
+                metadata={
+                    "hnsw:space": "cosine",
+                    "embedding_model": EMBEDDING_MODEL,
+                    "vector_schema_version": VECTOR_SCHEMA_VERSION,
+                    "response_quality_version": RESPONSE_QUALITY_VERSION,
+                },
             )
         else:
             try:
@@ -252,7 +284,12 @@ def build_vector_db_stream(
                 pass
             collection = client.create_collection(
                 COLLECTION,
-                metadata={"hnsw:space": "cosine", "embedding_model": EMBEDDING_MODEL},
+                metadata={
+                    "hnsw:space": "cosine",
+                    "embedding_model": EMBEDDING_MODEL,
+                    "vector_schema_version": VECTOR_SCHEMA_VERSION,
+                    "response_quality_version": RESPONSE_QUALITY_VERSION,
+                },
             )
 
         yield json.dumps({"status": "progress", "message": f"Found {total_docs} documents to embed. Starting encoding...", "progress": 40}) + "\n"
@@ -265,6 +302,7 @@ def build_vector_db_stream(
             "selected_columns": ANSWER_COLS,
             "total_docs": total_docs,
             "processed_count": resume_from,
+            "vector_schema_version": VECTOR_SCHEMA_VERSION,
         }
 
         processed_count = resume_from
@@ -306,11 +344,16 @@ def build_vector_db_stream(
 
         _clear_vector_checkpoint()
 
+        low_information_count = sum(
+            response_quality(answer) == LOW_INFORMATION_VALUE
+            for answer in df_combined["answer"]
+        )
         yield json.dumps({
             "status": "success",
             "message": "Vector DB built successfully",
             "document_count": total_docs,
             "vectors_created": total_docs,
+            "low_information_responses": low_information_count,
             "progress": 100
         }) + "\n"
 

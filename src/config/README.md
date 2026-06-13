@@ -26,6 +26,9 @@ Controls tunable runtime behavior for retrieval and local insight generation:
 
 ### `themes.py`
 Encapsulates structural constraints and standard categorizations.
-*   **Theme Scope Context**: Maps the UI taxonomy (`THEMES_LIST`) to robust instructional prompts (`THEME_LLM_DEFINITIONS`) for step `04_generation`, and lean semantic retrieval queries (`THEME_EMBEDDING_DEFINITIONS`) for vector search.
+*   **Theme Scope Context**: Maps the UI taxonomy (`THEMES_LIST`) to robust instructional prompts (`THEME_LLM_DEFINITIONS`) for step `04_generation`, and lean Dutch, English, and German semantic prototypes (`THEME_EMBEDDING_DEFINITIONS`) for vector search. Theme prototypes use the task-specific English query instruction in `THEME_RETRIEVAL_PROMPT`; low-information responses are embedded normally but routed deterministically instead of using a theme-query embedding.
 *   **Data Inference**: Exposes analytical structures like `METADATA_COLS` ensuring dynamic parsers (`src/utils/file_parsers.py`) can accurately distinguish metadata parameters from raw text surveys.
 *   **Alias Mappings**: Resolves the "Dutch vs English" metadata headache via `METADATA_ALIASES` and `SOURCE_METADATA_ALIASES`, unifying differing raw survey column structures (e.g. `academic_year` mapped simultaneously with `Jaar`).
+
+### `response_quality.py`
+Contains the complete low-information response classifier and its editable policy. Add words or complete phrases to `LOW_INFORMATION_RESPONSES`; matching is case-insensitive and ignores accents and punctuation. Punctuation-only answers such as `.`, `...`, `/`, and `-` are already classified as low-information without adding each symbol.
