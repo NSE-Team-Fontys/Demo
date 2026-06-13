@@ -45,12 +45,19 @@ def cache_matches_generation_settings(
 ) -> bool:
     if not isinstance(cached_theme, dict):
         return False
+    try:
+        classification_metadata = retrieval.classification_cache_metadata()
+    except Exception:
+        return False
     matches = (
         cached_theme.get("cache_version") == INSIGHT_CACHE_VERSION
         and cached_theme.get("llm_context_documents") == LLM_CONTEXT_DOCUMENTS
         and cached_theme.get("hierarchical_batch_documents")
         == HIERARCHICAL_RAG_BATCH_DOCUMENTS
-        and cached_theme.get("reranker") == retrieval.current_reranker_id()
+        and all(
+            cached_theme.get(key) == value
+            for key, value in classification_metadata.items()
+        )
     )
     if match_llm_identity and llm_provider is not None:
         matches = matches and cached_theme.get("llm_provider") == llm_provider

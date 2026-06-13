@@ -1,0 +1,242 @@
+from __future__ import annotations
+
+from importlib import import_module
+import json
+from pathlib import Path
+import tempfile
+import unittest
+from unittest import mock
+
+import chromadb
+import numpy as np
+import pandas as pd
+
+from src.config.themes import THEME_EMBEDDING_DEFINITIONS
+
+
+theme_classifier = import_module("src.pipeline.02_embedding.theme_classifier")
+vector_builder = import_module("src.pipeline.02_embedding.vector_builder")
+
+
+class ScoreReranker:
+    def __init__(self, scores) -> None:
+        self.scores = np.asarray(scores, dtype=np.float32)
+        self.calls = []
+
+    def predict(self, pairs):
+        self.calls.append(list(pairs))
+        return self.scores
+
+
+class BuildEmbeddingModel:
+    def __init__(self) -> None:
+        self.document_batches = []
+
+    def encode(self, values, **kwargs):
+        values = list(values) if isinstance(values, list) else values
+        if kwargs.get("prompt"):
+            size = len(THEME_EMBEDDING_DEFINITIONS)
+            embeddings = np.zeros((size, 2), dtype=np.float32)
+            embeddings[:, 0] = np.linspace(1.0, 0.4, size)
+            embeddings[:, 1] = np.linspace(0.0, 0.6, size)
+            norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
+            return embeddings / norms
+        self.document_batches.append(list(values))
+        return np.tile(
+            np.asarray([[1.0, 0.0]], dtype=np.float32),
+            (len(values), 1),
+        )
+
+
+class ThemeClassificationTests(unittest.TestCase):
+    def test_reranker_can_change_embedding_first_choice(self) -> None:
+        themes = ["Teachers", "Support / Mentoring", "Content and Organisation"]
+        theme_embeddings = np.asarray(
+            [
+                [1.0, 0.0],
+                [0.8, 0.2],
+                [0.0, 1.0],
+            ],
+            dtype=np.float32,
+        )
+        config = theme_classifier.classification_config(
+            "fake-embedding",
+            reranker_model_id="fake-reranker",
+            candidate_count=2,
+            ambiguity_score_margin=0.1,
+        )
+        reranker = ScoreReranker([0.1, 0.9])
+
+        result = theme_classifier.classify_theme_batch(
+            ["My lecturer also helps me plan my study."],
+            np.asarray([[1.0, 0.0]], dtype=np.float32),
+            theme_names=themes,
+            theme_embeddings=theme_embeddings,
+            config=config,
+            reranker_model=reranker,
+        )[0]
+
+        self.assertEqual(result["theme_primary"], "Support / Mentoring")
+        self.assertEqual(result["theme_candidate_1_embedding_rank"], 2)
+        self.assertEqual(result["theme_primary_score_kind"], "raw_cross_encoder_score")
+        self.assertEqual(len(reranker.calls), 1)
+        self.assertEqual(len(reranker.calls[0]), 2)
+
+    def test_margin_rule_marks_close_reranker_scores_ambiguous(self) -> None:
+        themes = ["Teachers", "Support / Mentoring"]
+        config = theme_classifier.classification_config(
+            "fake-embedding",
+            reranker_model_id="fake-reranker",
+            candidate_count=2,
+            ambiguity_score_margin=0.2,
+        )
+        result = theme_classifier.classify_theme_batch(
+            ["A genuinely multi-topic response."],
+            np.asarray([[1.0, 0.0]], dtype=np.float32),
+            theme_names=themes,
+            theme_embeddings=np.asarray(
+                [[1.0, 0.0], [0.9, 0.1]],
+                dtype=np.float32,
+            ),
+            config=config,
+            reranker_model=ScoreReranker([0.7, 0.6]),
+        )[0]
+
+        self.assertTrue(result["theme_ambiguous"])
+        self.assertAlmostEqual(result["theme_score_margin"], 0.1, places=5)
+
+    def test_fresh_build_and_interrupted_resume_keep_all_assignments(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            csv_path = root / "survey.csv"
+            db_path = root / "vectors"
+            checkpoint_path = root / "vector_checkpoint.json"
+            cache_path = root / "gemma_cache.json"
+            cache_path.write_text('{"stale": true}', encoding="utf-8")
+            question = "What should improve?"
+            pd.DataFrame(
+                {
+                    question: [
+                        f"Teacher feedback response {index}"
+                        for index in range(101)
+                    ],
+                    "location": ["A"] * 101,
+                }
+            ).to_csv(csv_path, index=False)
+
+            first_model = BuildEmbeddingModel()
+            with (
+                mock.patch.object(
+                    vector_builder,
+                    "VECTOR_CHECKPOINT",
+                    checkpoint_path,
+                ),
+                mock.patch.object(vector_builder, "CACHE_FILE", cache_path),
+                mock.patch.object(
+                    vector_builder,
+                    "load_embedding_model",
+                    return_value=first_model,
+                ),
+                mock.patch.object(
+                    vector_builder.reranker_models,
+                    "reranker_enabled",
+                    return_value=False,
+                ),
+                mock.patch.object(
+                    vector_builder,
+                    "unload_embedding_models",
+                ),
+                mock.patch.object(
+                    vector_builder.reranker_models,
+                    "unload_reranker_models",
+                ),
+            ):
+                stream = vector_builder.build_vector_db_stream(
+                    csv_path=str(csv_path),
+                    db_path=str(db_path),
+                    selected_columns=[question],
+                    allow_model_download=False,
+                )
+                first_batch_event = None
+                for line in stream:
+                    event = json.loads(line)
+                    if event.get("checkpoint_saved"):
+                        first_batch_event = event
+                        break
+                stream.close()
+
+            self.assertIsNotNone(first_batch_event)
+            self.assertEqual(first_batch_event["progress"], 94)
+            self.assertFalse(cache_path.exists())
+            interrupted_collection = chromadb.PersistentClient(
+                path=str(db_path)
+            ).get_collection("survey_responses")
+            self.assertEqual(interrupted_collection.count(), 100)
+            self.assertEqual(
+                interrupted_collection.metadata[
+                    "theme_classification_status"
+                ],
+                theme_classifier.CLASSIFICATION_STATUS_BUILDING,
+            )
+            self.assertTrue(checkpoint_path.exists())
+
+            second_model = BuildEmbeddingModel()
+            with (
+                mock.patch.object(
+                    vector_builder,
+                    "VECTOR_CHECKPOINT",
+                    checkpoint_path,
+                ),
+                mock.patch.object(vector_builder, "CACHE_FILE", cache_path),
+                mock.patch.object(
+                    vector_builder,
+                    "load_embedding_model",
+                    return_value=second_model,
+                ),
+                mock.patch.object(
+                    vector_builder.reranker_models,
+                    "reranker_enabled",
+                    return_value=False,
+                ),
+                mock.patch.object(
+                    vector_builder,
+                    "unload_embedding_models",
+                ),
+                mock.patch.object(
+                    vector_builder.reranker_models,
+                    "unload_reranker_models",
+                ),
+            ):
+                events = [
+                    json.loads(line)
+                    for line in vector_builder.build_vector_db_stream(
+                        csv_path=str(csv_path),
+                        db_path=str(db_path),
+                        selected_columns=[question],
+                        allow_model_download=False,
+                    )
+                ]
+
+            self.assertEqual(events[-1]["status"], "success", events)
+            self.assertEqual(second_model.document_batches, [["Teacher feedback response 100"]])
+            completed = chromadb.PersistentClient(
+                path=str(db_path)
+            ).get_collection("survey_responses")
+            stored = completed.get(include=["metadatas"])
+            self.assertEqual(completed.count(), 101)
+            self.assertEqual(len(set(stored["ids"])), 101)
+            self.assertTrue(
+                all(
+                    metadata.get("theme_primary")
+                    for metadata in stored["metadatas"]
+                )
+            )
+            self.assertEqual(
+                completed.metadata["theme_classification_status"],
+                theme_classifier.CLASSIFICATION_STATUS_READY,
+            )
+            self.assertFalse(checkpoint_path.exists())
+
+
+if __name__ == "__main__":
+    unittest.main()

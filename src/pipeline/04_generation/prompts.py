@@ -36,7 +36,39 @@ Responses:
 """
 
 
-def build_prompt(theme_name: str, docs: list[str], custom_prompt: str = "") -> str:
+def _append_evidence(prompt: str, evidence: list) -> str:
+    normalized = [
+        item
+        if isinstance(item, dict)
+        else {"document": str(item), "evidence_type": "definite"}
+        for item in evidence
+    ]
+    definite = [
+        item["document"]
+        for item in normalized
+        if item.get("evidence_type") in {"definite", "free_text_retrieval"}
+    ]
+    ambiguous = [
+        item["document"]
+        for item in normalized
+        if item.get("evidence_type") == "ambiguous"
+    ]
+    prompt += "\nDefinite evidence:\n"
+    for document in definite:
+        prompt += f"- {document}\n"
+    if ambiguous:
+        prompt += (
+            "\nAmbiguous candidate evidence:\n"
+            "These responses were close classification candidates for this theme. "
+            "Ignore any candidate evidence that is not genuinely relevant. A genuinely "
+            "multi-topic response may contribute to this summary.\n"
+        )
+        for document in ambiguous:
+            prompt += f"- {document}\n"
+    return prompt
+
+
+def build_prompt(theme_name: str, docs: list, custom_prompt: str = "") -> str:
     if custom_prompt.strip():
         prompt = (
             custom_prompt.replace("{theme_name}", theme_name)
@@ -47,14 +79,12 @@ def build_prompt(theme_name: str, docs: list[str], custom_prompt: str = "") -> s
     else:
         prompt = default_prompt(theme_name)
 
-    for doc in docs:
-        prompt += f"- {doc}\n"
-    return prompt
+    return _append_evidence(prompt, docs)
 
 
 def build_batch_summary_prompt(
     theme_name: str,
-    docs: list[str],
+    docs: list,
     *,
     batch_number: int,
     total_batches: int,
@@ -86,9 +116,7 @@ Respond EXACTLY in this JSON format:
 
 Responses:
 """
-    for doc in docs:
-        prompt += f"- {doc}\n"
-    return prompt
+    return _append_evidence(prompt, docs)
 
 
 def build_reduce_prompt(

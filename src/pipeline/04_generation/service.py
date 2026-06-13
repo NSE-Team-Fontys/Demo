@@ -104,8 +104,8 @@ def _select_theme_documents(
     max_documents: int | None = None,
 ):
     cap = max_documents if max_documents and max_documents > 0 else HIERARCHICAL_RAG_MAX_DOCUMENTS
-    embedding_model = retrieval.collection_embedding_model(collection)
     if theme_query and theme_query != theme_name:
+        embedding_model = retrieval.collection_embedding_model(collection)
         collected = retrieval.collect_documents_by_query(
             collection,
             theme_query,
@@ -113,27 +113,47 @@ def _select_theme_documents(
             model_id=embedding_model,
             n_results=cap or 500,
         )
+        all_evidence = [
+            {
+                "document": document,
+                "evidence_type": "free_text_retrieval",
+            }
+            for document in collected["documents"]
+        ]
     else:
         collected = retrieval.collect_theme_documents(
             collection,
             theme_name,
             filters=_normalized_filters(filters),
-            model_id=embedding_model,
         )
-    all_docs = collected["documents"]
-    selected_docs = all_docs[:cap] if cap > 0 else all_docs
+        all_evidence = collected["evidence"]
+    selected_evidence = all_evidence[:cap] if cap > 0 else all_evidence
+    all_docs = [evidence["document"] for evidence in all_evidence]
+    selected_docs = [evidence["document"] for evidence in selected_evidence]
     return {
         "frequency": collected["frequency"],
         "vector_relevant_count": collected["vector_relevant_count"],
         "total_filtered_documents": collected["total_filtered_documents"],
         "relevant_docs": selected_docs,
+        "relevant_evidence": selected_evidence,
         "all_docs": all_docs,
         "source_document_count": len(all_docs),
         "analyzed_document_count": len(selected_docs),
+        "definite_evidence_count": sum(
+            evidence["evidence_type"] == "definite"
+            for evidence in all_evidence
+        ),
+        "ambiguous_evidence_count": sum(
+            evidence["evidence_type"] == "ambiguous"
+            for evidence in all_evidence
+        ),
+        "classification_metadata": retrieval.classification_cache_metadata(
+            collection
+        ),
     }
 
 
-def _document_batches(docs: list[str]) -> list[list[str]]:
+def _document_batches(docs: list) -> list[list]:
     batch_size = max(1, HIERARCHICAL_RAG_BATCH_DOCUMENTS)
     return [docs[i : i + batch_size] for i in range(0, len(docs), batch_size)]
 
@@ -142,13 +162,17 @@ def _generate_hierarchical_json(
     client,
     llm_model: str,
     theme_name: str,
-    docs: list[str],
+    evidence: list[dict],
     *,
     custom_prompt: str = "",
 ) -> dict:
-    batches = _document_batches(docs)
+    batches = _document_batches(evidence)
     if len(batches) <= 1:
-        prompt = prompts.build_prompt(theme_name, docs, custom_prompt=custom_prompt)
+        prompt = prompts.build_prompt(
+            theme_name,
+            evidence,
+            custom_prompt=custom_prompt,
+        )
         return prompts.parse_llm_json(client.generate_json(llm_model, prompt, timeout=600))
 
     batch_summaries = []
@@ -170,7 +194,7 @@ def _generate_hierarchical_json(
     reduce_prompt = prompts.build_reduce_prompt(
         theme_name,
         batch_summaries,
-        source_document_count=len(docs),
+        source_document_count=len(evidence),
     )
     return prompts.parse_llm_json(
         client.generate_json(llm_model, reduce_prompt, timeout=600)
@@ -192,8 +216,8 @@ def _generate_theme_payload(
 ) -> dict:
     _ensure_llm_eligible_theme(theme_name)
     selected = _select_theme_documents(collection, theme_name, filters=filters, theme_query=theme_query, max_documents=max_documents)
-    relevant_docs = selected["relevant_docs"]
-    if not relevant_docs:
+    relevant_evidence = selected["relevant_evidence"]
+    if not relevant_evidence:
         return _empty_theme_payload(
             theme_name,
             selected,
@@ -207,7 +231,7 @@ def _generate_theme_payload(
         client,
         llm_model,
         theme_name,
-        relevant_docs,
+        relevant_evidence,
         custom_prompt=custom_prompt,
     )
     return _theme_payload_from_parsed(
@@ -254,7 +278,13 @@ def generate_theme_summary(
         if cached_response is not None:
             print(f"[LLM] Returning cached summary for: {theme_name}")
             return cached_response
-    elif cache_key in cache:
+    elif cache_key in cache and cache_matches_generation_settings(
+        cache[cache_key],
+        llm_provider=provider,
+        llm_model=llm_model,
+        llm_generation_settings=llm_generation_settings,
+        match_llm_identity=True,
+    ):
         print(f"[LLM] Returning cached subquery summary for: {theme_query}")
         return cache[cache_key]
 
@@ -264,13 +294,13 @@ def generate_theme_summary(
             "dashboard fields; regenerating."
         )
 
+    collection = retrieval.get_collection()
     client = get_llm_client(provider)
     try:
         label = theme_query if is_subquery else theme_name
         print(f"[LLM] Cache miss - generating summary for: {label}")
         client.ensure_model_available(llm_model, allow_download=allow_model_download)
 
-        collection = retrieval.get_collection()
         response_data = _generate_theme_payload(
             client=client,
             collection=collection,
@@ -323,7 +353,10 @@ def _empty_theme_payload(
         "llm_provider": provider,
         "llm_model": llm_model,
         "llm_generation_settings": llm_generation_settings,
-        "reranker": retrieval.current_reranker_id(),
+        "reranker": selected["classification_metadata"]["theme_reranker_model"],
+        "definite_evidence_count": selected["definite_evidence_count"],
+        "ambiguous_evidence_count": selected["ambiguous_evidence_count"],
+        **selected["classification_metadata"],
         "summary": "No responses were semantically assigned to this theme.",
         "sentiments": [],
         "positive_comments": [],
@@ -367,7 +400,10 @@ def _theme_payload_from_parsed(
         "llm_provider": provider,
         "llm_model": llm_model,
         "llm_generation_settings": llm_generation_settings,
-        "reranker": retrieval.current_reranker_id(),
+        "reranker": selected["classification_metadata"]["theme_reranker_model"],
+        "definite_evidence_count": selected["definite_evidence_count"],
+        "ambiguous_evidence_count": selected["ambiguous_evidence_count"],
+        **selected["classification_metadata"],
         "summary": parsed.get("summary", "Summary could not be parsed."),
         "sentiments": sentiments,
         "positive_comments": parsed.get("positive_comments", [])[:3],
@@ -444,6 +480,7 @@ def precompute_insights_stream(
             ) + "\n"
             return
 
+        collection = retrieval.get_collection()
         yield json.dumps(
             {
                 "status": "progress",
@@ -454,8 +491,6 @@ def precompute_insights_stream(
 
         client = get_llm_client(provider)
         client.ensure_model_available(llm_model, allow_download=allow_model_download)
-
-        collection = retrieval.get_collection()
 
         # Total steps across baseline + every grid combo, so progress never resets.
         total_passes = 1 + len(normalized_grid)
@@ -618,7 +653,13 @@ def precompute_insights_stream(
                         ]
                         for st_idx, subtheme in enumerate(subthemes):
                             sub_key = _cache_key(theme_name, combo, subtheme)
-                            if sub_key in cache:
+                            if sub_key in cache and cache_matches_generation_settings(
+                                cache[sub_key],
+                                llm_provider=provider,
+                                llm_model=llm_model,
+                                llm_generation_settings=llm_generation_settings,
+                                match_llm_identity=True,
+                            ):
                                 continue
                             yield json.dumps(
                                 {
@@ -676,6 +717,7 @@ def precompute_insights_stream(
 
 
 def themes_overview_payload(filters: dict) -> dict:
+    retrieval.get_collection()
     normalized_filters = _normalized_filters(filters)
     cached_values = [
         data

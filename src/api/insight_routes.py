@@ -178,7 +178,10 @@ def get_themes_overview():
         value = request.args.get(key)
         if value and value != "All":
             filters[key] = value
-    return jsonify(generation.themes_overview_payload(filters))
+    try:
+        return jsonify(generation.themes_overview_payload(filters))
+    except Exception as exc:
+        return jsonify({"status": "error", "error": str(exc)}), 409
 
 
 def _filters_from_payload(data: dict) -> dict:

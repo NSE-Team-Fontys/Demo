@@ -251,6 +251,8 @@ RERANKER_ENABLED=true
 RERANKER_MODEL=zeroentropy/zerank-2-reranker
 RERANKER_CANDIDATE_MULTIPLIER=5
 RERANKER_MAX_CANDIDATES=100
+THEME_CLASSIFICATION_CANDIDATES=3
+THEME_AMBIGUITY_SCORE_MARGIN=0.15
 LLM_CONTEXT_DOCUMENTS=100
 HIERARCHICAL_RAG_BATCH_DOCUMENTS=60
 HIERARCHICAL_RAG_MAX_DOCUMENTS=0
@@ -496,7 +498,8 @@ Behavior:
 - Embeds search queries with the same embedding model stored in the Chroma collection.
 - Retrieves broad candidates from Chroma.
 - Uses `zeroentropy/zerank-2-reranker` by default to rerank candidates.
-- Computes theme distribution from the closest hardcoded theme embedding.
+- Reads predefined dashboard theme distribution from persisted primary assignments.
+- Returns definite primary evidence plus ambiguous candidate evidence without loading models.
 - Caches filtered theme overview frequency results in memory.
 
 ### 5. Generate Insights
@@ -526,7 +529,8 @@ Behavior:
 - Checks llama.cpp availability and the selected Gemma GGUF model before generation.
 - Supports these Unsloth dynamic Q4 model ids: `unsloth/gemma-4-E2B-it-qat-GGUF:UD-Q4_K_XL`, `unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL`, `unsloth/gemma-4-26B-A4B-it-GGUF:UD-Q4_K_M`, and `unsloth/gemma-4-31B-it-GGUF:UD-Q4_K_XL`.
 - Uses semantic hierarchical RAG for theme insights instead of fixing answers to their original survey question.
-- First applies metadata filters, then compares every remaining answer with every theme embedding and assigns each answer to the closest theme.
+- First applies metadata filters, then reads indexing-time primary and ambiguous candidate assignments directly from Chroma metadata.
+- Counts each answer once under its primary theme while allowing genuinely multi-topic ambiguous evidence in multiple summaries.
 - Splits the assigned answers into map batches of `HIERARCHICAL_RAG_BATCH_DOCUMENTS` answers. The default is `60` answers per small summary.
 - Generates one JSON summary per batch, then sends those batch summaries into a final reduce prompt that produces the dashboard insight.
 - `HIERARCHICAL_RAG_MAX_DOCUMENTS=0` means no artificial document cap; set it above `0` to sample only the closest assigned answers during testing.
