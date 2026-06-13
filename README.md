@@ -524,7 +524,7 @@ Behavior:
 
 - Uses local llama.cpp at `http://127.0.0.1:8080` by default.
 - Checks llama.cpp availability and the selected Gemma GGUF model before generation.
-- Supports these Unsloth dynamic Q4 model ids: `unsloth/gemma-4-E2B-it-GGUF:UD-Q4_K_XL`, `unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL`, `unsloth/gemma-4-26B-A4B-it-GGUF:UD-Q4_K_M`, and `unsloth/gemma-4-31B-it-GGUF:UD-Q4_K_XL`.
+- Supports these Unsloth dynamic Q4 model ids: `unsloth/gemma-4-E2B-it-qat-GGUF:UD-Q4_K_XL`, `unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL`, `unsloth/gemma-4-26B-A4B-it-GGUF:UD-Q4_K_M`, and `unsloth/gemma-4-31B-it-GGUF:UD-Q4_K_XL`.
 - Uses semantic hierarchical RAG for theme insights instead of fixing answers to their original survey question.
 - First applies metadata filters, then compares every remaining answer with every theme embedding and assigns each answer to the closest theme.
 - Splits the assigned answers into map batches of `HIERARCHICAL_RAG_BATCH_DOCUMENTS` answers. The default is `60` answers per small summary.

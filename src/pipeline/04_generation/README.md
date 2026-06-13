@@ -46,12 +46,13 @@ Abstract protocol (`LLMClient`) governing the interaction between Python and ext
 
 ### `llama_cpp_models.py`
 Central registry for the supported Gemma Unsloth dynamic Q4 GGUF model options and their model-specific llama.cpp tuning:
-- `unsloth/gemma-4-E2B-it-GGUF:UD-Q4_K_XL`
+- `unsloth/gemma-4-E2B-it-qat-GGUF:UD-Q4_K_XL`
 - `unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL`
 - `unsloth/gemma-4-26B-A4B-it-GGUF:UD-Q4_K_M`
 - `unsloth/gemma-4-31B-it-GGUF:UD-Q4_K_XL`
 
 Each registry entry owns its context size, max completion tokens, sampling controls, JSON-mode setting, and thinking flag. `llm_clients.py` only resolves the model and passes through those settings.
+The E2B QAT entry also enables its bundled MTP drafter with `--spec-type draft-mtp --spec-draft-n-max 2`.
 
 ### `prompts.py`
 Handles LLM IO formatting.
