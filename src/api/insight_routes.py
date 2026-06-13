@@ -47,6 +47,9 @@ def precompute_insights():
     if not themes:
         return jsonify({"error": "No themes provided"}), 400
 
+    raw_max = data.get("max_documents")
+    max_documents = int(raw_max) if raw_max and str(raw_max).isdigit() else None
+
     return Response(
         generation.precompute_insights_stream(
             themes=themes,
@@ -55,6 +58,7 @@ def precompute_insights():
             allow_model_download=bool(data.get("allow_model_download", False)),
             provider=data.get("provider", settings.DEFAULT_LLM_PROVIDER),
             filters=_filters_from_payload(data),
+            max_documents=max_documents,
         ),
         mimetype="application/x-ndjson",
     )
@@ -70,6 +74,28 @@ def llm_models():
             "models": llama_cpp_models.llama_cpp_model_options(),
         }
     )
+
+
+@insight_bp.route("/api/llm-models/start", methods=["POST"])
+def start_llm_model():
+    try:
+        data = request.get_json(silent=True) or {}
+        provider = data.get("provider", settings.DEFAULT_LLM_PROVIDER)
+        model_name = data.get("llm_model") or settings.DEFAULT_LLM_MODEL
+        client = generation.get_llm_client(provider)
+        client.ensure_model_available(model_name, allow_download=True)
+        return jsonify(
+            {
+                "status": "ready",
+                "provider": provider,
+                "model": llama_cpp_models.resolve_llama_cpp_model(model_name).id,
+            }
+        )
+    except ValueError as exc:
+        return jsonify({"status": "error", "error": str(exc)}), 400
+    except Exception as exc:
+        print(f"[LLAMA_CPP START ERROR] {str(exc)}")
+        return jsonify({"status": "error", "error": str(exc)}), 500
 
 
 @insight_bp.route("/api/themes-overview", methods=["GET"])

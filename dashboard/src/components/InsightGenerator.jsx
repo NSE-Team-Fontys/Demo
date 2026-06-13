@@ -30,8 +30,16 @@ export default function InsightGenerator({ onComplete }) {
   const [showPromptEditor, setShowPromptEditor] = useState(false);
   const [clearCache, setClearCache] = useState(false);
   const [allowModelDownload, setAllowModelDownload] = useState(true);
+  const [maxDocuments, setMaxDocuments] = useState(240);
+  const [totalDocs, setTotalDocs] = useState(null);
+  const [modelActivation, setModelActivation] = useState({
+    status: 'idle',
+    modelId: null,
+    message: ''
+  });
 
   const logRef = useRef(null);
+  const activationRequestRef = useRef(0);
 
   // Auto-scroll logs
   useEffect(() => {
@@ -39,6 +47,62 @@ export default function InsightGenerator({ onComplete }) {
       logRef.current.scrollTop = logRef.current.scrollHeight;
     }
   }, [logs]);
+
+  useEffect(() => {
+    fetch('http://localhost:5001/api/vector-stats')
+      .then(r => r.json())
+      .then(data => { if (data.total_documents > 0) setTotalDocs(data.total_documents) })
+      .catch(() => {})
+  }, []);
+
+  const selectAndStartModel = async (model) => {
+    setSelectedModel(model.id);
+    const requestId = activationRequestRef.current + 1;
+    activationRequestRef.current = requestId;
+
+    if (!allowModelDownload) {
+      setModelActivation({
+        status: 'idle',
+        modelId: model.id,
+        message: 'Selected. Automatic llama-server startup is disabled.'
+      });
+      return;
+    }
+
+    setModelActivation({
+      status: 'starting',
+      modelId: model.id,
+      message: `Starting ${model.name} with llama.cpp...`
+    });
+
+    try {
+      const res = await fetch('http://localhost:5001/api/llm-models/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          llm_model: model.id,
+          provider: LLM_PROVIDER
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || data.status !== 'ready') {
+        throw new Error(data.error || `Request failed with HTTP ${res.status}`);
+      }
+      if (activationRequestRef.current !== requestId) return;
+      setModelActivation({
+        status: 'ready',
+        modelId: model.id,
+        message: `${model.name} is loaded and ready on llama.cpp.`
+      });
+    } catch (e) {
+      if (activationRequestRef.current !== requestId) return;
+      setModelActivation({
+        status: 'error',
+        modelId: model.id,
+        message: e.message || 'Could not start llama.cpp.'
+      });
+    }
+  };
 
   const startGeneration = async () => {
     setGenerating(true);
@@ -85,7 +149,8 @@ export default function InsightGenerator({ onComplete }) {
           llm_model: selectedModel,
           provider: LLM_PROVIDER,
           custom_prompt: customPrompt !== DEFAULT_PROMPT ? customPrompt : '',
-          allow_model_download: allowModelDownload
+          allow_model_download: allowModelDownload,
+          max_documents: maxDocuments,
         })
       });
 
@@ -182,7 +247,13 @@ export default function InsightGenerator({ onComplete }) {
                 {AVAILABLE_LLM_MODELS.map(model => {
                   const isSelected = selectedModel === model.id;
                   return (
-                    <label key={model.id} onClick={() => setSelectedModel(model.id)} className={`block p-3 rounded-xl border-2 cursor-pointer transition-all duration-200 ${isSelected ? 'border-violet-500 bg-violet-50/50 shadow-sm' : 'border-gray-100 hover:border-gray-200 bg-white'}`}>
+                    <button
+                      type="button"
+                      key={model.id}
+                      onClick={() => selectAndStartModel(model)}
+                      disabled={modelActivation.status === 'starting'}
+                      className={`block w-full text-left p-3 rounded-xl border-2 cursor-pointer transition-all duration-200 disabled:cursor-wait ${isSelected ? 'border-violet-500 bg-violet-50/50 shadow-sm' : 'border-gray-100 hover:border-gray-200 bg-white'}`}
+                    >
                       <div className="flex items-start gap-3">
                         <div className={`mt-0.5 flex items-center justify-center w-5 h-5 rounded-full flex-shrink-0 transition-colors ${isSelected ? 'bg-violet-500' : 'border-2 border-gray-300'}`}>
                           {isSelected && <div className="w-2 h-2 bg-white rounded-full"></div>}
@@ -200,12 +271,27 @@ export default function InsightGenerator({ onComplete }) {
                           </div>
                         </div>
                       </div>
-                    </label>
+                    </button>
                   );
                 })}
               </div>
+              {modelActivation.message && (
+                <div
+                  className={`rounded-lg border px-3 py-2 text-xs ${
+                    modelActivation.status === 'ready'
+                      ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                      : modelActivation.status === 'error'
+                        ? 'border-red-200 bg-red-50 text-red-700'
+                        : modelActivation.status === 'starting'
+                          ? 'border-blue-200 bg-blue-50 text-blue-700'
+                          : 'border-gray-200 bg-gray-50 text-gray-600'
+                  }`}
+                >
+                  {modelActivation.message}
+                </div>
+              )}
               <p className="text-[11px] text-gray-400 leading-relaxed">
-                Model must be available to <code className="bg-gray-100 px-1 py-0.5 rounded text-[10px]">llama-server</code>. Router model id: <code className="bg-gray-100 px-1 py-0.5 rounded text-[10px] break-all">{selectedModel}</code>
+                Selecting a model starts <code className="bg-gray-100 px-1 py-0.5 rounded text-[10px]">llama-server</code> when automatic startup is enabled. Model id: <code className="bg-gray-100 px-1 py-0.5 rounded text-[10px] break-all">{selectedModel}</code>
               </p>
             </div>
 
@@ -281,9 +367,31 @@ export default function InsightGenerator({ onComplete }) {
                   </div>
                   <div>
                     <p className={`text-sm font-medium ${allowModelDownload ? 'text-violet-900' : 'text-gray-700'}`}>Start llama-server if needed</p>
-                    <p className="text-xs text-gray-500">When enabled, the backend runs llama-server for the selected Gemma model and unloads it after generation.</p>
+                    <p className="text-xs text-gray-500">When enabled, selecting a Gemma model starts or switches llama-server. The model downloads automatically from Hugging Face the first time.</p>
                   </div>
                 </label>
+
+                <div className="p-3 rounded-xl border-2 border-gray-100 bg-white space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium text-gray-700">Documents analysed per theme</p>
+                    <span className="text-sm font-bold text-primary tabular-nums">{maxDocuments}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={60}
+                    max={totalDocs ?? 600}
+                    step={60}
+                    value={maxDocuments}
+                    onChange={(e) => setMaxDocuments(Number(e.target.value))}
+                    className="w-full accent-primary"
+                  />
+                  <div className="flex justify-between text-[10px] text-gray-400 font-medium">
+                    <span>60 (fast)</span>
+                    <span>240 (default)</span>
+                    <span>{totalDocs ? `${totalDocs} (all)` : '...'}</span>
+                  </div>
+                  <p className="text-xs text-gray-500">Higher = more accurate LLM summary, longer generation time.</p>
+                </div>
               </div>
             </div>
           </div>
@@ -293,7 +401,7 @@ export default function InsightGenerator({ onComplete }) {
             <div className="text-sm text-gray-600 flex items-center gap-2">
               <span className="font-semibold text-gray-800">{activeModel?.name}</span>
               <span className="text-gray-300">•</span>
-              <span className="text-gray-500">7 themes</span>
+              <span className="text-gray-500">7 themes · {maxDocuments} docs/theme</span>
               {clearCache && (
                 <>
                   <span className="text-gray-300">•</span>

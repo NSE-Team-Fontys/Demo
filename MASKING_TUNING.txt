@@ -1,0 +1,184 @@
+MASKING QUALITY TUNING GUIDE
+==============================
+When the anonymization pipeline still over- or under-filters after running,
+use this guide to decide what to change and where.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+QUICK REFERENCE: SYMPTOMS AND FIXES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SYMPTOM                              FIX
+─────────────────────────────────    ─────────────────────────────────────────
+Real names are slipping through      Lower PRESIDIO_MIN_SCORE (e.g. 0.5)
+Real PII slipping through            Lower EU_PII_MIN_SCORE (e.g. 0.75)
+Too many false positives in [NAME]   Raise PRESIDIO_MIN_SCORE (e.g. 0.7)
+Too many false positives in [PII]    Raise EU_PII_MIN_SCORE (e.g. 0.90)
+Too many false positives in [LOCATION] Raise PRESIDIO_MIN_SCORE (e.g. 0.7)
+Short names being rejected           Lower compound-noun length threshold
+                                       in is_plausible_name_span (layer_utils.py)
+Long place names being rejected      Raise location length threshold
+                                       in is_plausible_location_span (layer_utils.py)
+German words tagged as names/places  Check de_core_news_lg is installed:
+                                       python -m spacy info de_core_news_lg
+Product names still tagged           Check CamelCase rule in layer_utils.py —
+                                       if they use underscores or all-caps,
+                                       add a structural rule for that pattern
+Health terms being missed            EU-PII handles HEALTH; lower EU_PII_MIN_SCORE
+                                       or check if text is too short (<3 chars)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+THE TWO SCORE THRESHOLDS  (.env)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Both thresholds live in .env and take effect on the next run.
+No code changes needed — just edit the value and re-run.
+
+  PRESIDIO_MIN_SCORE=0.6
+  ├── Controls: [NAME] and [LOCATION] spans from Presidio (spaCy NER)
+  ├── Range: 0.0 – 1.0
+  ├── Raise (e.g. 0.7–0.8): fewer false positives, more things slip through
+  └── Lower (e.g. 0.4–0.5): catches more edge cases, more false positives
+
+  EU_PII_MIN_SCORE=0.85
+  ├── Controls: all spans from the EU-PII transformer (all tags)
+  ├── Range: 0.0 – 1.0
+  ├── Raise (e.g. 0.90–0.95): fewer false positives, real PII may slip through
+  └── Lower (e.g. 0.70–0.80): catches more, but false positives increase
+
+Rule of thumb: EU_PII_MIN_SCORE should always be higher than
+PRESIDIO_MIN_SCORE. The transformer model is more sensitive and
+needs a stricter gate. Presidio's spaCy-based scores are already
+conservative.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+THE STRUCTURAL RULES  (layer_utils.py)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+File: src/pipeline/01_anonymization/layers/layer_utils.py
+
+These rules fire AFTER the score threshold and reject spans by shape
+alone, regardless of model confidence. They apply to both Presidio
+and EU-PII output.
+
+--- is_plausible_name_span ---
+Rejects [NAME] spans that match any of:
+  • All-caps AND ≤ 5 chars         → acronyms (SEO, CRO, START)
+  • Single token AND > 12 chars    → Dutch compound nouns
+  • Single token AND CamelCase     → product/brand names
+  • Entirely lowercase             → common words
+  • > 50% digits                   → numbers
+
+  Adjust if:
+  ├── Short surnames (≤ 12 chars but one-word) are being wrongly rejected
+  │     → This is a threshold, not a list. Lowering it risks more compound nouns.
+  │       Better fix: lower PRESIDIO_MIN_SCORE to catch the name earlier.
+  └── A new pattern of false positives emerges (e.g. all-digits-then-letters)
+        → Add a new rule in is_plausible_name_span following the same pattern.
+
+--- is_plausible_location_span ---
+Rejects [LOCATION] spans that match any of:
+  • Single token AND > 15 chars    → Dutch compound nouns
+  • Single token AND CamelCase     → product/platform names
+  • Single token AND all-lowercase → common words
+  • All-caps AND ≤ 5 chars, no digits → abbreviations
+  • Single token ending in a digit → team/group identifiers
+
+  Note: the length threshold is higher (15) than for names (12)
+  because genuine Dutch place names can be longer (e.g. 's-Hertogenbosch).
+
+  Adjust if:
+  ├── Long legitimate place names are being rejected
+  │     → Raise the >15 threshold (e.g. to 18 or 20)
+  └── Compound nouns still slip through
+        → Lower the >15 threshold, or raise EU_PII_MIN_SCORE
+
+--- is_plausible_pii_span ---
+Rejects [PII] catch-all spans that match any of:
+  • Single token AND CamelCase     → product/software names
+  • Single token AND all-lowercase alphabetic → common words
+  • All-caps AND ≤ 4 chars, no digits → short abbreviations
+
+  Note: this only applies to the [PII] catch-all category. Spans
+  that the EU-PII model explicitly labels as e.g. EMAIL or PHONE
+  are not affected by this check — those are handled by Presidio's
+  dedicated recognizers.
+
+  Adjust if:
+  ├── A product name in all-caps (e.g. "TEAMS") is being kept as PII
+  │     → Raise the all-caps length threshold from 4 to 5
+  └── A common word slips through because it starts with a capital
+        → The score threshold is the right lever here, not this rule
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+HOW TO ADD A NEW STRUCTURAL RULE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+When you find a new category of false positives that cannot be fixed
+by adjusting thresholds, add a structural rule to layer_utils.py:
+
+1. Look at the false positives and find a SHAPE pattern that
+   distinguishes them from real entities of that type.
+   Good patterns: length, casing, contains digit, contains hyphen,
+   starts/ends with specific character class.
+   Avoid: specific words, topic-based logic, language-specific terms.
+
+2. Add the rule to the relevant function (is_plausible_name_span,
+   is_plausible_location_span, or is_plausible_pii_span).
+
+3. Test it by running verification-only:
+   python run_anon_test.py --verify-only --input "your_file.csv" --verify-sample 500
+
+4. Check the report: false positives should decrease, missed_samples
+   should not increase (that would mean real entities are being dropped).
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+WHICH LAYER IS CAUSING A SPECIFIC FALSE POSITIVE?
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+To find out whether a false positive came from Presidio or EU-PII,
+temporarily enable debug logging at the top of your run:
+
+  import logging
+  logging.basicConfig(level=logging.DEBUG)
+
+Both layers log rejected spans at DEBUG level:
+  "Rejected low-score NAME span ..."          → Presidio, score filter
+  "Rejected implausible NAME span ..."        → Presidio, shape filter
+  "EU-PII: dropped low-score span ..."        → EU-PII, score filter
+  "EU-PII: dropped implausible PII span ..."  → EU-PII, shape filter
+
+If you see a false positive in the output but no rejection log for it,
+it passed all filters — the relevant threshold needs to be raised.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+BEFORE / AFTER COMPARISON WORKFLOW
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Run baseline (before any changes):
+   python run_anon_test.py --input "your_file.csv"
+   → saves data/anonymization_report.json  (keep a copy as baseline_before.json)
+
+2. Make your changes (thresholds, structural rules, etc.)
+
+3. Delete the checkpoint so the full file is reprocessed:
+   del data\anon_checkpoint.csv
+   del data\anon_checkpoint_meta.json
+
+4. Run again:
+   python run_anon_test.py --input "your_file.csv"
+   → saves new data/anonymization_report.json
+
+5. Compare tag_counts, missed_counts, and missed_samples between
+   the two JSON files. A good change:
+   ├── missed_counts stay the same or decrease  (not missing real PII)
+   └── tag_counts decrease for the affected tag (fewer false positives)
+
+If you only changed thresholds or structural rules (not the anonymization
+logic itself), you can skip re-anonymizing and just re-run verification:
+   python run_anon_test.py --verify-only --input "your_file.csv" --verify-sample 500

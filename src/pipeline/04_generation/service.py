@@ -43,12 +43,15 @@ def _normalized_filters(filters: dict | None) -> dict:
     }
 
 
-def _cache_key(theme_name: str, filters: dict | None = None) -> str:
+def _cache_key(theme_name: str, filters: dict | None = None, theme_query: str | None = None) -> str:
     normalized = _normalized_filters(filters)
+    key = theme_name
+    if theme_query and theme_query != theme_name:
+        key = f"{theme_name}::subquery={theme_query}"
     if not normalized:
-        return theme_name
+        return key
     filters_json = json.dumps(normalized, sort_keys=True, separators=(",", ":"))
-    return f"{theme_name}::filters={filters_json}"
+    return f"{key}::filters={filters_json}"
 
 
 def _cache_filters_match(cached_data: dict | None, filters: dict | None) -> bool:
@@ -89,23 +92,35 @@ def _select_theme_documents(
     theme_name: str,
     *,
     filters: dict | None = None,
+    theme_query: str | None = None,
+    max_documents: int | None = None,
 ):
+    cap = max_documents if max_documents and max_documents > 0 else HIERARCHICAL_RAG_MAX_DOCUMENTS
     embedding_model = retrieval.collection_embedding_model(collection)
-    collected = retrieval.collect_theme_documents(
-        collection,
-        theme_name,
-        filters=_normalized_filters(filters),
-        model_id=embedding_model,
-    )
-    selected_docs = collected["documents"]
-    if HIERARCHICAL_RAG_MAX_DOCUMENTS > 0:
-        selected_docs = selected_docs[:HIERARCHICAL_RAG_MAX_DOCUMENTS]
+    if theme_query and theme_query != theme_name:
+        collected = retrieval.collect_documents_by_query(
+            collection,
+            theme_query,
+            filters=_normalized_filters(filters),
+            model_id=embedding_model,
+            n_results=cap or 500,
+        )
+    else:
+        collected = retrieval.collect_theme_documents(
+            collection,
+            theme_name,
+            filters=_normalized_filters(filters),
+            model_id=embedding_model,
+        )
+    all_docs = collected["documents"]
+    selected_docs = all_docs[:cap] if cap > 0 else all_docs
     return {
         "frequency": collected["frequency"],
         "vector_relevant_count": collected["vector_relevant_count"],
         "total_filtered_documents": collected["total_filtered_documents"],
         "relevant_docs": selected_docs,
-        "source_document_count": len(collected["documents"]),
+        "all_docs": all_docs,
+        "source_document_count": len(all_docs),
         "analyzed_document_count": len(selected_docs),
     }
 
@@ -164,8 +179,10 @@ def _generate_theme_payload(
     llm_model: str,
     llm_generation_settings: dict | None,
     custom_prompt: str = "",
+    theme_query: str | None = None,
+    max_documents: int | None = None,
 ) -> dict:
-    selected = _select_theme_documents(collection, theme_name, filters=filters)
+    selected = _select_theme_documents(collection, theme_name, filters=filters, theme_query=theme_query, max_documents=max_documents)
     relevant_docs = selected["relevant_docs"]
     if not relevant_docs:
         return _empty_theme_payload(
@@ -208,25 +225,30 @@ def generate_theme_summary(
     provider = str(provider or DEFAULT_LLM_PROVIDER).strip()
     filters = _normalized_filters(filters)
     llm_generation_settings = _model_generation_settings(provider, llm_model)
-    theme_search_query = retrieval.theme_query_text(theme_name) if theme_name else theme_query
-    if not theme_search_query:
+    is_subquery = theme_query and theme_query != theme_name
+    if not theme_name and not theme_query:
         raise ValueError("No query provided")
 
     cache = load_cache()
-    cached_response = _cached_dashboard_response(
-        cache,
-        theme_name,
-        filters=filters,
-        llm_provider=provider,
-        llm_model=llm_model,
-        llm_generation_settings=llm_generation_settings,
-        match_llm_identity=True,
-    )
-    if cached_response is not None:
-        print(f"[LLM] Returning cached summary for: {theme_name}")
-        return cached_response
-    cache_key = _cache_key(theme_name, filters)
-    if cache_key in cache:
+    cache_key = _cache_key(theme_name, filters, theme_query if is_subquery else None)
+    if not is_subquery:
+        cached_response = _cached_dashboard_response(
+            cache,
+            theme_name,
+            filters=filters,
+            llm_provider=provider,
+            llm_model=llm_model,
+            llm_generation_settings=llm_generation_settings,
+            match_llm_identity=True,
+        )
+        if cached_response is not None:
+            print(f"[LLM] Returning cached summary for: {theme_name}")
+            return cached_response
+    elif cache_key in cache:
+        print(f"[LLM] Returning cached subquery summary for: {theme_query}")
+        return cache[cache_key]
+
+    if cache_key in cache and not is_subquery:
         print(
             f"[LLM] Cached summary for {theme_name} is missing current "
             "dashboard fields; regenerating."
@@ -234,7 +256,8 @@ def generate_theme_summary(
 
     client = get_llm_client(provider)
     try:
-        print(f"[LLM] Cache miss - generating summary for: {theme_name}")
+        label = theme_query if is_subquery else theme_name
+        print(f"[LLM] Cache miss - generating summary for: {label}")
         client.ensure_model_available(llm_model, allow_download=allow_model_download)
 
         collection = retrieval.get_collection()
@@ -246,6 +269,7 @@ def generate_theme_summary(
             provider=provider,
             llm_model=llm_model,
             llm_generation_settings=llm_generation_settings,
+            theme_query=theme_query if is_subquery else None,
         )
         print(
             f"[LLM] Hierarchical RAG analyzed "
@@ -312,7 +336,9 @@ def _theme_payload_from_parsed(
     llm_generation_settings: dict | None,
 ) -> dict:
     relevant_docs = selected["relevant_docs"]
+    all_docs = selected.get("all_docs", relevant_docs)
     sentiments = parsed.get("sentiments", [])
+    subthemes = parsed.get("subthemes", [])
     return {
         "status": "success",
         "theme": theme_name,
@@ -336,11 +362,9 @@ def _theme_payload_from_parsed(
         "positive_comments": parsed.get("positive_comments", [])[:3],
         "critical_comments": parsed.get("critical_comments", [])[:3],
         "student_suggestions": parsed.get("student_suggestions", [])[:3],
-        "subthemes": parsed.get("subthemes", []),
-        "subtheme_mentions": insight_metrics.subtheme_mention_rows(
-            parsed.get("subthemes", []), relevant_docs
-        ),
-        "quotes": relevant_docs[:3],
+        "subthemes": subthemes,
+        "subtheme_mentions": insight_metrics.subtheme_mention_rows(subthemes, all_docs),
+        "quotes": all_docs,
     }
 
 
@@ -352,6 +376,7 @@ def precompute_insights_stream(
     allow_model_download: bool = False,
     provider: str = DEFAULT_LLM_PROVIDER,
     filters: dict | None = None,
+    max_documents: int | None = None,
 ):
     llm_model = str(llm_model or DEFAULT_LLM_MODEL).strip()
     provider = str(provider or DEFAULT_LLM_PROVIDER).strip()
@@ -463,6 +488,7 @@ def precompute_insights_stream(
                     llm_model=llm_model,
                     llm_generation_settings=llm_generation_settings,
                     custom_prompt=custom_prompt,
+                    max_documents=max_documents,
                 )
                 cache[_cache_key(theme_name, filters)] = response_data
             except Exception as exc:

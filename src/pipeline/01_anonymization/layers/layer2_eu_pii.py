@@ -11,9 +11,16 @@ from transformers import pipeline as hf_pipeline
 from src.utils.model_device import describe_model_device, get_model_device, get_pipeline_device
 
 from .layer2_text_norm import normalize_for_ner
+from .layer_utils import is_plausible_location_span, is_plausible_pii_span
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+# Minimum confidence score for the EU-PII model to keep a span.
+# The model outputs a score per entity; below this threshold the detection is
+# considered too uncertain and dropped. Raise to reduce false positives,
+# lower to catch more edge cases. Override via env: EU_PII_MIN_SCORE=0.90
+_EU_PII_MIN_SCORE = float(os.environ.get("EU_PII_MIN_SCORE", "0.85"))
 
 _torch_device = get_model_device()
 _device = get_pipeline_device(_torch_device)
@@ -139,7 +146,7 @@ def eu_pii_collect_batch(texts: list, config: Optional[dict] = None) -> list:
         return [[] for _ in texts]
     try:
         texts_for_ner = [normalize_for_ner(t) if isinstance(t, str) else "" for t in texts]
-        batch_entities = _ner(texts_for_ner, batch_size=len(texts_for_ner))
+        batch_entities = _ner(texts_for_ner, batch_size=min(len(texts_for_ner), 128))
     except Exception as e:
         logger.warning("eu-pii-safeguard collect batch error: %s", e)
         return [[] for _ in texts]
@@ -154,8 +161,22 @@ def eu_pii_collect_batch(texts: list, config: Optional[dict] = None) -> list:
             span_text = text[ent["start"] : ent["end"]]
             if not span_text.strip() or len(span_text) < 2:
                 continue
+            # Drop low-confidence detections — the model's uncertainty is a
+            # reliable signal that the span is a false positive.
+            score = ent.get("score", 1.0)
+            if score < _EU_PII_MIN_SCORE:
+                logger.debug("EU-PII: dropped low-score span %r (%.2f < %.2f)", span_text, score, _EU_PII_MIN_SCORE)
+                continue
             tag = _eu_pii_tag(ent.get("entity_group", ""), span_text)
             if not _config_allows_tag(config, tag):
+                continue
+            # Apply structural plausibility checks for the tag types most prone
+            # to false positives. [HEALTH] is accurate enough to skip this.
+            if tag == "[PII]" and not is_plausible_pii_span(span_text):
+                logger.debug("EU-PII: dropped implausible PII span %r", span_text)
+                continue
+            if tag == "[LOCATION]" and not is_plausible_location_span(span_text):
+                logger.debug("EU-PII: dropped implausible LOCATION span %r", span_text)
                 continue
             spans.append((ent["start"], ent["end"], tag))
         all_spans.append(spans)
@@ -184,7 +205,7 @@ def eu_pii_safeguard_anonymize_batch(texts: list, config: Optional[dict] = None)
     if not texts:
         return texts
     try:
-        batch_entities = _ner(texts, batch_size=len(texts))
+        batch_entities = _ner(texts, batch_size=min(len(texts), 128))
     except Exception as e:
         logger.warning("eu-pii-safeguard batch error: %s", e)
         return texts

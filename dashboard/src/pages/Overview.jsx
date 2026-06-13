@@ -2,8 +2,8 @@ import { useState, useMemo, useEffect } from 'react'
 import { getFilteredThemes, FILTER_OPTIONS } from '../data/themes'
 import { mergeWithLiveData } from '../services/api'
 import { useApiData } from '../hooks/useApiData'
+import { Link } from 'react-router-dom'
 import ThemeCard from '../components/ThemeCard'
-import DetailDrawer from '../components/DetailDrawer'
 import TrendChart from '../components/TrendChart'
 import ComparisonMiniChart from '../components/ComparisonMiniChart'
 import FilterDropdown from '../components/FilterDropdown'
@@ -116,6 +116,7 @@ export default function Overview() {
         return {
           ...t,
           percentage: typeof dynamic.frequency === 'number' ? dynamic.frequency : t.percentage,
+          responseCount: typeof dynamic.vector_relevant_count === 'number' ? dynamic.vector_relevant_count : null,
           aiSummary: dynamic.summary || t.aiSummary,
           subthemes: dynamic.subthemes?.length > 0 ? dynamic.subthemes : t.subthemes,
           quotes: dynamic.quotes?.length > 0 ? dynamic.quotes : t.quotes,
@@ -126,17 +127,26 @@ export default function Overview() {
     })
   }, [baseThemes, dynamicThemesData])
 
-  // Sort by percentage and assign bento sizes dynamically
-  const bentoThemes = useMemo(() => {
-    const sorted = [...themes].sort((a, b) => b.percentage - a.percentage)
-    return sorted.map((t, i) => ({
-      ...t,
-      size: i === 0 ? 'large' : i <= 2 ? 'medium' : 'small',
-    }))
+  // Sort themes by percentage (which is the actual count of comments)
+  const sortedThemes = useMemo(() => {
+    return [...themes].sort((a, b) => b.percentage - a.percentage)
   }, [themes])
 
-  const [activeId, setActiveId] = useState(null)
-  const activeTheme = themes.find((t) => t.id === activeId) ?? null
+  // Get most popular key subthemes across all themes
+  const popularSubthemes = useMemo(() => {
+    const list = []
+    themes.forEach(t => {
+      const mentionsList = t.cachedInsight?.subtheme_mentions || t.subtheme_mentions || []
+      mentionsList.forEach(m => {
+        list.push({
+          name: m.subtheme,
+          mentions: m.mentions || 0,
+          parentTheme: t
+        })
+      })
+    })
+    return list.sort((a, b) => b.mentions - a.mentions).slice(0, 5)
+  }, [themes])
 
   function setFilter(key, value) {
     setFilters((prev) => ({ ...prev, [key]: value }))
@@ -147,10 +157,6 @@ export default function Overview() {
   }
 
   const hasActiveFilters = Object.values(filters).some((v) => v !== 'All')
-
-  function handleThemeClick(theme) {
-    setActiveId((prev) => (prev === theme.id ? null : theme.id))
-  }
 
   const { vectorData, loading: vectorLoading, error, lastUpdated, refresh: vectorRefresh } = useVectorDB();
 
@@ -216,99 +222,120 @@ export default function Overview() {
           </button>
         )}
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-8 items-start">
+      <div className="flex flex-col gap-6 md:gap-8 w-full">
 
-        {/* Left/center — bento + charts */}
-        <div className="order-2 md:order-1 col-span-1 md:col-span-8 flex flex-col gap-6 md:gap-8">
-
-          {/* Theme Landscape */}
-          <section>
-            <div className="flex items-end justify-between mb-5">
-              <div>
-                <h2 className="text-2xl font-bold font-headline text-primary">
-                  Theme Frequency Insights
-                </h2>
-                <p className="text-xs text-tertiary-container mt-0.5">
-                  Live response frequencies from VectorDB
-                </p>
-              </div>
+        {/* Theme Landscape */}
+        <section>
+          <div className="flex items-end justify-between mb-5">
+            <div>
+              <h2 className="text-2xl font-bold font-headline text-primary">
+                Theme Frequency Insights
+              </h2>
+              <p className="text-xs text-tertiary-container mt-0.5">
+                Live response frequencies from VectorDB
+              </p>
             </div>
+          </div>
 
-            <LayoutGroup>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 auto-rows-fr">
-                {bentoThemes.map((theme) => (
+          <LayoutGroup>
+            <div className="flex flex-col gap-6">
+              {/* Top 3 themes (Large cards side-by-side) */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {sortedThemes.slice(0, 3).map((theme) => (
                   <ThemeCard
                     key={theme.id}
                     theme={theme}
-                    size={theme.size}
-                    isActive={activeId === theme.id}
-                    onClick={() => handleThemeClick(theme)}
+                    size="large"
                     filters={filters}
                   />
                 ))}
               </div>
-            </LayoutGroup>
 
-            {activeTheme && (
-              <p className="mt-3 text-xs text-on-surface-variant/50 text-center">
-                Click again on a theme to clear the selection
-              </p>
-            )}
-          </section>
-
-          {/* Charts row */}
-          <section className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-            <TrendChart activeTheme={activeTheme} allThemes={themes} />
-            <ComparisonMiniChart theme={activeTheme ?? themes[0]} filters={filters} />
-          </section>
-
-          {/* Live response counts (only shown when API is online) */}
-          {isLive && liveThemes && liveThemes.length > 0 && (
-            <section className="bg-surface-container-lowest rounded-2xl p-5 shadow-ambient border border-outline-variant/10">
-              <div className="flex items-center gap-2 mb-4">
-                <span
-                  className="material-symbols-outlined text-base text-tertiary-container"
-                  style={{ fontVariationSettings: "'FILL' 1" }}
-                >
-                  hub
-                </span>
-                <h2 className="text-xs font-bold uppercase tracking-wider text-tertiary-container">
-                  Live Pipeline — Response Counts
-                </h2>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {liveThemes.map((t) => (
-                  <div
-                    key={t.theme}
-                    className="bg-surface-container-low rounded-xl px-3 py-2 flex items-center justify-between gap-2"
-                  >
-                    <span className="text-xs text-on-surface-variant truncate">{t.theme}</span>
-                    <span className="text-sm font-bold text-primary shrink-0">{t.total}</span>
-                  </div>
+              {/* Remaining themes (Small cards below) */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {sortedThemes.slice(3).map((theme) => (
+                  <ThemeCard
+                    key={theme.id}
+                    theme={theme}
+                    size="small"
+                    filters={filters}
+                  />
                 ))}
               </div>
-              <p className="text-[10px] text-on-surface-variant/40 mt-3">
-                Raw counts from the NSE pipeline database · {new Date().toLocaleTimeString()}
-              </p>
-            </section>
-          )}
-        </div>
-
-        {/* Right sidebar — detail drawer */}
-        <aside className="order-1 md:order-2 col-span-1 md:col-span-4 flex flex-col gap-5 md:sticky md:top-20">
-          <DetailDrawer theme={activeTheme} />
-
-          {!activeTheme && (
-            <div className="bg-surface-container-low rounded-2xl p-8 text-center">
-              <span className="material-symbols-outlined text-4xl text-outline mb-3 block">
-                touch_app
-              </span>
-              <p className="text-sm text-on-surface-variant">
-                Click on a theme to view the details
-              </p>
             </div>
-          )}
-        </aside>
+          </LayoutGroup>
+        </section>
+
+        {/* Most Popular Sub-themes Section */}
+        {popularSubthemes.length > 0 && (
+          <section className="bg-surface-container-lowest rounded-2xl p-5 shadow-ambient border border-outline-variant/10">
+            <div className="flex items-center gap-2 mb-4">
+              <span className="material-symbols-outlined text-primary text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
+              <h2 className="text-base font-bold font-headline text-primary">Most Popular Sub-themes</h2>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
+              {popularSubthemes.map((sub) => (
+                <Link
+                  key={sub.name}
+                  to={`/thema/${sub.parentTheme.id}`}
+                  state={{ theme: sub.parentTheme, filters, selectedSubtheme: sub.name }}
+                  onClick={() => window.scrollTo(0, 0)}
+                  className="bg-surface-container-low hover:bg-surface-container-high border border-outline-variant/10 rounded-xl p-4 flex flex-col justify-between transition-all duration-300 hover:scale-[1.02] hover:shadow-sm"
+                >
+                  <div>
+                    <span className="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-wider block mb-1">
+                      {sub.parentTheme.name}
+                    </span>
+                    <h3 className="text-sm font-bold text-primary line-clamp-2 leading-tight">
+                      {sub.name}
+                    </h3>
+                  </div>
+                  <div className="mt-4 flex items-center gap-1.5 text-xs text-on-surface-variant font-semibold">
+                    <span className="material-symbols-outlined text-sm text-outline">forum</span>
+                    {sub.mentions} comments
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Charts row */}
+        <section className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+          <TrendChart activeTheme={null} allThemes={themes} />
+          <ComparisonMiniChart theme={themes[0]} filters={filters} />
+        </section>
+
+        {/* Live response counts (only shown when API is online) */}
+        {isLive && liveThemes && liveThemes.length > 0 && (
+          <section className="bg-surface-container-lowest rounded-2xl p-5 shadow-ambient border border-outline-variant/10">
+            <div className="flex items-center gap-2 mb-4">
+              <span
+                className="material-symbols-outlined text-base text-tertiary-container"
+                style={{ fontVariationSettings: "'FILL' 1" }}
+              >
+                hub
+              </span>
+              <h2 className="text-xs font-bold uppercase tracking-wider text-tertiary-container">
+                Live Pipeline — Response Counts
+              </h2>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {liveThemes.map((t) => (
+                <div
+                  key={t.theme}
+                  className="bg-surface-container-low rounded-xl px-3 py-2 flex items-center justify-between gap-2"
+                >
+                  <span className="text-xs text-on-surface-variant truncate">{t.theme}</span>
+                  <span className="text-sm font-bold text-primary shrink-0">{t.total}</span>
+                </div>
+              ))}
+            </div>
+            <p className="text-[10px] text-on-surface-variant/40 mt-3">
+              Raw counts from the NSE pipeline database · {new Date().toLocaleTimeString()}
+            </p>
+          </section>
+        )}
       </div>
 
 

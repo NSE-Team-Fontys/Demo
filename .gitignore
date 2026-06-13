@@ -75,6 +75,6 @@ survey_vector_db/
 # Local data files
 data/
 
-# llama.cpp 
+# llama.cpp
 llama.cpp/
 .python-version

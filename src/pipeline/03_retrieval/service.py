@@ -451,6 +451,45 @@ def collect_theme_documents(
     }
 
 
+def collect_documents_by_query(
+    collection,
+    query_text: str,
+    *,
+    filters: dict | None = None,
+    model_id: str | None = None,
+    n_results: int = 500,
+) -> dict:
+    """Direct vector search for a query string — used for subtheme drilldowns."""
+    where_filter = build_where_filter(filters or {})
+    total_docs = collection.count()
+    if total_docs <= 0:
+        return {"frequency": 0, "vector_relevant_count": 0, "total_filtered_documents": 0, "documents": [], "metadatas": [], "distances": []}
+
+    selected_model = model_id or collection_embedding_model(collection)
+    model = get_theme_embedding_model(selected_model)
+    query_embedding = model.encode(query_text, normalize_embeddings=True)
+
+    k = min(n_results, max(total_docs, 1))
+    results = collection.query(
+        query_embeddings=[query_embedding.tolist()],
+        n_results=k,
+        where=where_filter,
+        include=["documents", "metadatas", "distances"],
+    )
+    documents = results.get("documents", [[]])[0] if results.get("documents") else []
+    metadatas = results.get("metadatas", [[]])[0] if results.get("metadatas") else []
+    distances = results.get("distances", [[]])[0] if results.get("distances") else []
+    total_filtered = len(documents)
+    return {
+        "frequency": 0,
+        "vector_relevant_count": total_filtered,
+        "total_filtered_documents": total_filtered,
+        "documents": documents,
+        "metadatas": metadatas,
+        "distances": distances,
+    }
+
+
 def filtered_themes_overview(cache: dict, filters: dict) -> dict:
     if not filters:
         return cache

@@ -17,6 +17,7 @@ from src.config.paths import (
     ANON_REPORT_JSON,
 )
 from . import checkpoints, reporting
+from .blocklist import apply_blocklist, load_blocklist
 from src.utils.file_parsers import detect_sep, read_dataframe
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -157,6 +158,12 @@ def process_file_with_layers(
             + "\n"
         )
 
+    # Load custom word blocklist once — applied after every batch as a fast
+    # post-processing step that doesn't touch any NER model.
+    _blocklist = load_blocklist()
+    if _blocklist:
+        logger.info("Custom word blocklist loaded: %d entr%s", len(_blocklist), "y" if len(_blocklist) == 1 else "ies")
+
     total_cols = len(columns_to_anonymize)
     total_rows = len(df)
 
@@ -221,6 +228,8 @@ def process_file_with_layers(
 
             if chunk_texts:
                 masked = process_chunk_sync(chunk_texts, layer_config, layers)
+                if _blocklist:
+                    masked = [apply_blocklist(t, _blocklist) for t in masked]
                 for row_i, new_val in zip(chunk_indices, masked):
                     df.at[row_i, col] = new_val
 
@@ -445,7 +454,7 @@ def process_file_with_layers(
     )
 
 
-def run_check_stream(original_path: str, anonymized_path: str, columns: list, sep: str = None):
+def run_check_stream(original_path: str, anonymized_path: str, columns: list, sep: str = None, sample_rows: int = None):
     """
     Run only the verification step on already-existing original + anonymized files.
     Yields NDJSON progress events; final event has status='success' with full stats.
@@ -475,7 +484,15 @@ def run_check_stream(original_path: str, anonymized_path: str, columns: list, se
         return
 
     total_rows = len(df_original)
-    yield json.dumps({"status": "progress", "message": f"{total_rows} rijen gevonden. Tags tellen...", "progress": 10}) + "\n"
+
+    # Optionally sample a random subset of rows for faster verification.
+    import random
+    if sample_rows and sample_rows < total_rows:
+        sampled_indices = sorted(random.sample(range(total_rows), sample_rows))
+        yield json.dumps({"status": "progress", "message": f"{total_rows} rijen gevonden, steekproef {sample_rows}. Tags tellen...", "progress": 10}) + "\n"
+    else:
+        sampled_indices = list(range(total_rows))
+        yield json.dumps({"status": "progress", "message": f"{total_rows} rijen gevonden. Tags tellen...", "progress": 10}) + "\n"
 
     # Count tags in anonymized output
     _TAG_RE = re.compile(r'\[(NAME|PII|LOCATION|TITLE|HEALTH)\]')
@@ -511,12 +528,12 @@ def run_check_stream(original_path: str, anonymized_path: str, columns: list, se
             "progress": base_progress,
         }) + "\n"
 
-        # Batch EU-PII spans for the whole column (transformer hates row-by-row).
+        # Batch EU-PII spans for the sampled rows only (transformer hates row-by-row).
         col_eu_spans_by_idx: dict[int, list] = {}
         if _eu_pii_ok:
             col_indices: list[int] = []
             col_texts: list[str] = []
-            for idx in range(total_rows):
+            for idx in sampled_indices:
                 ov = df_original[col].iloc[idx]
                 if isinstance(ov, str) and ov.strip():
                     col_indices.append(idx)
@@ -528,7 +545,7 @@ def run_check_stream(original_path: str, anonymized_path: str, columns: list, se
                 except Exception as e:
                     logger.warning("EU-PII verification batch failed for column '%s': %s", col, e)
 
-        for idx in range(total_rows):
+        for idx in sampled_indices:
             original_val = df_original[col].iloc[idx]
             anonymized_val = df_anon[col].iloc[idx]
 

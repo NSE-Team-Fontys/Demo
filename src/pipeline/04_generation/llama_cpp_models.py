@@ -23,8 +23,20 @@ class LlamaCppGenerationSettings:
         args: list[str] = []
         if self.context_size > 0:
             args.extend(["-c", str(self.context_size)])
-        if LLAMA_CPP_N_GPU_LAYERS > 0:
-            args.extend(["-ngl", str(LLAMA_CPP_N_GPU_LAYERS)])
+        if LLAMA_CPP_N_GPU_LAYERS in {"auto", "all"}:
+            args.extend(["-ngl", LLAMA_CPP_N_GPU_LAYERS])
+        else:
+            try:
+                gpu_layers = int(LLAMA_CPP_N_GPU_LAYERS)
+            except ValueError as exc:
+                raise ValueError(
+                    "LLAMA_CPP_N_GPU_LAYERS must be 'auto', 'all', or a non-negative integer."
+                ) from exc
+            if gpu_layers < 0:
+                raise ValueError(
+                    "LLAMA_CPP_N_GPU_LAYERS must be 'auto', 'all', or a non-negative integer."
+                )
+            args.extend(["-ngl", str(gpu_layers)])
         return args
 
     def chat_completion_payload(self, model_id: str, prompt: str) -> dict[str, Any]:
@@ -81,11 +93,21 @@ class LlamaCppModel:
     @property
     def download_command(self) -> str:
         return " ".join(
-            ["llama-server", "-hf", self.llama_server_model_id, *self.generation.server_args]
+            [
+                "llama-server",
+                "-hf",
+                self.llama_server_model_id,
+                *self.generation.server_args,
+            ]
         )
 
     def server_command(self, server_bin: str) -> list[str]:
-        return [server_bin, "-hf", self.llama_server_model_id, *self.generation.server_args]
+        return [
+            server_bin,
+            "-hf",
+            self.llama_server_model_id,
+            *self.generation.server_args,
+        ]
 
     def chat_completion_payload(self, prompt: str) -> dict[str, Any]:
         return self.generation.chat_completion_payload(self.id, prompt)
@@ -160,9 +182,7 @@ GEMMA_LLAMA_CPP_MODELS = (
     ),
 )
 
-LLAMA_CPP_MODEL_REGISTRY = {
-    model.id: model for model in GEMMA_LLAMA_CPP_MODELS
-}
+LLAMA_CPP_MODEL_REGISTRY = {model.id: model for model in GEMMA_LLAMA_CPP_MODELS}
 
 LLAMA_CPP_MODEL_ALIASES = {
     "gemma4:e2b": "unsloth/gemma-4-E2B-it-GGUF:UD-Q4_K_XL",

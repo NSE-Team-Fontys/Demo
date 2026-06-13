@@ -13,6 +13,8 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
   const [showStats, setShowStats] = useState(true);
   const [runVerification, setRunVerification] = useState(true);
   const [expandedCategory, setExpandedCategory] = useState(null);
+  const [blocklist, setBlocklist] = useState([]);
+  const [blocklistInput, setBlocklistInput] = useState('');
 
   // Real-time stream states
   const [statusMessage, setStatusMessage] = useState('');
@@ -30,7 +32,40 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
       .then(r => r.json())
       .then(data => { if (data.has_report) setLastReport(data); })
       .catch(() => {});
+    fetch('http://localhost:5001/api/word-blocklist')
+      .then(r => r.json())
+      .then(data => { if (Array.isArray(data.words)) setBlocklist(data.words); })
+      .catch(() => {});
   }, []);
+
+  const saveBlocklist = (updatedWords) => {
+    fetch('http://localhost:5001/api/word-blocklist', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ words: updatedWords }),
+    })
+      .then(r => r.json())
+      .then(data => { if (Array.isArray(data.words)) setBlocklist(data.words); })
+      .catch(() => {});
+  };
+
+  const addBlocklistWord = () => {
+    const word = blocklistInput.trim();
+    if (!word || blocklist.map(w => w.toLowerCase()).includes(word.toLowerCase())) {
+      setBlocklistInput('');
+      return;
+    }
+    const updated = [...blocklist, word];
+    setBlocklist(updated);
+    setBlocklistInput('');
+    saveBlocklist(updated);
+  };
+
+  const removeBlocklistWord = (word) => {
+    const updated = blocklist.filter(w => w !== word);
+    setBlocklist(updated);
+    saveBlocklist(updated);
+  };
 
   const loadLastReport = () => {
     if (!lastReport) return;
@@ -559,6 +594,67 @@ export default function AnonymizerTab({ onComplete, existingAnonymized }) {
                   Recommended uses the same layered flow as <code className="font-mono text-purple-700">privacy_officer</code>: collect spans first, merge/filter them, then apply masks once.
                 </p>
               </div>
+            </div>
+
+            {/* Custom Word Blocklist */}
+            <div className="p-6 bg-white border border-gray-100 shadow-sm rounded-2xl space-y-4">
+              <div className="flex items-center justify-between pb-2 border-b border-gray-50">
+                <div className="flex items-center space-x-2">
+                  <span className="text-xl">🚫</span>
+                  <h3 className="font-bold text-gray-800">Custom Word Filter</h3>
+                </div>
+                {blocklist.length > 0 && (
+                  <span className="text-xs font-bold text-purple-700 bg-purple-50 border border-purple-100 px-2 py-1 rounded-full">
+                    {blocklist.length} word{blocklist.length !== 1 ? 's' : ''}
+                  </span>
+                )}
+              </div>
+
+              <p className="text-xs text-gray-500 leading-relaxed">
+                Words or phrases added here are always masked as <span className="font-mono font-bold text-purple-700">[PII]</span> during anonymization — regardless of what the NER models detect. Applied as a fast post-processing step with no impact on performance. Persists between runs.
+              </p>
+
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={blocklistInput}
+                  onChange={e => setBlocklistInput(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && addBlocklistWord()}
+                  placeholder="Type a word or phrase and press Enter…"
+                  className="flex-1 px-4 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-300 focus:border-purple-400 transition-all"
+                />
+                <button
+                  type="button"
+                  onClick={addBlocklistWord}
+                  disabled={!blocklistInput.trim()}
+                  className="px-4 py-2 bg-purple-600 text-white text-sm font-bold rounded-xl hover:bg-purple-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                >
+                  Add
+                </button>
+              </div>
+
+              {blocklist.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {blocklist.map(word => (
+                    <span
+                      key={word}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 border border-purple-200 text-purple-800 text-sm font-mono rounded-lg"
+                    >
+                      {word}
+                      <button
+                        type="button"
+                        onClick={() => removeBlocklistWord(word)}
+                        className="text-purple-400 hover:text-purple-700 transition-colors leading-none"
+                        title={`Remove "${word}"`}
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-gray-400 italic">No custom words added yet.</p>
+              )}
             </div>
 
             {preview.length > 0 && (

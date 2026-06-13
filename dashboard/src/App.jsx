@@ -18,6 +18,7 @@ function App() {
           <Route path="/" element={<Overview />} />
           <Route path="/pipeline-demo" element={<PipelineDemo />} />
           <Route path="/thema/:id" element={<ViewMorePage />} />
+          <Route path="/thema/:id/subtheme/:subthemeName" element={<ViewMorePage />} />
           <Route path="/theme/:id" element={<ThemeDetail />} />
           <Route path="/vergelijken" element={<Vergelijken />} />
           <Route path="/presentatie" element={<Presentatie />} />
