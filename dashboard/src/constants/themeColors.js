@@ -19,12 +19,12 @@ export const THEME_COLORS = {
     border: 'rgba(0, 106, 106, 0.15)',
   },
   teachers: {
-    accent: '#7C3AED',
+    accent: '#7B3AED',
     accentLight: '#ede9fe',
-    gradient: 'linear-gradient(135deg, #7C3AED 0%, #a855f7 100%)',
-    bgTint: 'rgba(124, 58, 237, 0.04)',
-    bgHover: 'rgba(124, 58, 237, 0.08)',
-    border: 'rgba(124, 58, 237, 0.15)',
+    gradient: 'linear-gradient(135deg, rgb(123 58 237) 0%, rgb(123 85 247) 100%)',
+    bgTint: 'rgba(123, 58, 237, 0.04)',
+    bgHover: 'rgba(123, 58, 237, 0.08)',
+    border: 'rgba(123, 58, 237, 0.15)',
   },
   support: {
     accent: '#059669',
@@ -62,7 +62,7 @@ export const THEME_COLORS = {
 
 // Ordered list for bar chart / consistent ordering
 export const THEME_COLOR_LIST = [
-  '#002F59', '#006A6A', '#7C3AED', '#059669', '#D97706', '#DC2626', '#2563EB',
+  '#002F59', '#006A6A', '#7B3AED', '#059669', '#D97706', '#DC2626', '#2563EB',
 ]
 
 export function getThemeColor(themeId) {
