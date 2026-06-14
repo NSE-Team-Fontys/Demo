@@ -2,50 +2,13 @@ import { useState, useMemo, useEffect } from 'react'
 import { getFilteredThemes, FILTER_OPTIONS } from '../data/themes'
 import { mergeWithLiveData } from '../services/api'
 import { useApiData } from '../hooks/useApiData'
-import { Link } from 'react-router-dom'
 import ThemeCard from '../components/ThemeCard'
-import TrendChart from '../components/TrendChart'
-import ComparisonMiniChart from '../components/ComparisonMiniChart'
 import FilterDropdown from '../components/FilterDropdown'
-import { LayoutGroup } from 'framer-motion'
+import HeroBanner from '../components/HeroBanner'
+import SubthemeWordCloud from '../components/SubthemeWordCloud'
+import { LayoutGroup, motion } from 'framer-motion'
 import { useVectorDB } from '../context/VectorDBContext'
 import { CITY_TO_BRIN, LOCATION_OPTIONS } from '../constants/locations'
-
-// ── Live/Offline status badge ─────────────────────────────────────────────────
-function DataSourceBadge({ isLive, loading, onRefresh }) {
-  if (loading) {
-    return (
-      <span className="flex items-center gap-1.5 text-xs text-on-surface-variant/60 font-medium">
-        <span className="w-2 h-2 rounded-full bg-outline/50 animate-pulse" />
-        Connecting…
-      </span>
-    )
-  }
-  if (isLive) {
-    return (
-      <button
-        onClick={onRefresh}
-        title="Click to refresh live data"
-        className="flex items-center gap-1.5 text-xs font-semibold text-tertiary-container hover:opacity-80 transition-opacity"
-      >
-        <span className="w-2 h-2 rounded-full bg-tertiary-container animate-pulse" />
-        Live data
-        <span className="material-symbols-outlined text-[14px]">refresh</span>
-      </button>
-    )
-  }
-  return (
-    <button
-      onClick={onRefresh}
-      title="API offline — click to retry"
-      className="flex items-center gap-1.5 text-xs font-medium text-on-surface-variant/60 hover:opacity-80 transition-opacity"
-    >
-      <span className="w-2 h-2 rounded-full bg-outline/40" />
-      Demo data
-      <span className="material-symbols-outlined text-[14px]">refresh</span>
-    </button>
-  )
-}
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function Overview() {
@@ -132,21 +95,7 @@ export default function Overview() {
     return [...themes].sort((a, b) => b.percentage - a.percentage)
   }, [themes])
 
-  // Get most popular key subthemes across all themes
-  const popularSubthemes = useMemo(() => {
-    const list = []
-    themes.forEach(t => {
-      const mentionsList = t.cachedInsight?.subtheme_mentions || t.subtheme_mentions || []
-      mentionsList.forEach(m => {
-        list.push({
-          name: m.subtheme,
-          mentions: m.mentions || 0,
-          parentTheme: t
-        })
-      })
-    })
-    return list.sort((a, b) => b.mentions - a.mentions).slice(0, 5)
-  }, [themes])
+
 
   function setFilter(key, value) {
     setFilters((prev) => ({ ...prev, [key]: value }))
@@ -163,8 +112,16 @@ export default function Overview() {
   return (
     <main className="max-w-[1280px] mx-auto px-4 py-6 md:px-8 md:py-8 flex flex-col gap-6">
 
+      {/* ── Hero Stats Banner ── */}
+      <HeroBanner themes={themes} isLive={isLive} loading={loading} />
+
       {/* ── Filters bar ── */}
-      <div className="relative z-20 bg-surface-container-lowest/85 glass-panel shadow-editorial rounded-2xl px-5 py-4">
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.3, duration: 0.5 }}
+        className="relative z-20 bg-surface-container-lowest/85 glass-panel shadow-editorial rounded-2xl px-5 py-4"
+      >
         <div className="flex flex-wrap md:flex-nowrap gap-3 flex-1">
           <div className="flex-1 min-w-[130px]">
             <FilterDropdown
@@ -221,7 +178,7 @@ export default function Overview() {
             Clear all filters
           </button>
         )}
-      </div>
+      </motion.div>
       <div className="flex flex-col gap-6 md:gap-8 w-full">
 
         {/* Theme Landscape */}
@@ -241,24 +198,26 @@ export default function Overview() {
             <div className="flex flex-col gap-6">
               {/* Top 3 themes (Large cards side-by-side) */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {sortedThemes.slice(0, 3).map((theme) => (
+                {sortedThemes.slice(0, 3).map((theme, idx) => (
                   <ThemeCard
                     key={theme.id}
                     theme={theme}
                     size="large"
                     filters={filters}
+                    index={idx}
                   />
                 ))}
               </div>
 
               {/* Remaining themes (Small cards below) */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {sortedThemes.slice(3).map((theme) => (
+                {sortedThemes.slice(3).map((theme, idx) => (
                   <ThemeCard
                     key={theme.id}
                     theme={theme}
                     size="small"
                     filters={filters}
+                    index={idx + 3}
                   />
                 ))}
               </div>
@@ -266,45 +225,8 @@ export default function Overview() {
           </LayoutGroup>
         </section>
 
-        {/* Most Popular Sub-themes Section */}
-        {popularSubthemes.length > 0 && (
-          <section className="bg-surface-container-lowest rounded-2xl p-5 shadow-ambient border border-outline-variant/10">
-            <div className="flex items-center gap-2 mb-4">
-              <span className="material-symbols-outlined text-primary text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
-              <h2 className="text-base font-bold font-headline text-primary">Most Popular Sub-themes</h2>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
-              {popularSubthemes.map((sub) => (
-                <Link
-                  key={sub.name}
-                  to={`/thema/${sub.parentTheme.id}`}
-                  state={{ theme: sub.parentTheme, filters, selectedSubtheme: sub.name }}
-                  onClick={() => window.scrollTo(0, 0)}
-                  className="bg-surface-container-low hover:bg-surface-container-high border border-outline-variant/10 rounded-xl p-4 flex flex-col justify-between transition-all duration-300 hover:scale-[1.02] hover:shadow-sm"
-                >
-                  <div>
-                    <span className="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-wider block mb-1">
-                      {sub.parentTheme.name}
-                    </span>
-                    <h3 className="text-sm font-bold text-primary line-clamp-2 leading-tight">
-                      {sub.name}
-                    </h3>
-                  </div>
-                  <div className="mt-4 flex items-center gap-1.5 text-xs text-on-surface-variant font-semibold">
-                    <span className="material-symbols-outlined text-sm text-outline">forum</span>
-                    {sub.mentions} comments
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* Charts row */}
-        <section className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-          <TrendChart activeTheme={null} allThemes={themes} />
-          <ComparisonMiniChart theme={themes[0]} filters={filters} />
-        </section>
+        {/* Sub-theme Word Cloud */}
+        <SubthemeWordCloud themes={themes} />
 
         {/* Live response counts (only shown when API is online) */}
         {isLive && liveThemes && liveThemes.length > 0 && (

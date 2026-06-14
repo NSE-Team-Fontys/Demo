@@ -1,22 +1,55 @@
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 
 export default function NavBar() {
+  const location = useLocation()
+
+  const links = [
+    { to: '/', label: 'Overview', icon: 'dashboard' },
+    { to: '/pipeline-demo', label: 'Pipeline', icon: 'sync' },
+  ]
+
   return (
-    <nav className="bg-blue-600 text-white p-4 shadow-lg">
-      <div className="max-w-7xl mx-auto flex gap-6">
-        <Link to="/" className="hover:underline font-bold">
-          📊 Overview
+    <nav className="sticky top-0 z-50 bg-primary/95 glass-panel border-b border-white/10 shadow-lg">
+      <div className="max-w-[1280px] mx-auto px-4 md:px-8 flex items-center justify-between h-16">
+        {/* Brand */}
+        <Link to="/" className="flex items-center gap-2.5 group no-underline">
+          <span
+            className="material-symbols-outlined text-2xl text-white/90 group-hover:text-white transition-colors"
+            style={{ fontVariationSettings: "'FILL' 1" }}
+          >
+            insights
+          </span>
+          <span className="text-lg font-extrabold font-headline text-white tracking-tight">
+            NSE<span className="text-primary-fixed-dim"> Insights</span>
+          </span>
         </Link>
-        <Link to="/pipeline-demo" className="hover:underline font-bold">
-          🔄 Pipeline
-        </Link>
-        
-        <Link to="/presentatie" className="hover:underline font-bold">
-          🎯 Presentation
-        </Link>
-        <Link to="/presentatie/nse-deck" className="hover:underline font-bold">
-          📑 NSE Deck
-        </Link>
+
+        {/* Nav links */}
+        <div className="flex items-center gap-1">
+          {links.map((link) => {
+            const isActive = location.pathname === link.to
+            return (
+              <Link
+                key={link.to}
+                to={link.to}
+                className={`
+                  relative flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold
+                  transition-all duration-200 no-underline
+                  ${isActive
+                    ? 'bg-white/15 text-white shadow-sm'
+                    : 'text-white/70 hover:text-white hover:bg-white/8'
+                  }
+                `}
+              >
+                <span className="material-symbols-outlined text-lg">{link.icon}</span>
+                <span className="hidden sm:inline">{link.label}</span>
+                {isActive && (
+                  <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-primary-fixed-dim rounded-full" />
+                )}
+              </Link>
+            )
+          })}
+        </div>
       </div>
     </nav>
   )
