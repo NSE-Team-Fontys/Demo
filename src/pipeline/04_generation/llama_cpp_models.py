@@ -1,3 +1,4 @@
+import os
 from dataclasses import dataclass
 from typing import Any
 
@@ -21,8 +22,12 @@ class LlamaCppGenerationSettings:
     @property
     def server_args(self) -> list[str]:
         args: list[str] = []
-        if self.context_size > 0:
-            args.extend(["-c", str(self.context_size)])
+        env_ctx = os.environ.get("LLAMA_ARG_CTX_SIZE")
+        ctx = (
+            int(env_ctx) if env_ctx and env_ctx.strip().isdigit() else self.context_size
+        )
+        if ctx > 0:
+            args.extend(["-c", str(ctx)])
         if LLAMA_CPP_N_GPU_LAYERS in {"auto", "all"}:
             args.extend(["-ngl", LLAMA_CPP_N_GPU_LAYERS])
         else:
@@ -85,6 +90,7 @@ class LlamaCppModel:
     speed: str = ""
     recommended: bool = False
     generation: LlamaCppGenerationSettings = LlamaCppGenerationSettings()
+    extra_server_args: tuple[str, ...] = ()
 
     @property
     def llama_server_model_id(self) -> str:
@@ -98,6 +104,7 @@ class LlamaCppModel:
                 "-hf",
                 self.llama_server_model_id,
                 *self.generation.server_args,
+                *self.extra_server_args,
             ]
         )
 
@@ -107,6 +114,7 @@ class LlamaCppModel:
             "-hf",
             self.llama_server_model_id,
             *self.generation.server_args,
+            *self.extra_server_args,
         ]
 
     def chat_completion_payload(self, prompt: str) -> dict[str, Any]:
@@ -115,13 +123,20 @@ class LlamaCppModel:
 
 GEMMA_LLAMA_CPP_MODELS = (
     LlamaCppModel(
-        id="unsloth/gemma-4-E2B-it-GGUF:UD-Q4_K_XL",
-        name="Gemma 4 E2B IT UD-Q4_K_XL",
-        repo_id="unsloth/gemma-4-E2B-it-GGUF",
-        filename="gemma-4-E2B-it-UD-Q4_K_XL.gguf",
-        size="3.18 GB",
+        id="unsloth/gemma-4-E2B-it-qat-GGUF:UD-Q4_K_XL",
+        name="Gemma 4 E2B IT QAT UD-Q4_K_XL",
+        repo_id="unsloth/gemma-4-E2B-it-qat-GGUF",
+        filename="gemma-4-E2B-it-qat-UD-Q4_K_XL.gguf",
+        size="2.62 GB",
         speed="Very fast",
+        extra_server_args=(
+            "--spec-type",
+            "draft-mtp",
+            "--spec-draft-n-max",
+            "2",
+        ),
         generation=LlamaCppGenerationSettings(
+
             context_size=32000,
             max_tokens=8192,
             temperature=1.0,
@@ -185,11 +200,12 @@ GEMMA_LLAMA_CPP_MODELS = (
 LLAMA_CPP_MODEL_REGISTRY = {model.id: model for model in GEMMA_LLAMA_CPP_MODELS}
 
 LLAMA_CPP_MODEL_ALIASES = {
-    "gemma4:e2b": "unsloth/gemma-4-E2B-it-GGUF:UD-Q4_K_XL",
+    "gemma4:e2b": "unsloth/gemma-4-E2B-it-qat-GGUF:UD-Q4_K_XL",
     "gemma4:e4b": "unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL",
     "gemma4:26b": "unsloth/gemma-4-26B-A4B-it-GGUF:UD-Q4_K_M",
     "gemma4:31b": "unsloth/gemma-4-31B-it-GGUF:UD-Q4_K_XL",
-    "unsloth/gemma-4-E2B-it-GGUF:Q4_K_M": "unsloth/gemma-4-E2B-it-GGUF:UD-Q4_K_XL",
+    "unsloth/gemma-4-E2B-it-GGUF:UD-Q4_K_XL": "unsloth/gemma-4-E2B-it-qat-GGUF:UD-Q4_K_XL",
+    "unsloth/gemma-4-E2B-it-GGUF:Q4_K_M": "unsloth/gemma-4-E2B-it-qat-GGUF:UD-Q4_K_XL",
     "unsloth/gemma-4-E4B-it-GGUF:Q4_K_M": "unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL",
     "unsloth/gemma-4-26B-A4B-it-GGUF:Q4_K_M": "unsloth/gemma-4-26B-A4B-it-GGUF:UD-Q4_K_M",
     "unsloth/gemma-4-31B-it-GGUF:Q4_K_M": "unsloth/gemma-4-31B-it-GGUF:UD-Q4_K_XL",
@@ -220,6 +236,7 @@ def llama_cpp_model_options() -> list[dict]:
             "recommended": model.recommended,
             "llama_server_model_id": model.llama_server_model_id,
             "download_command": model.download_command,
+            "extra_server_args": list(model.extra_server_args),
             "generation": model.generation.to_dict(),
         }
         for model in GEMMA_LLAMA_CPP_MODELS

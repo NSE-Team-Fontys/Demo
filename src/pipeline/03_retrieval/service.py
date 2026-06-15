@@ -2,11 +2,20 @@ import chromadb
 from importlib import import_module
 
 from src.config.paths import VECTOR_DB_PATH
+from src.config.response_quality import (
+    LOW_INFORMATION_VALUE,
+    RESPONSE_QUALITY_METADATA_KEY,
+    is_low_information_response,
+)
 from src.config.settings import RERANKER_CANDIDATE_MULTIPLIER, RERANKER_MAX_CANDIDATES
-from src.config.themes import METADATA_ALIASES, THEME_EMBEDDING_DEFINITIONS, THEMES_LIST
-
+from src.config.themes import (
+    LOW_INFORMATION_THEME,
+    METADATA_ALIASES,
+    THEMES_LIST,
+)
 embedding_models = import_module("src.pipeline.02_embedding.embedding_models")
 reranker_models = import_module("src.pipeline.03_retrieval.reranker_models")
+theme_classifier = import_module("src.pipeline.02_embedding.theme_classifier")
 
 DEFAULT_EMBEDDING_MODEL = embedding_models.DEFAULT_EMBEDDING_MODEL
 describe_embedding_runtime = embedding_models.describe_embedding_runtime
@@ -21,7 +30,6 @@ THEME_EMBEDDING_MODEL = DEFAULT_EMBEDDING_MODEL
 
 _theme_overview_cache = {}
 _theme_embedding_models = {}
-_theme_query_embeddings = {}
 
 
 def metadata_value(meta: dict, canonical_key: str):
@@ -49,6 +57,97 @@ def build_where_filter(filters: dict):
     return {"$and": conditions}
 
 
+def _combine_where(*clauses):
+    active = [clause for clause in clauses if clause]
+    if not active:
+        return None
+    if len(active) == 1:
+        return active[0]
+    return {"$and": active}
+
+
+def filtered_response_rows(collection, where_filter=None) -> list[dict]:
+    get_kwargs = {"include": ["documents", "metadatas"]}
+    if where_filter:
+        get_kwargs["where"] = where_filter
+    result = collection.get(**get_kwargs)
+    ids = result.get("ids") or []
+    documents = result.get("documents") or []
+    metadatas = result.get("metadatas") or []
+
+    rows = []
+    for index, doc_id in enumerate(ids):
+        document = documents[index] if index < len(documents) else ""
+        metadata = metadatas[index] if index < len(metadatas) else {}
+        metadata = metadata or {}
+        is_low_information = (
+            metadata.get(RESPONSE_QUALITY_METADATA_KEY) == LOW_INFORMATION_VALUE
+            or is_low_information_response(document)
+        )
+        rows.append(
+            {
+                "id": doc_id,
+                "document": str(document or ""),
+                "metadata": metadata,
+                "is_low_information": is_low_information,
+            }
+        )
+    return rows
+
+
+def _candidate_metrics(metadata: dict, theme_name: str) -> tuple[float, float]:
+    candidate_count = int(metadata.get("theme_candidate_count", 0) or 0)
+    for position in range(1, candidate_count + 1):
+        prefix = f"theme_candidate_{position}"
+        if metadata.get(prefix) == theme_name:
+            score = float(metadata.get(f"{prefix}_score", 0.0))
+            distance = float(
+                metadata.get(f"{prefix}_embedding_distance", 1.0)
+            )
+            return score, distance
+    return float(metadata.get("theme_primary_score", 0.0)), 1.0
+
+
+def _get_evidence_rows(
+    collection,
+    where_clause,
+    *,
+    theme_name: str,
+    evidence_type: str,
+) -> list[dict]:
+    result = collection.get(
+        where=where_clause,
+        include=["documents", "metadatas"],
+    )
+    ids = result.get("ids") or []
+    documents = result.get("documents") or []
+    metadatas = result.get("metadatas") or []
+    rows = []
+    for index, doc_id in enumerate(ids):
+        document = documents[index] if index < len(documents) else ""
+        metadata = metadatas[index] if index < len(metadatas) else {}
+        metadata = metadata or {}
+        score, distance = _candidate_metrics(metadata, theme_name)
+        rows.append(
+            {
+                "id": doc_id,
+                "document": str(document or ""),
+                "metadata": metadata,
+                "distance": distance,
+                "classification_score": score,
+                "evidence_type": evidence_type,
+            }
+        )
+    rows.sort(
+        key=lambda row: (
+            row["classification_score"],
+            -row["distance"],
+        ),
+        reverse=True,
+    )
+    return rows
+
+
 def clear_runtime_caches():
     _theme_overview_cache.clear()
 
@@ -73,24 +172,43 @@ def get_theme_embedding_model(model_id: str | None = None):
     return _theme_embedding_models[selected_model]
 
 
-def theme_query_text(theme_name: str) -> str:
-    definition = THEME_EMBEDDING_DEFINITIONS.get(theme_name)
-    return f"{theme_name}. {definition}" if definition else theme_name
-
-
-def get_theme_query_embeddings(model_id: str | None = None):
-    selected_model = model_id or THEME_EMBEDDING_MODEL
-    if selected_model not in _theme_query_embeddings:
-        model = get_theme_embedding_model(selected_model)
-        _theme_query_embeddings[selected_model] = {
-            theme: model.encode(theme_query_text(theme), normalize_embeddings=True).tolist()
-            for theme in THEMES_LIST
-        }
-    return _theme_query_embeddings[selected_model]
-
-
 def current_reranker_id():
     return selected_reranker_model() if reranker_enabled() else None
+
+
+def expected_classification_config(embedding_model_id: str):
+    return theme_classifier.classification_config(
+        embedding_model_id,
+        reranker_model_id=current_reranker_id(),
+    )
+
+
+def validate_theme_classification(collection):
+    metadata = getattr(collection, "metadata", None) or {}
+    embedding_model_id = collection_embedding_model(collection)
+    expected = expected_classification_config(embedding_model_id)
+    expected_metadata = expected.collection_metadata(
+        status=theme_classifier.CLASSIFICATION_STATUS_READY
+    )
+    mismatches = [
+        key
+        for key, expected_value in expected_metadata.items()
+        if metadata.get(key) != expected_value
+    ]
+    if mismatches:
+        mismatch_list = ", ".join(sorted(mismatches))
+        raise RuntimeError(
+            "Vector database is missing compatible persisted theme "
+            f"classification ({mismatch_list}). Delete it and run a fresh "
+            "vector build before generating dashboard summaries."
+        )
+    return expected
+
+
+def classification_cache_metadata(collection=None) -> dict:
+    selected_collection = collection or get_collection()
+    config = validate_theme_classification(selected_collection)
+    return config.cache_metadata()
 
 
 def rerank_documents(
@@ -145,9 +263,11 @@ def rerank_documents(
 
 
 def get_collection():
-    return chromadb.PersistentClient(path=str(VECTOR_DB_PATH)).get_collection(
+    collection = chromadb.PersistentClient(path=str(VECTOR_DB_PATH)).get_collection(
         COLLECTION_NAME
     )
+    validate_theme_classification(collection)
+    return collection
 
 
 def filter_options_payload() -> dict:
@@ -156,6 +276,7 @@ def filter_options_payload() -> dict:
         collection = client.get_collection(COLLECTION_NAME)
     except Exception:
         return {"status": "empty", "options": {}}
+    validate_theme_classification(collection)
 
     all_docs = collection.get(limit=collection.count())
     buckets = {
@@ -260,6 +381,7 @@ def vector_stats_payload() -> dict:
             "total_documents": 0,
             "message": "Vector DB not initialized",
         }
+    validate_theme_classification(collection)
 
     count = collection.count()
     if count == 0:
@@ -307,16 +429,10 @@ def percentages_from_counts(counts: dict[str, int]) -> dict[str, int]:
 
 
 def theme_distribution(collection, model_id: str | None = None, where_filter=None) -> dict:
-    if where_filter:
-        matching_docs = collection.get(where=where_filter)
-        total_docs = (
-            len(matching_docs["ids"])
-            if matching_docs and matching_docs.get("ids")
-            else 0
-        )
-    else:
-        total_docs = collection.count()
-
+    del model_id
+    validate_theme_classification(collection)
+    response_rows = filtered_response_rows(collection, where_filter)
+    total_docs = len(response_rows)
     counts = {theme: 0 for theme in THEMES_LIST}
     if total_docs <= 0:
         return {
@@ -325,24 +441,13 @@ def theme_distribution(collection, model_id: str | None = None, where_filter=Non
             "total_docs": 0,
         }
 
-    theme_embeddings = get_theme_query_embeddings(model_id)
-    best_by_doc = {}
-    for theme_name in THEMES_LIST:
-        results = collection.query(
-            query_embeddings=[theme_embeddings[theme_name]],
-            n_results=total_docs,
-            where=where_filter,
-            include=["distances"],
-        )
-        ids = results.get("ids", [[]])[0] if results.get("ids") else []
-        distances = results.get("distances", [[]])[0] if results.get("distances") else []
-        for doc_id, distance in zip(ids, distances):
-            current = best_by_doc.get(doc_id)
-            if current is None or distance < current[0]:
-                best_by_doc[doc_id] = (distance, theme_name)
-
-    for _, theme_name in best_by_doc.values():
-        counts[theme_name] += 1
+    for row in response_rows:
+        primary_theme = row["metadata"].get("theme_primary")
+        if primary_theme not in counts:
+            raise RuntimeError(
+                f"Document {row['id']} has an invalid persisted primary theme."
+            )
+        counts[primary_theme] += 1
 
     return {
         "counts": counts,
@@ -358,26 +463,14 @@ def collect_theme_documents(
     filters: dict | None = None,
     model_id: str | None = None,
 ) -> dict:
-    """
-    Collect the filtered documents whose nearest theme query is the requested theme.
-
-    This intentionally does not bind responses to the survey question they came from.
-    Each answer is compared against every theme definition and assigned to the closest
-    theme in embedding space, so off-topic-but-useful student comments can move to the
-    theme they actually discuss.
-    """
+    """Collect persisted definite and ambiguous evidence for one predefined theme."""
+    del model_id
+    classification = validate_theme_classification(collection)
     where_filter = build_where_filter(filters or {})
-    if where_filter:
-        matching_docs = collection.get(where=where_filter)
-        total_docs = (
-            len(matching_docs["ids"])
-            if matching_docs and matching_docs.get("ids")
-            else 0
-        )
-    else:
-        total_docs = collection.count()
-
-    counts = {theme: 0 for theme in THEMES_LIST}
+    distribution = theme_distribution(collection, where_filter=where_filter)
+    total_docs = distribution["total_docs"]
+    counts = distribution["counts"]
+    percentages = distribution["percentages"]
     if total_docs <= 0:
         return {
             "frequency": 0,
@@ -386,59 +479,51 @@ def collect_theme_documents(
             "documents": [],
             "metadatas": [],
             "distances": [],
+            "evidence": [],
+            "definite_documents": [],
+            "ambiguous_documents": [],
             "counts": counts,
             "percentages": percentages_from_counts(counts),
         }
 
-    selected_model = model_id or collection_embedding_model(collection)
-    theme_embeddings = get_theme_query_embeddings(selected_model)
-    best_by_doc = {}
-    target_docs = {}
+    if theme_name not in THEMES_LIST:
+        raise ValueError(f"Unknown predefined theme: {theme_name}")
 
-    for candidate_theme in THEMES_LIST:
-        include = (
-            ["documents", "metadatas", "distances"]
-            if candidate_theme == theme_name
-            else ["distances"]
+    definite_clause = _combine_where(
+        where_filter,
+        {"theme_primary": theme_name},
+        {"theme_ambiguous": False},
+    )
+    definite_rows = _get_evidence_rows(
+        collection,
+        definite_clause,
+        theme_name=theme_name,
+        evidence_type="definite",
+    )
+
+    ambiguous_rows = []
+    if theme_name != LOW_INFORMATION_THEME:
+        candidate_conditions = [
+            {f"theme_candidate_{position}": theme_name}
+            for position in range(1, classification.candidate_count + 1)
+        ]
+        ambiguous_clause = _combine_where(
+            where_filter,
+            {"theme_ambiguous": True},
+            (
+                candidate_conditions[0]
+                if len(candidate_conditions) == 1
+                else {"$or": candidate_conditions}
+            ),
         )
-        results = collection.query(
-            query_embeddings=[theme_embeddings[candidate_theme]],
-            n_results=total_docs,
-            where=where_filter,
-            include=include,
+        ambiguous_rows = _get_evidence_rows(
+            collection,
+            ambiguous_clause,
+            theme_name=theme_name,
+            evidence_type="ambiguous",
         )
-        ids = results.get("ids", [[]])[0] if results.get("ids") else []
-        distances = results.get("distances", [[]])[0] if results.get("distances") else []
 
-        if candidate_theme == theme_name:
-            documents = results.get("documents", [[]])[0] if results.get("documents") else []
-            metadatas = (
-                results.get("metadatas", [[]])[0] if results.get("metadatas") else []
-            )
-            if len(metadatas) < len(documents):
-                metadatas = list(metadatas) + [{} for _ in range(len(documents) - len(metadatas))]
-            for doc_id, doc, meta, distance in zip(ids, documents, metadatas, distances):
-                target_docs[doc_id] = {
-                    "document": doc,
-                    "metadata": meta,
-                    "distance": distance,
-                }
-
-        for doc_id, distance in zip(ids, distances):
-            current = best_by_doc.get(doc_id)
-            if current is None or distance < current[0]:
-                best_by_doc[doc_id] = (distance, candidate_theme)
-
-    selected_rows = []
-    for doc_id, (distance, assigned_theme) in best_by_doc.items():
-        counts[assigned_theme] += 1
-        if assigned_theme == theme_name and doc_id in target_docs:
-            row = dict(target_docs[doc_id])
-            row["distance"] = distance
-            selected_rows.append(row)
-
-    selected_rows.sort(key=lambda row: row["distance"])
-    percentages = percentages_from_counts(counts)
+    selected_rows = definite_rows + ambiguous_rows
     return {
         "frequency": percentages.get(theme_name, 0),
         "vector_relevant_count": counts.get(theme_name, 0),
@@ -446,6 +531,9 @@ def collect_theme_documents(
         "documents": [row["document"] for row in selected_rows],
         "metadatas": [row["metadata"] for row in selected_rows],
         "distances": [row["distance"] for row in selected_rows],
+        "evidence": selected_rows,
+        "definite_documents": [row["document"] for row in definite_rows],
+        "ambiguous_documents": [row["document"] for row in ambiguous_rows],
         "counts": counts,
         "percentages": percentages,
     }
@@ -461,15 +549,26 @@ def collect_documents_by_query(
 ) -> dict:
     """Direct vector search for a query string — used for subtheme drilldowns."""
     where_filter = build_where_filter(filters or {})
-    total_docs = collection.count()
+    response_rows = filtered_response_rows(collection, where_filter)
+    total_docs = len(response_rows)
     if total_docs <= 0:
         return {"frequency": 0, "vector_relevant_count": 0, "total_filtered_documents": 0, "documents": [], "metadatas": [], "distances": []}
+
+    substantive_ids = {
+        row["id"] for row in response_rows if not row["is_low_information"]
+    }
+    if not substantive_ids:
+        return {"frequency": 0, "vector_relevant_count": 0, "total_filtered_documents": total_docs, "documents": [], "metadatas": [], "distances": []}
 
     selected_model = model_id or collection_embedding_model(collection)
     model = get_theme_embedding_model(selected_model)
     query_embedding = model.encode(query_text, normalize_embeddings=True)
 
-    k = min(n_results, max(total_docs, 1))
+    k = min(
+        max(n_results * RERANKER_CANDIDATE_MULTIPLIER, n_results),
+        max(total_docs, 1),
+        RERANKER_MAX_CANDIDATES,
+    )
     results = collection.query(
         query_embeddings=[query_embedding.tolist()],
         n_results=k,
@@ -479,14 +578,28 @@ def collect_documents_by_query(
     documents = results.get("documents", [[]])[0] if results.get("documents") else []
     metadatas = results.get("metadatas", [[]])[0] if results.get("metadatas") else []
     distances = results.get("distances", [[]])[0] if results.get("distances") else []
-    total_filtered = len(documents)
+    ids = results.get("ids", [[]])[0] if results.get("ids") else []
+    substantive_results = [
+        (document, metadata, distance)
+        for doc_id, document, metadata, distance in zip(
+            ids, documents, metadatas, distances
+        )
+        if doc_id in substantive_ids
+    ]
+    ranked_results = rerank_documents(
+        query_text,
+        [row[0] for row in substantive_results],
+        metadatas=[row[1] for row in substantive_results],
+        distances=[row[2] for row in substantive_results],
+        top_n=n_results,
+    )
     return {
         "frequency": 0,
-        "vector_relevant_count": total_filtered,
-        "total_filtered_documents": total_filtered,
-        "documents": documents,
-        "metadatas": metadatas,
-        "distances": distances,
+        "vector_relevant_count": len(ranked_results),
+        "total_filtered_documents": total_docs,
+        "documents": [row["document"] for row in ranked_results],
+        "metadatas": [row["metadata"] for row in ranked_results],
+        "distances": [row["distance"] for row in ranked_results],
     }
 
 

@@ -1,73 +1,33 @@
 {
-  "/Users/simon/Desktop/university/year2/sem4/Demo/dashboard/public/favicon.svg": {
-    "mtime": 1779905677.8184478,
-    "ast_hash": "7e840862161341271697daa99a40d76b",
-    "semantic_hash": "7e840862161341271697daa99a40d76b"
+  "/Users/simon/Desktop/university/year2/sem4/Demo/anonymizer.py": {
+    "mtime": 1780086666.8127816,
+    "ast_hash": "b8946dadcb417e91b7d845b0a6908b81",
+    "semantic_hash": "b8946dadcb417e91b7d845b0a6908b81"
   },
-  "/Users/simon/Desktop/university/year2/sem4/Demo/dashboard/public/icons.svg": {
-    "mtime": 1779905677.8186936,
-    "ast_hash": "3b4fcfcf393eca4d264dca4a4663bc37",
-    "semantic_hash": "3b4fcfcf393eca4d264dca4a4663bc37"
+  "/Users/simon/Desktop/university/year2/sem4/Demo/app.py": {
+    "mtime": 1781300309.9786143,
+    "ast_hash": "f32f2072996102e50d50f49352b51a07",
+    "semantic_hash": "f32f2072996102e50d50f49352b51a07"
   },
-  "/Users/simon/Desktop/university/year2/sem4/Demo/dashboard/src/assets/hero.png": {
-    "mtime": 1779905677.8190355,
-    "ast_hash": "5cf2b0762834cdddc0dd3ec1397b5011",
-    "semantic_hash": "5cf2b0762834cdddc0dd3ec1397b5011"
+  "/Users/simon/Desktop/university/year2/sem4/Demo/package.json": {
+    "mtime": 1781300356.6996536,
+    "ast_hash": "b360106918971fa59f9bed5d8d9fc679",
+    "semantic_hash": "b360106918971fa59f9bed5d8d9fc679"
   },
-  "/Users/simon/Desktop/university/year2/sem4/Demo/dashboard/src/assets/react.svg": {
-    "mtime": 1779905677.819203,
-    "ast_hash": "f0402b67b6ce880f65666bb49e841696",
-    "semantic_hash": "f0402b67b6ce880f65666bb49e841696"
+  "/Users/simon/Desktop/university/year2/sem4/Demo/pii_false_positive_checker.py": {
+    "mtime": 1781300356.699922,
+    "ast_hash": "4922151770bced0e70b2eabcf15a68eb",
+    "semantic_hash": "4922151770bced0e70b2eabcf15a68eb"
   },
-  "/Users/simon/Desktop/university/year2/sem4/Demo/dashboard/src/assets/vite.svg": {
-    "mtime": 1779905677.819325,
-    "ast_hash": "9960a24288958394ac50e57ff638b036",
-    "semantic_hash": "9960a24288958394ac50e57ff638b036"
+  "/Users/simon/Desktop/university/year2/sem4/Demo/queryVectorDB.py": {
+    "mtime": 1780086666.8150442,
+    "ast_hash": "459f828f44aaa778bd1c4facf0c919a2",
+    "semantic_hash": "459f828f44aaa778bd1c4facf0c919a2"
   },
-  "/Users/simon/Desktop/university/year2/sem4/Demo/src/config/README.md": {
-    "mtime": 1781300356.7016523,
-    "ast_hash": "a755a03acccc7e632647f9982d2eb218",
-    "semantic_hash": "a755a03acccc7e632647f9982d2eb218"
-  },
-  "/Users/simon/Desktop/university/year2/sem4/Demo/src/pipeline/01_anonymization/README.md": {
-    "mtime": 1781300356.7025852,
-    "ast_hash": "5459258afe49005a8fdc12be1361935e",
-    "semantic_hash": "5459258afe49005a8fdc12be1361935e"
-  },
-  "/Users/simon/Desktop/university/year2/sem4/Demo/src/pipeline/02_embedding/README.md": {
-    "mtime": 1781300356.7044902,
-    "ast_hash": "cd9fce18cd70226dd845de2943c689dd",
-    "semantic_hash": "cd9fce18cd70226dd845de2943c689dd"
-  },
-  "/Users/simon/Desktop/university/year2/sem4/Demo/src/pipeline/03_retrieval/README.md": {
-    "mtime": 1780086666.8193686,
-    "ast_hash": "fcee51aa2eb107f32aed13c431b54956",
-    "semantic_hash": "fcee51aa2eb107f32aed13c431b54956"
-  },
-  "/Users/simon/Desktop/university/year2/sem4/Demo/src/pipeline/04_generation/README.md": {
-    "mtime": 1781300356.7054565,
-    "ast_hash": "0892f7310c1622207dda6b4f293055b0",
-    "semantic_hash": "0892f7310c1622207dda6b4f293055b0"
-  },
-  "/Users/simon/Desktop/university/year2/sem4/Demo/src/utils/README.md": {
-    "mtime": 1781300356.7066085,
-    "ast_hash": "e221212817907217f2af32972c691a48",
-    "semantic_hash": "e221212817907217f2af32972c691a48"
-  },
-  "/Users/simon/Desktop/university/year2/sem4/Demo/dashboard/index.html": {
-    "mtime": 1779905677.8166082,
-    "ast_hash": "b0cc513d35c7a8801d8717f88fe919dd",
-    "semantic_hash": "b0cc513d35c7a8801d8717f88fe919dd"
-  },
-  "/Users/simon/Desktop/university/year2/sem4/Demo/dashboard/public/NSE Deck.html": {
-    "mtime": 1779905677.8183105,
-    "ast_hash": "9ba369cb0a637443c44612987e7f71f1",
-    "semantic_hash": "9ba369cb0a637443c44612987e7f71f1"
-  },
-  "/Users/simon/Desktop/university/year2/sem4/Demo/dashboard/public/presentation.html": {
-    "mtime": 1779905677.8187737,
-    "ast_hash": "c8615bdc16cfcfd6b39716d0be13490a",
-    "semantic_hash": "c8615bdc16cfcfd6b39716d0be13490a"
+  "/Users/simon/Desktop/university/year2/sem4/Demo/run_anon_test.py": {
+    "mtime": 1781300356.7006443,
+    "ast_hash": "f24722397eaf585782ab98349ddd1dd6",
+    "semantic_hash": "f24722397eaf585782ab98349ddd1dd6"
   },
   "/Users/simon/Desktop/university/year2/sem4/Demo/src/__init__.py": {
     "mtime": 1779917279.843216,
@@ -85,9 +45,9 @@
     "semantic_hash": "79e924e8a6f75064898a76228d58e69c"
   },
   "/Users/simon/Desktop/university/year2/sem4/Demo/src/api/insight_routes.py": {
-    "mtime": 1781300356.7011957,
-    "ast_hash": "6894723827d7d7b33b66d984d722d27b",
-    "semantic_hash": "6894723827d7d7b33b66d984d722d27b"
+    "mtime": 1781386303.5663998,
+    "ast_hash": "d51072b3218be19efcbf7e17c7c69f66",
+    "semantic_hash": "d51072b3218be19efcbf7e17c7c69f66"
   },
   "/Users/simon/Desktop/university/year2/sem4/Demo/src/api/vector_routes.py": {
     "mtime": 1781300356.7014134,
@@ -104,20 +64,25 @@
     "ast_hash": "b89e9b28ce1ca73eea1f98492928f151",
     "semantic_hash": "b89e9b28ce1ca73eea1f98492928f151"
   },
+  "/Users/simon/Desktop/university/year2/sem4/Demo/src/config/response_quality.py": {
+    "mtime": 1781385090.541622,
+    "ast_hash": "2409f6ee5c563f5f6651c709bcbaa74e",
+    "semantic_hash": "2409f6ee5c563f5f6651c709bcbaa74e"
+  },
   "/Users/simon/Desktop/university/year2/sem4/Demo/src/config/runtime.py": {
     "mtime": 1780086666.8162618,
     "ast_hash": "0d85a28ec8dcbc0823a593684f2efee7",
     "semantic_hash": "0d85a28ec8dcbc0823a593684f2efee7"
   },
   "/Users/simon/Desktop/university/year2/sem4/Demo/src/config/settings.py": {
-    "mtime": 1781300356.7020144,
-    "ast_hash": "317a7c9927f8e9c6ab4910713e0ecca1",
-    "semantic_hash": "317a7c9927f8e9c6ab4910713e0ecca1"
+    "mtime": 1781385791.632847,
+    "ast_hash": "036cc41ac6497e8440d7f4583e195d88",
+    "semantic_hash": "036cc41ac6497e8440d7f4583e195d88"
   },
   "/Users/simon/Desktop/university/year2/sem4/Demo/src/config/themes.py": {
-    "mtime": 1781300356.7023427,
-    "ast_hash": "94e1ae4fd4cab1c3cbff0129825010ab",
-    "semantic_hash": "94e1ae4fd4cab1c3cbff0129825010ab"
+    "mtime": 1781385791.7191963,
+    "ast_hash": "75b950afb0d44620490a0f43e7417fd5",
+    "semantic_hash": "75b950afb0d44620490a0f43e7417fd5"
   },
   "/Users/simon/Desktop/university/year2/sem4/Demo/src/pipeline/01_anonymization/__init__.py": {
     "mtime": 1780086666.817027,
@@ -195,14 +160,19 @@
     "semantic_hash": "1d7f163adf379229b503087f3b24fcd5"
   },
   "/Users/simon/Desktop/university/year2/sem4/Demo/src/pipeline/02_embedding/service.py": {
-    "mtime": 1780086666.8190231,
-    "ast_hash": "be5a24f10cb1fe17dc5e463b755c1d04",
-    "semantic_hash": "be5a24f10cb1fe17dc5e463b755c1d04"
+    "mtime": 1781386303.389367,
+    "ast_hash": "787dad15e20b1b868222790edbcc317d",
+    "semantic_hash": "787dad15e20b1b868222790edbcc317d"
+  },
+  "/Users/simon/Desktop/university/year2/sem4/Demo/src/pipeline/02_embedding/theme_classifier.py": {
+    "mtime": 1781385791.8965433,
+    "ast_hash": "38d990c4361f5e446175936f81064449",
+    "semantic_hash": "38d990c4361f5e446175936f81064449"
   },
   "/Users/simon/Desktop/university/year2/sem4/Demo/src/pipeline/02_embedding/vector_builder.py": {
-    "mtime": 1781300356.7049227,
-    "ast_hash": "5f126f742361fd935e8ac03863a6ab4c",
-    "semantic_hash": "5f126f742361fd935e8ac03863a6ab4c"
+    "mtime": 1781386303.2975345,
+    "ast_hash": "ca7d3610bfc2b0c72a0ed4b931f2bff3",
+    "semantic_hash": "ca7d3610bfc2b0c72a0ed4b931f2bff3"
   },
   "/Users/simon/Desktop/university/year2/sem4/Demo/src/pipeline/03_retrieval/__init__.py": {
     "mtime": 1780086666.8195114,
@@ -215,14 +185,14 @@
     "semantic_hash": "b07c0206d527894033cee9fc98272b9f"
   },
   "/Users/simon/Desktop/university/year2/sem4/Demo/src/pipeline/03_retrieval/reranker_models.py": {
-    "mtime": 1780086666.8198054,
-    "ast_hash": "0eceea9840a60483b9f1e6e40e3e316d",
-    "semantic_hash": "0eceea9840a60483b9f1e6e40e3e316d"
+    "mtime": 1781385791.8094382,
+    "ast_hash": "d986cd9d6bd32beb7c41f607ba739b91",
+    "semantic_hash": "d986cd9d6bd32beb7c41f607ba739b91"
   },
   "/Users/simon/Desktop/university/year2/sem4/Demo/src/pipeline/03_retrieval/service.py": {
-    "mtime": 1781300356.7051752,
-    "ast_hash": "316e3abadbe6087da49a7e26aedc8a77",
-    "semantic_hash": "316e3abadbe6087da49a7e26aedc8a77"
+    "mtime": 1781386303.4766562,
+    "ast_hash": "afd483a213e91b185936a8cdfcb47912",
+    "semantic_hash": "afd483a213e91b185936a8cdfcb47912"
   },
   "/Users/simon/Desktop/university/year2/sem4/Demo/src/pipeline/04_generation/__init__.py": {
     "mtime": 1780086666.8202624,
@@ -230,9 +200,9 @@
     "semantic_hash": "ff0e9f010bfe226e9027fb98cbc2995e"
   },
   "/Users/simon/Desktop/university/year2/sem4/Demo/src/pipeline/04_generation/cache.py": {
-    "mtime": 1781300356.7056346,
-    "ast_hash": "37e0bdd0096122355c81acb1b3b2dcd8",
-    "semantic_hash": "37e0bdd0096122355c81acb1b3b2dcd8"
+    "mtime": 1781386021.5015886,
+    "ast_hash": "31d0344e5a33c8fd14ec2c974bfc86ed",
+    "semantic_hash": "31d0344e5a33c8fd14ec2c974bfc86ed"
   },
   "/Users/simon/Desktop/university/year2/sem4/Demo/src/pipeline/04_generation/insight_metrics.py": {
     "mtime": 1780086666.82046,
@@ -240,9 +210,9 @@
     "semantic_hash": "6e4d9864f02755224c213f50ad10d278"
   },
   "/Users/simon/Desktop/university/year2/sem4/Demo/src/pipeline/04_generation/llama_cpp_models.py": {
-    "mtime": 1781300356.7058122,
-    "ast_hash": "cfb7e6c99ce0ff8d3aeb9f4e3aefa434",
-    "semantic_hash": "cfb7e6c99ce0ff8d3aeb9f4e3aefa434"
+    "mtime": 1781379459.7414749,
+    "ast_hash": "6eae7ae066cb7a1e35d46302dcc8af65",
+    "semantic_hash": "6eae7ae066cb7a1e35d46302dcc8af65"
   },
   "/Users/simon/Desktop/university/year2/sem4/Demo/src/pipeline/04_generation/llm_clients.py": {
     "mtime": 1781300356.7060432,
@@ -250,14 +220,14 @@
     "semantic_hash": "1a1ad21b8a5c736b87a2dd9f45239bb5"
   },
   "/Users/simon/Desktop/university/year2/sem4/Demo/src/pipeline/04_generation/prompts.py": {
-    "mtime": 1781300356.706286,
-    "ast_hash": "70c8461aefc4b777d45fc0b48ad3830b",
-    "semantic_hash": "70c8461aefc4b777d45fc0b48ad3830b"
+    "mtime": 1781386021.593384,
+    "ast_hash": "71d9a6fb5dbb3da2d85e14ec4fd69005",
+    "semantic_hash": "71d9a6fb5dbb3da2d85e14ec4fd69005"
   },
   "/Users/simon/Desktop/university/year2/sem4/Demo/src/pipeline/04_generation/service.py": {
-    "mtime": 1781300356.7064626,
-    "ast_hash": "a2dcd78a39a4f2bb03f414303e6189e9",
-    "semantic_hash": "a2dcd78a39a4f2bb03f414303e6189e9"
+    "mtime": 1781386427.0817964,
+    "ast_hash": "20437379b1359b8241415f538e48b0d5",
+    "semantic_hash": "20437379b1359b8241415f538e48b0d5"
   },
   "/Users/simon/Desktop/university/year2/sem4/Demo/src/pipeline/__init__.py": {
     "mtime": 1780086666.8211327,
@@ -279,149 +249,69 @@
     "ast_hash": "4a212c302337741d97ae79a5c61e33eb",
     "semantic_hash": "4a212c302337741d97ae79a5c61e33eb"
   },
-  "/Users/simon/Desktop/university/year2/sem4/Demo/dashboard/package.json": {
-    "mtime": 1781300356.6949675,
-    "ast_hash": "62f6fd7348dc7b25207306103afb408a",
-    "semantic_hash": "62f6fd7348dc7b25207306103afb408a"
+  "/Users/simon/Desktop/university/year2/sem4/Demo/vector_builder.py": {
+    "mtime": 1780086666.8216374,
+    "ast_hash": "dcb3f5ee01a88997cdfd44f85c2160b6",
+    "semantic_hash": "dcb3f5ee01a88997cdfd44f85c2160b6"
   },
-  "/Users/simon/Desktop/university/year2/sem4/Demo/dashboard/postcss.config.js": {
-    "mtime": 1779905677.8168652,
-    "ast_hash": "ef3ba2a81ba19f8ea5ddf625521e96f0",
-    "semantic_hash": "ef3ba2a81ba19f8ea5ddf625521e96f0"
+  "/Users/simon/Desktop/university/year2/sem4/Demo/ANONYMIZATION_IMPROVEMENTS.md": {
+    "mtime": 1781300356.6920877,
+    "ast_hash": "5a971f001fbcd9e33955eddbd7a321df",
+    "semantic_hash": "5a971f001fbcd9e33955eddbd7a321df"
   },
-  "/Users/simon/Desktop/university/year2/sem4/Demo/dashboard/src/App.jsx": {
-    "mtime": 1781300356.6952026,
-    "ast_hash": "ac9596b1150641aa3705711516e0e50a",
-    "semantic_hash": "ac9596b1150641aa3705711516e0e50a"
+  "/Users/simon/Desktop/university/year2/sem4/Demo/MASKING_TUNING.txt": {
+    "mtime": 1781300356.6923668,
+    "ast_hash": "56a94d9c3c02ac84bd56dcac41bd72f8",
+    "semantic_hash": "56a94d9c3c02ac84bd56dcac41bd72f8"
   },
-  "/Users/simon/Desktop/university/year2/sem4/Demo/dashboard/src/components/AnonymizerTab.jsx": {
-    "mtime": 1781300356.6954908,
-    "ast_hash": "a42268fb2a6c8176830b44c47bd02686",
-    "semantic_hash": "a42268fb2a6c8176830b44c47bd02686"
+  "/Users/simon/Desktop/university/year2/sem4/Demo/README.md": {
+    "mtime": 1781386354.3426156,
+    "ast_hash": "dd9fed36a5b7fe77cd949cf27c224a11",
+    "semantic_hash": "dd9fed36a5b7fe77cd949cf27c224a11"
   },
-  "/Users/simon/Desktop/university/year2/sem4/Demo/dashboard/src/components/ComparisonMiniChart.jsx": {
-    "mtime": 1779905677.8195071,
-    "ast_hash": "092d346db339dbd4095a4dd5919c189d",
-    "semantic_hash": "092d346db339dbd4095a4dd5919c189d"
+  "/Users/simon/Desktop/university/year2/sem4/Demo/requirements-amd.txt": {
+    "mtime": 1781300356.70007,
+    "ast_hash": "74707a6ab0b7dca58c4aecf03b8e74fe",
+    "semantic_hash": "74707a6ab0b7dca58c4aecf03b8e74fe"
   },
-  "/Users/simon/Desktop/university/year2/sem4/Demo/dashboard/src/components/DetailDrawer.jsx": {
-    "mtime": 1780086757.234207,
-    "ast_hash": "f1cea3a803db2dd4552864f361e48041",
-    "semantic_hash": "f1cea3a803db2dd4552864f361e48041"
+  "/Users/simon/Desktop/university/year2/sem4/Demo/requirements-common.txt": {
+    "mtime": 1781300356.7002122,
+    "ast_hash": "6b3533c5adba6ebbbf87545009e2b3e9",
+    "semantic_hash": "6b3533c5adba6ebbbf87545009e2b3e9"
   },
-  "/Users/simon/Desktop/university/year2/sem4/Demo/dashboard/src/components/FilterDropdown.jsx": {
-    "mtime": 1781300356.695693,
-    "ast_hash": "7ae1efa62c28f8d8967d90c02ad0de65",
-    "semantic_hash": "7ae1efa62c28f8d8967d90c02ad0de65"
+  "/Users/simon/Desktop/university/year2/sem4/Demo/requirements.txt": {
+    "mtime": 1781300356.700445,
+    "ast_hash": "fb27c8f51ac854a9370088c32be95ea9",
+    "semantic_hash": "fb27c8f51ac854a9370088c32be95ea9"
   },
-  "/Users/simon/Desktop/university/year2/sem4/Demo/dashboard/src/components/InsightGenerator.jsx": {
-    "mtime": 1781300356.6958957,
-    "ast_hash": "ec38c8eb77b29dc8cbd07b9efc3a46e0",
-    "semantic_hash": "ec38c8eb77b29dc8cbd07b9efc3a46e0"
+  "/Users/simon/Desktop/university/year2/sem4/Demo/src/config/README.md": {
+    "mtime": 1781386354.2539973,
+    "ast_hash": "0f3df4e5dd80cde0cdfaf831c3d67c9a",
+    "semantic_hash": "0f3df4e5dd80cde0cdfaf831c3d67c9a"
   },
-  "/Users/simon/Desktop/university/year2/sem4/Demo/dashboard/src/components/NavBar.jsx": {
-    "mtime": 1779905677.8198428,
-    "ast_hash": "6ad0b592a51b268e64e1dbbedbf322a1",
-    "semantic_hash": "6ad0b592a51b268e64e1dbbedbf322a1"
+  "/Users/simon/Desktop/university/year2/sem4/Demo/src/pipeline/01_anonymization/README.md": {
+    "mtime": 1781300356.7025852,
+    "ast_hash": "5459258afe49005a8fdc12be1361935e",
+    "semantic_hash": "5459258afe49005a8fdc12be1361935e"
   },
-  "/Users/simon/Desktop/university/year2/sem4/Demo/dashboard/src/components/QueryTab.jsx": {
-    "mtime": 1779905677.8199532,
-    "ast_hash": "862e513fea4b48924ca8a063e64a55fb",
-    "semantic_hash": "862e513fea4b48924ca8a063e64a55fb"
+  "/Users/simon/Desktop/university/year2/sem4/Demo/src/pipeline/02_embedding/README.md": {
+    "mtime": 1781386353.9883223,
+    "ast_hash": "d0708cb9b08252576860a4fd122de7ab",
+    "semantic_hash": "d0708cb9b08252576860a4fd122de7ab"
   },
-  "/Users/simon/Desktop/university/year2/sem4/Demo/dashboard/src/components/ThemeCard.jsx": {
-    "mtime": 1781300356.696146,
-    "ast_hash": "d0f6d95f33eae8290d0ccf432d2c257f",
-    "semantic_hash": "d0f6d95f33eae8290d0ccf432d2c257f"
+  "/Users/simon/Desktop/university/year2/sem4/Demo/src/pipeline/03_retrieval/README.md": {
+    "mtime": 1781386354.0772505,
+    "ast_hash": "89966d5221429e1b935cad69f339f694",
+    "semantic_hash": "89966d5221429e1b935cad69f339f694"
   },
-  "/Users/simon/Desktop/university/year2/sem4/Demo/dashboard/src/components/TrendChart.jsx": {
-    "mtime": 1779905677.8201807,
-    "ast_hash": "d87258d09cc767276eacb7a89f4df8e1",
-    "semantic_hash": "d87258d09cc767276eacb7a89f4df8e1"
+  "/Users/simon/Desktop/university/year2/sem4/Demo/src/pipeline/04_generation/README.md": {
+    "mtime": 1781386354.16494,
+    "ast_hash": "83239c13b183ccefc6b642457a100c71",
+    "semantic_hash": "83239c13b183ccefc6b642457a100c71"
   },
-  "/Users/simon/Desktop/university/year2/sem4/Demo/dashboard/src/components/VectorDBBuilder.jsx": {
-    "mtime": 1780086666.813974,
-    "ast_hash": "9738c67df397c3a6040908209b689b52",
-    "semantic_hash": "9738c67df397c3a6040908209b689b52"
-  },
-  "/Users/simon/Desktop/university/year2/sem4/Demo/dashboard/src/config/llmModels.js": {
-    "mtime": 1780086757.2346566,
-    "ast_hash": "71ead24099a4aec8aa4a5dd558cf9f7a",
-    "semantic_hash": "71ead24099a4aec8aa4a5dd558cf9f7a"
-  },
-  "/Users/simon/Desktop/university/year2/sem4/Demo/dashboard/src/constants/locations.js": {
-    "mtime": 1781300356.696374,
-    "ast_hash": "f08d40535d8fb92666c3652ecc6a499c",
-    "semantic_hash": "f08d40535d8fb92666c3652ecc6a499c"
-  },
-  "/Users/simon/Desktop/university/year2/sem4/Demo/dashboard/src/context/VectorDBContext.jsx": {
-    "mtime": 1779905677.8203607,
-    "ast_hash": "292a7678f80df01754ddfe543966d500",
-    "semantic_hash": "292a7678f80df01754ddfe543966d500"
-  },
-  "/Users/simon/Desktop/university/year2/sem4/Demo/dashboard/src/hooks/useApiData.js": {
-    "mtime": 1779905677.8205662,
-    "ast_hash": "392d878cecbd5072976b021ac5b37336",
-    "semantic_hash": "392d878cecbd5072976b021ac5b37336"
-  },
-  "/Users/simon/Desktop/university/year2/sem4/Demo/dashboard/src/hooks/useThemeSummary.js": {
-    "mtime": 1781300356.6988168,
-    "ast_hash": "39710586191eaaa302d4a30f613a6235",
-    "semantic_hash": "39710586191eaaa302d4a30f613a6235"
-  },
-  "/Users/simon/Desktop/university/year2/sem4/Demo/dashboard/src/main.jsx": {
-    "mtime": 1779905677.8207202,
-    "ast_hash": "e13723e2574429d9a6d849727e3ff695",
-    "semantic_hash": "e13723e2574429d9a6d849727e3ff695"
-  },
-  "/Users/simon/Desktop/university/year2/sem4/Demo/dashboard/src/pages/NSEDeck.jsx": {
-    "mtime": 1779905677.820809,
-    "ast_hash": "5f08f3e12d7a3cb084b1ca544761bfc3",
-    "semantic_hash": "5f08f3e12d7a3cb084b1ca544761bfc3"
-  },
-  "/Users/simon/Desktop/university/year2/sem4/Demo/dashboard/src/pages/Overview.jsx": {
-    "mtime": 1781300356.699054,
-    "ast_hash": "de7cf0555ac92ad7899ae5976c851ff5",
-    "semantic_hash": "de7cf0555ac92ad7899ae5976c851ff5"
-  },
-  "/Users/simon/Desktop/university/year2/sem4/Demo/dashboard/src/pages/PipelineDemo.jsx": {
-    "mtime": 1779905677.8210819,
-    "ast_hash": "de06d9ef28715920c76d9383f00fdfdd",
-    "semantic_hash": "de06d9ef28715920c76d9383f00fdfdd"
-  },
-  "/Users/simon/Desktop/university/year2/sem4/Demo/dashboard/src/pages/Presentatie.jsx": {
-    "mtime": 1779905677.821162,
-    "ast_hash": "bad327db81fd04ce8699c0eb5b10b95b",
-    "semantic_hash": "bad327db81fd04ce8699c0eb5b10b95b"
-  },
-  "/Users/simon/Desktop/university/year2/sem4/Demo/dashboard/src/pages/ThemeDetail.jsx": {
-    "mtime": 1779905677.82128,
-    "ast_hash": "2d764d4b8cdd3117ecd4bd427a9c7654",
-    "semantic_hash": "2d764d4b8cdd3117ecd4bd427a9c7654"
-  },
-  "/Users/simon/Desktop/university/year2/sem4/Demo/dashboard/src/pages/Vergelijken.jsx": {
-    "mtime": 1779905677.8213584,
-    "ast_hash": "9dd8a0a50bdf74260853bbff74699750",
-    "semantic_hash": "9dd8a0a50bdf74260853bbff74699750"
-  },
-  "/Users/simon/Desktop/university/year2/sem4/Demo/dashboard/src/pages/ViewMorePage.jsx": {
-    "mtime": 1781300356.6992886,
-    "ast_hash": "e7de4f9d1edeb51b59b684442c8232a6",
-    "semantic_hash": "e7de4f9d1edeb51b59b684442c8232a6"
-  },
-  "/Users/simon/Desktop/university/year2/sem4/Demo/dashboard/src/services/api.js": {
-    "mtime": 1779905677.8216112,
-    "ast_hash": "e9f22b018ff66b38946712c18d0b2700",
-    "semantic_hash": "e9f22b018ff66b38946712c18d0b2700"
-  },
-  "/Users/simon/Desktop/university/year2/sem4/Demo/dashboard/tailwind.config.js": {
-    "mtime": 1779905677.8216672,
-    "ast_hash": "13af945ebc005e9ce41c91c53d086bb7",
-    "semantic_hash": "13af945ebc005e9ce41c91c53d086bb7"
-  },
-  "/Users/simon/Desktop/university/year2/sem4/Demo/dashboard/vite.config.js": {
-    "mtime": 1779905677.821721,
-    "ast_hash": "63a499609093fd8f6337601fdacbd161",
-    "semantic_hash": "63a499609093fd8f6337601fdacbd161"
+  "/Users/simon/Desktop/university/year2/sem4/Demo/src/utils/README.md": {
+    "mtime": 1781385091.1322546,
+    "ast_hash": "e221212817907217f2af32972c691a48",
+    "semantic_hash": "e221212817907217f2af32972c691a48"
   }
 }

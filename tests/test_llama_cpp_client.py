@@ -6,8 +6,10 @@ from unittest import mock
 
 
 llm_clients = import_module("src.pipeline.04_generation.llm_clients")
+llama_cpp_models = import_module("src.pipeline.04_generation.llama_cpp_models")
 
-E2B_MODEL = "unsloth/gemma-4-E2B-it-GGUF:UD-Q4_K_XL"
+E2B_MODEL = "unsloth/gemma-4-E2B-it-qat-GGUF:UD-Q4_K_XL"
+LEGACY_E2B_MODEL = "unsloth/gemma-4-E2B-it-GGUF:UD-Q4_K_XL"
 E4B_MODEL = "unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL"
 
 
@@ -23,6 +25,28 @@ class LlamaCppClientTests(unittest.TestCase):
         self.assertEqual(
             self.client._model_ids({"models": [{"model": E2B_MODEL}]}),
             {E2B_MODEL},
+        )
+
+    def test_legacy_e2b_id_resolves_to_qat_model(self) -> None:
+        self.assertEqual(
+            llama_cpp_models.resolve_llama_cpp_model(LEGACY_E2B_MODEL).id,
+            E2B_MODEL,
+        )
+
+    def test_e2b_server_command_enables_mtp(self) -> None:
+        command = llama_cpp_models.resolve_llama_cpp_model(E2B_MODEL).server_command(
+            "llama-server"
+        )
+
+        self.assertEqual(
+            command[-4:],
+            ["--spec-type", "draft-mtp", "--spec-draft-n-max", "2"],
+        )
+        self.assertNotIn(
+            "--spec-type",
+            llama_cpp_models.resolve_llama_cpp_model(E4B_MODEL).server_command(
+                "llama-server"
+            ),
         )
 
     def test_matching_single_server_model_is_reused(self) -> None:

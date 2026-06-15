@@ -49,9 +49,17 @@ def vector_checkpoint_status_payload() -> dict:
 
 
 def pipeline_status_payload() -> dict:
-    vector_db_exists = VECTOR_DB_PATH.exists() and any(os.scandir(VECTOR_DB_PATH))
+    vector_db_storage_exists = VECTOR_DB_PATH.exists() and any(
+        os.scandir(VECTOR_DB_PATH)
+    )
+    vector_db_ready = (
+        vector_db_storage_exists
+        and _builder.vector_db_is_ready(str(VECTOR_DB_PATH))
+    )
     return {
         "status": "success",
         "anonymized_exists": ANONYMIZED_CSV_PATH.exists(),
-        "vector_db_exists": vector_db_exists,
+        "vector_db_exists": vector_db_ready,
+        "vector_db_storage_exists": vector_db_storage_exists,
+        "vector_db_ready": vector_db_ready,
     }

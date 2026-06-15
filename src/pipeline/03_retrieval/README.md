@@ -1,6 +1,6 @@
 # Retrieval Pipeline (03_retrieval)
 
-The `03_retrieval` module handles the process of extracting the most relevant survey responses from the vector database given a query, and scoring them for maximum accuracy. This module utilizes a two-stage retrieval technique: an initial **Dense Retrieval** using embedding similarities, followed by a **Reranking** stage using a Cross-Encoder model.
+The `03_retrieval` module has two deliberately separate paths. Predefined dashboard themes read persisted assignments from Chroma metadata without loading ML models. Arbitrary queries and generated subthemes use dense retrieval followed by optional cross-encoder reranking.
 
 ## Architecture & Workflow
 
@@ -19,6 +19,14 @@ Because standard dense embeddings (especially Bi-Encoders) might miss subtle sem
 - It outputs an independent relevance score.
 - The retrieved results are then sorted based on this high-fidelity score (`reranker_score`), vastly improving the relevance of what is passed onto the `04_generation` step.
 
+### 4. Persisted Dashboard Theme Evidence
+`collect_theme_documents()` queries scalar classification metadata written during vector construction:
+- Frequency counts use only `theme_primary`, so every response is counted once.
+- Definite evidence is a non-ambiguous primary assignment.
+- Ambiguous evidence may be returned for each persisted candidate theme.
+- Existing dashboard metadata filters are combined with primary/candidate filters in Chroma.
+- Missing, building, or configuration-incompatible classification data fails with a fresh-build requirement instead of loading models at read time.
+
 ---
 
 ## Core Components
@@ -28,6 +36,8 @@ The brain of the retrieval pipeline. This script exports the main APIs consumed 
 - **Connection & Model Management**: Efficiently loads embedding and cross-encoder models with LRU caching to prevent Memory Overflows. 
 - **Filters Engine (`build_where_filter`)**: Maps complex front-end filter payloads into valid Chroma `$and` / `$or` queries.
 - **`rerank_documents()`**: Fuses the dense results with the cross-encoder predictions to sort documents. It gracefully degrades if the reranker is disabled, defaulting to cosine similarity (`1 - distance`).
+- **`collect_theme_documents()`**: Returns definite and ambiguous persisted evidence for predefined themes without embedding or reranking.
+- **`theme_distribution()`**: Counts persisted primary assignments only.
 - **Options Discovery (`filter_options_payload`)**: Reads the database metadata to dynamically generate dropdown filter categories available on the frontend dashboard. 
 
 ### `reranker_models.py`
@@ -54,4 +64,3 @@ The retrieval environment can be heavily controlled via system variables (mostly
 | `RERANKER_MODEL` | Hugging Face ID of the Cross-Encoder model. | `zeroentropy/zerank-2-reranker` |
 | `HF_HUB_OFFLINE` | Set to 1 to freeze downloads from HF hub and utilize local cache only. | `0` |
 | `RERANKER_TRUST_REMOTE_CODE` | Enables custom execution for complex models dynamically. | `false` |
-

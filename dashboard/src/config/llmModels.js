@@ -2,11 +2,11 @@ export const LLM_PROVIDER = 'llama.cpp';
 
 export const AVAILABLE_LLM_MODELS = [
   {
-    id: 'unsloth/gemma-4-E2B-it-GGUF:UD-Q4_K_XL',
-    name: 'Gemma 4 E2B',
+    id: 'unsloth/gemma-4-E2B-it-qat-GGUF:UD-Q4_K_XL',
+    name: 'Gemma 4 E2B QAT',
     provider: 'Unsloth GGUF',
-    description: 'Smallest Unsloth dynamic Q4 option for quick local insight generation.',
-    size: '3.18 GB',
+    description: 'Smallest Unsloth QAT dynamic Q4 option for quick local insight generation.',
+    size: '2.62 GB',
     speed: 'Very fast',
     recommended: false
   },
