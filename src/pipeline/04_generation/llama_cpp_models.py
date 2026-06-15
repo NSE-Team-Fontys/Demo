@@ -1,7 +1,6 @@
+import os
 from dataclasses import dataclass
 from typing import Any
-
-import os
 
 from src.config.settings import LLAMA_CPP_N_GPU_LAYERS
 
@@ -24,7 +23,9 @@ class LlamaCppGenerationSettings:
     def server_args(self) -> list[str]:
         args: list[str] = []
         env_ctx = os.environ.get("LLAMA_ARG_CTX_SIZE")
-        ctx = int(env_ctx) if env_ctx and env_ctx.strip().isdigit() else self.context_size
+        ctx = (
+            int(env_ctx) if env_ctx and env_ctx.strip().isdigit() else self.context_size
+        )
         if ctx > 0:
             args.extend(["-c", str(ctx)])
         if LLAMA_CPP_N_GPU_LAYERS in {"auto", "all"}:
@@ -135,7 +136,7 @@ GEMMA_LLAMA_CPP_MODELS = (
             "2",
         ),
         generation=LlamaCppGenerationSettings(
-            context_size=128000,
+            context_size=32000,
             max_tokens=8192,
             temperature=1.0,
             top_p=0.95,
