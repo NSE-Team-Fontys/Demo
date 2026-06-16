@@ -622,6 +622,8 @@ def filtered_themes_overview(cache: dict, filters: dict) -> dict:
     if total_docs == 0:
         for theme in new_cache:
             new_cache[theme]["frequency"] = 0
+            new_cache[theme]["vector_relevant_count"] = 0
+            new_cache[theme]["document_count"] = 0
         _theme_overview_cache[cache_key] = new_cache
         return new_cache
 
@@ -640,3 +642,12 @@ def filtered_themes_overview(cache: dict, filters: dict) -> dict:
 
     _theme_overview_cache[cache_key] = new_cache
     return new_cache
+
+
+def count_filtered_documents(filters: dict | None = None) -> int:
+    collection = get_collection()
+    where_clause = build_where_filter(filters or {})
+    if not where_clause:
+        return collection.count()
+    filtered_docs = collection.get(where=where_clause)
+    return len(filtered_docs["ids"]) if filtered_docs and filtered_docs["ids"] else 0

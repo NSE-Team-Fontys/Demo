@@ -1,11 +1,20 @@
 import { useMemo, useState, useEffect } from 'react'
-import { Link, NavLink, useLocation, useParams, useNavigate } from 'react-router-dom'
-import { getFilteredThemes } from '../data/themes'
+import { Link, NavLink, useLocation, useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useThemeSummary } from '../hooks/useThemeSummary'
 import FilterDropdown from '../components/FilterDropdown'
-import { CITY_TO_BRIN, LOCATION_OPTIONS } from '../constants/locations'
+import { LOCATION_OPTIONS } from '../constants/locations'
 import { getThemeColor } from '../constants/themeColors'
+import { buildRealTheme, THEME_NAME_BY_ID } from '../constants/realThemes'
 import { motion } from 'framer-motion'
+import {
+  filtersFromSearchParams,
+  filtersToApiParams,
+  filtersToSearchParams,
+  hasActiveFilters as filtersHaveActiveValues,
+  normalizeFilters,
+  searchFromFilters,
+  stableFilterKey,
+} from '../utils/filters'
 
 function normaliseComment(comment) {
   return String(comment || '').replace(/^"+|"+$/g, '')
@@ -633,21 +642,19 @@ export default function ViewMorePage() {
   const { id, subthemeName } = useParams()
   const location = useLocation()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
 
   const decodedSubtheme = useMemo(() => {
     return subthemeName ? decodeURIComponent(subthemeName) : null
   }, [subthemeName])
 
-  const [filters, setFilters] = useState(() => {
-    const sf = location.state?.filters
-    return {
-      jaar: sf?.jaar ?? 'All',
-      locatie: sf?.locatie ?? 'All',
-      opleiding: sf?.opleiding ?? 'All',
-      studievorm: sf?.studievorm ?? 'All',
-      taal: sf?.taal ?? 'All',
+  const filters = useMemo(() => {
+    const urlFilters = filtersFromSearchParams(searchParams)
+    if (!filtersHaveActiveValues(urlFilters) && location.state?.filters) {
+      return normalizeFilters(location.state.filters)
     }
-  })
+    return urlFilters
+  }, [searchParams, location.state])
 
   const [filterOptions, setFilterOptions] = useState({
     academic_years: [],
@@ -668,28 +675,67 @@ export default function ViewMorePage() {
   const [filteredPercentage, setFilteredPercentage] = useState(null)
 
   function setFilter(key, value) {
-    setFilters((prev) => ({ ...prev, [key]: value }))
+    const nextFilters = normalizeFilters({ ...filters, [key]: value })
+    setSearchParams(filtersToSearchParams(nextFilters))
   }
 
   function clearFilters() {
-    setFilters({ jaar: 'All', locatie: 'All', opleiding: 'All', studievorm: 'All', taal: 'All' })
+    setSearchParams(new URLSearchParams())
   }
 
-  const hasActiveFilters = Object.values(filters).some((v) => v !== 'All')
+  const hasActiveFilters = filtersHaveActiveValues(filters)
 
-  const fallbackTheme = useMemo(() => {
-    const themes = getFilteredThemes({
-      jaar: 'All',
-      locatie: 'All',
-      opleiding: 'All',
-      studievorm: 'All',
-      cohort: 'All',
-    })
-    return themes.find((t) => t.id === id)
-  }, [id])
+  const routeTheme = location.state?.theme?.id === id ? location.state.theme : null
+  const [fetchedTheme, setFetchedTheme] = useState(null)
+  const [loadingTheme, setLoadingTheme] = useState(!routeTheme)
 
-  const theme = location.state?.theme?.id === id ? location.state.theme : fallbackTheme
+  useEffect(() => {
+    if (routeTheme) {
+      setFetchedTheme(null)
+      setLoadingTheme(false)
+      return
+    }
+
+    const themeName = THEME_NAME_BY_ID[id]
+    if (!themeName) {
+      setFetchedTheme(null)
+      setLoadingTheme(false)
+      return
+    }
+
+    let isMounted = true
+    const apiFilters = filtersToApiParams(filters)
+    const apiFilterKey = stableFilterKey(apiFilters)
+    const params = new URLSearchParams(apiFilters)
+
+    setLoadingTheme(true)
+    fetch(`http://localhost:5001/api/themes-overview?${params}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (!isMounted) return
+        const themes = data?.themes ?? data ?? {}
+        const insight = themes[themeName]
+        if (!insight) {
+          setFetchedTheme(null)
+          return
+        }
+        const insightFilterKey = stableFilterKey(insight?.filters_applied ?? {})
+        const includeInsightDetails = apiFilterKey === '{}' || insightFilterKey === apiFilterKey
+        setFetchedTheme(buildRealTheme(themeName, insight, { includeInsightDetails }))
+      })
+      .catch(() => {
+        if (isMounted) setFetchedTheme(null)
+      })
+      .finally(() => {
+        if (isMounted) setLoadingTheme(false)
+      })
+
+    return () => { isMounted = false }
+  }, [id, routeTheme, filters])
+
+  const theme = routeTheme || fetchedTheme
   const colors = theme ? getThemeColor(theme.id) : getThemeColor('content_org')
+  const filterSearch = searchFromFilters(filters)
   const { liveData, loadingLive } = useThemeSummary(theme, filters)
 
   const [subthemeLiveData, setSubthemeLiveData] = useState(null)
@@ -703,12 +749,7 @@ export default function ViewMorePage() {
     let isMounted = true
     setLoadingSubtheme(true)
     setSubthemeLiveData(null)
-    const apiFilters = {}
-    if (filters.jaar !== 'All') apiFilters.academic_year = filters.jaar
-    if (filters.locatie !== 'All') apiFilters.location = CITY_TO_BRIN[filters.locatie] || filters.locatie
-    if (filters.opleiding !== 'All') apiFilters.programme = filters.opleiding
-    if (filters.studievorm !== 'All') apiFilters.study_mode = filters.studievorm
-    if (filters.taal !== 'All') apiFilters.language = filters.taal
+    const apiFilters = filtersToApiParams(filters)
     fetch('http://localhost:5001/api/theme-summary', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -735,23 +776,18 @@ export default function ViewMorePage() {
 
   useEffect(() => {
     if (!theme) return
-    const params = new URLSearchParams()
-    if (filters.jaar !== 'All') params.append('academic_year', filters.jaar)
-    if (filters.locatie !== 'All')
-      params.append('location', CITY_TO_BRIN[filters.locatie] || filters.locatie)
-    if (filters.opleiding !== 'All') params.append('programme', filters.opleiding)
-    if (filters.studievorm !== 'All') params.append('study_mode', filters.studievorm)
-    if (filters.taal !== 'All') params.append('language', filters.taal)
+    const params = new URLSearchParams(filtersToApiParams(filters))
     fetch(`http://localhost:5001/api/themes-overview?${params}`)
       .then((r) => r.json())
       .then((data) => {
-        const d = data[theme.name]
+        const themes = data?.themes ?? data ?? {}
+        const d = themes[theme.name]
         setFilteredPercentage(d && typeof d.frequency === 'number' ? d.frequency : null)
       })
       .catch(() => setFilteredPercentage(null))
   }, [filters, theme?.name])
 
-  // FIX: Safe error-state handling, if liveData fails/offline, fall back to mock theme!
+  // If live generation fails/offline, use the real payload already loaded for this theme.
   const hasLlmError = !liveData || liveData.error || liveData.status === 'error'
   const effectiveData = hasLlmError ? (theme?.cachedInsight || theme) : liveData
 
@@ -816,10 +852,18 @@ export default function ViewMorePage() {
     [activeData?.quotes],
   )
 
+  if (loadingTheme) {
+    return (
+      <main className="max-w-[1280px] mx-auto px-4 py-6 md:px-8 md:py-10">
+        <p className="text-on-surface-variant">Loading real theme data...</p>
+      </main>
+    )
+  }
+
   if (!theme) {
     return (
       <main className="max-w-[1280px] mx-auto px-4 py-6 md:px-8 md:py-10">
-        <p className="text-on-surface-variant">Theme not found.</p>
+        <p className="text-on-surface-variant">Theme not available from real data.</p>
         <NavLink to="/" className="text-sm text-primary font-semibold mt-4 inline-block">
           Back to overview
         </NavLink>
@@ -837,7 +881,10 @@ export default function ViewMorePage() {
           transition={{ duration: 0.4 }}
           className="flex flex-wrap items-center gap-1 text-sm font-semibold text-on-surface-variant/70 mb-6"
         >
-          <Link to="/" className="hover:text-on-surface transition-colors flex items-center gap-1 no-underline text-on-surface-variant/70">
+          <Link
+            to={{ pathname: '/', search: filterSearch }}
+            className="hover:text-on-surface transition-colors flex items-center gap-1 no-underline text-on-surface-variant/70"
+          >
             <span className="material-symbols-outlined text-base">home</span>
             Overview
           </Link>
@@ -845,7 +892,7 @@ export default function ViewMorePage() {
           {decodedSubtheme ? (
             <>
               <button
-                onClick={() => navigate(`/thema/${theme.id}`, { state: { theme, filters } })}
+                onClick={() => navigate({ pathname: `/thema/${theme.id}`, search: filterSearch }, { state: { theme, filters } })}
                 className="hover:text-on-surface transition-colors focus:outline-none bg-transparent border-none p-0 cursor-pointer font-semibold text-on-surface-variant/70"
               >
                 {theme.name}
@@ -966,7 +1013,7 @@ export default function ViewMorePage() {
                   )}
                   {activeData.isSubtheme && (
                     <button
-                      onClick={() => navigate(`/thema/${theme.id}`, { state: { theme, filters } })}
+                      onClick={() => navigate({ pathname: `/thema/${theme.id}`, search: filterSearch }, { state: { theme, filters } })}
                       className="mt-3 inline-flex items-center gap-1 text-xs text-white/80 hover:text-white bg-white/10 hover:bg-white/20 px-2.5 py-1 rounded-lg transition-colors font-medium border-none cursor-pointer"
                     >
                       <span className="material-symbols-outlined text-[14px]">arrow_upward</span>
@@ -1074,7 +1121,13 @@ export default function ViewMorePage() {
               {!activeData.isSubtheme ? (
                 <SubthemesList
                   rows={activeData.subtheme_mentions}
-                  onSelectSubtheme={(subName) => navigate(`/thema/${theme.id}/subtheme/${encodeURIComponent(subName)}`, { state: { theme, filters } })}
+                  onSelectSubtheme={(subName) => navigate(
+                    {
+                      pathname: `/thema/${theme.id}/subtheme/${encodeURIComponent(subName)}`,
+                      search: filterSearch,
+                    },
+                    { state: { theme, filters } },
+                  )}
                   activeSubtheme={decodedSubtheme}
                   accentColor={colors.accent}
                   gradient={colors.gradient}
@@ -1095,7 +1148,13 @@ export default function ViewMorePage() {
                       {theme.subtheme_mentions?.filter(sm => sm.subtheme !== decodedSubtheme).map((sm) => (
                         <button
                           key={sm.subtheme}
-                          onClick={() => navigate(`/thema/${theme.id}/subtheme/${encodeURIComponent(sm.subtheme)}`, { state: { theme, filters } })}
+                          onClick={() => navigate(
+                            {
+                              pathname: `/thema/${theme.id}/subtheme/${encodeURIComponent(sm.subtheme)}`,
+                              search: filterSearch,
+                            },
+                            { state: { theme, filters } },
+                          )}
                           className="w-full text-left p-3.5 rounded-xl border border-outline-variant/10 bg-surface-container-low hover:bg-surface-container-high text-sm font-bold text-on-surface transition-all duration-200 hover:scale-[1.01] cursor-pointer"
                         >
                           <div className="flex justify-between items-center w-full gap-2">
@@ -1129,7 +1188,7 @@ export default function ViewMorePage() {
                       ))}
                     </div>
                     <button
-                      onClick={() => navigate(`/thema/${theme.id}`, { state: { theme, filters } })}
+                      onClick={() => navigate({ pathname: `/thema/${theme.id}`, search: filterSearch }, { state: { theme, filters } })}
                       className="w-full mt-4 flex items-center justify-center gap-2 rounded-xl border text-xs font-bold py-2.5 transition-colors cursor-pointer hover:opacity-80"
                       style={{ borderColor: colors.accent, color: colors.accent }}
                     >
@@ -1141,7 +1200,7 @@ export default function ViewMorePage() {
               )}
 
               <Link
-                to="/"
+                to={{ pathname: '/', search: filterSearch }}
                 className="inline-flex items-center justify-center gap-2 w-full rounded-xl text-white text-sm font-bold px-4 py-3 transition-all shadow-sm no-underline hover:opacity-90"
                 style={{ background: colors.gradient }}
               >

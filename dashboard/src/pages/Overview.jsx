@@ -1,26 +1,25 @@
 import { useState, useMemo, useEffect } from 'react'
-import { getFilteredThemes, FILTER_OPTIONS } from '../data/themes'
-import { mergeWithLiveData } from '../services/api'
-import { useApiData } from '../hooks/useApiData'
+import { useSearchParams } from 'react-router-dom'
 import ThemeCard from '../components/ThemeCard'
 import FilterDropdown from '../components/FilterDropdown'
 import HeroBanner from '../components/HeroBanner'
 import SubthemeWordCloud from '../components/SubthemeWordCloud'
 import { LayoutGroup, motion } from 'framer-motion'
-import { useVectorDB } from '../context/VectorDBContext'
-import { CITY_TO_BRIN, LOCATION_OPTIONS } from '../constants/locations'
+import { LOCATION_OPTIONS } from '../constants/locations'
+import { buildRealTheme } from '../constants/realThemes'
+import {
+  filtersFromSearchParams,
+  filtersToApiParams,
+  filtersToSearchParams,
+  hasActiveFilters as filtersHaveActiveValues,
+  normalizeFilters,
+  stableFilterKey,
+} from '../utils/filters'
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function Overview() {
-  const [filters, setFilters] = useState({
-    jaar: 'All',
-    locatie: 'All',
-    opleiding: 'All',
-    studievorm: 'All',
-    cohort: 'All',
-    sector: 'All',
-    taal: 'All',
-  })
+  const [searchParams, setSearchParams] = useSearchParams()
+  const filters = useMemo(() => filtersFromSearchParams(searchParams), [searchParams])
 
   // Fetch filter options on mount
   const [filterOptions, setFilterOptions] = useState({
@@ -42,53 +41,60 @@ export default function Overview() {
       .catch(e => console.error(e));
   }, []);
 
-  // 1. Mock / enriched mock data (always available)
-  const mockThemes = useMemo(() => getFilteredThemes(filters), [filters])
-
-  // 2. Live API data (may be null when offline)
-  const { themes: liveThemes, isLive, loading, refresh } = useApiData(filters)
-
-  // 3. Merge: live data overlays mock where theme IDs match
-  const baseThemes = useMemo(
-    () => mergeWithLiveData(mockThemes, liveThemes),
-    [mockThemes, liveThemes],
-  )
-  
   const [dynamicThemesData, setDynamicThemesData] = useState({})
+  const [overviewMeta, setOverviewMeta] = useState(null)
+  const [loadingThemes, setLoadingThemes] = useState(true)
   
-  // Fetch dynamic theme data and optionally pass filters in the future
+  // Fetch dynamic theme data using the same canonical filter mapping as detail pages.
   useEffect(() => {
-    const params = new URLSearchParams();
-    if (filters.jaar !== 'All') params.append('academic_year', filters.jaar);
-    if (filters.locatie !== 'All') params.append('location', CITY_TO_BRIN[filters.locatie] || filters.locatie);
-    if (filters.opleiding !== 'All') params.append('programme', filters.opleiding);
-    if (filters.studievorm !== 'All') params.append('study_mode', filters.studievorm);
-    if (filters.cohort !== 'All') params.append('cohort', filters.cohort);
-    if (filters.taal !== 'All') params.append('language', filters.taal);
+    const params = new URLSearchParams(filtersToApiParams(filters))
 
+    setLoadingThemes(true)
     fetch(`http://localhost:5001/api/themes-overview?${params}`)
       .then(r => r.json())
-      .then(data => setDynamicThemesData(data))
-      .catch(e => console.error(e))
+      .then(data => {
+        setDynamicThemesData(data?.themes ?? data ?? {})
+        setOverviewMeta({
+          status: data?.status ?? null,
+          totalFilteredDocuments: data?.total_filtered_documents ?? null,
+        })
+      })
+      .catch(e => {
+        console.error(e)
+        setDynamicThemesData({})
+        setOverviewMeta(null)
+      })
+      .finally(() => setLoadingThemes(false))
   }, [filters])
+
+  const apiFilters = useMemo(() => filtersToApiParams(filters), [filters])
+  const apiFilterKey = useMemo(() => stableFilterKey(apiFilters), [apiFilters])
   
   const themes = useMemo(() => {
-    return baseThemes.map(t => {
-      const dynamic = dynamicThemesData[t.name]
-      if (dynamic) {
-        return {
-          ...t,
-          percentage: typeof dynamic.frequency === 'number' ? dynamic.frequency : t.percentage,
-          responseCount: typeof dynamic.vector_relevant_count === 'number' ? dynamic.vector_relevant_count : null,
-          aiSummary: dynamic.summary || t.aiSummary,
-          subthemes: dynamic.subthemes?.length > 0 ? dynamic.subthemes : t.subthemes,
-          quotes: dynamic.quotes?.length > 0 ? dynamic.quotes : t.quotes,
-          cachedInsight: { ...dynamic, status: 'success' },
-        }
-      }
-      return t
+    return Object.entries(dynamicThemesData)
+      .filter(([themeName]) => themeName !== 'No Meaningful Response')
+      .map(([themeName, insight]) => {
+        const insightFilterKey = stableFilterKey(insight?.filters_applied ?? {})
+        const includeInsightDetails = apiFilterKey === '{}' || insightFilterKey === apiFilterKey
+        return buildRealTheme(themeName, insight, { includeInsightDetails })
+      })
+  }, [dynamicThemesData, apiFilterKey])
+
+  const hasFilteredSubthemeData = useMemo(() => {
+    return themes.some((theme) => {
+      const mentions = theme.subtheme_mentions || theme.cachedInsight?.subtheme_mentions || []
+      return mentions.some((mention) => (mention.mentions || 0) > 0)
     })
-  }, [baseThemes, dynamicThemesData])
+  }, [themes])
+
+  const hasFilteredThemeData = useMemo(() => {
+    return themes.some((theme) => {
+      const count = theme.responseCount ?? theme.percentage ?? 0
+      return count > 0
+    })
+  }, [themes])
+
+  const hasThemePayload = themes.length > 0
 
   // Sort themes by percentage (which is the actual count of comments)
   const sortedThemes = useMemo(() => {
@@ -98,22 +104,24 @@ export default function Overview() {
 
 
   function setFilter(key, value) {
-    setFilters((prev) => ({ ...prev, [key]: value }))
+    const nextFilters = normalizeFilters({ ...filters, [key]: value })
+    setSearchParams(filtersToSearchParams(nextFilters))
   }
 
   function clearFilters() {
-    setFilters({ jaar: 'All', locatie: 'All', opleiding: 'All', studievorm: 'All', cohort: 'All', taal: 'All' })
+    setSearchParams(new URLSearchParams())
   }
 
-  const hasActiveFilters = Object.values(filters).some((v) => v !== 'All')
-
-  const { vectorData, loading: vectorLoading, error, lastUpdated, refresh: vectorRefresh } = useVectorDB();
+  const hasActiveFilters = filtersHaveActiveValues(filters)
+  const hasNoMatchingResponses = hasActiveFilters && overviewMeta?.totalFilteredDocuments === 0
+  const showNoSubthemeData = !hasNoMatchingResponses && hasActiveFilters && !hasFilteredSubthemeData
+  const displayThemes = hasNoMatchingResponses ? [] : themes
 
   return (
     <main className="max-w-[1280px] mx-auto px-4 py-6 md:px-8 md:py-8 flex flex-col gap-6">
 
       {/* ── Hero Stats Banner ── */}
-      <HeroBanner themes={themes} isLive={isLive} loading={loading} />
+      <HeroBanner themes={displayThemes} isLive={hasThemePayload} loading={loadingThemes} />
 
       {/* ── Filters bar ── */}
       <motion.div
@@ -194,70 +202,85 @@ export default function Overview() {
             </div>
           </div>
 
-          <LayoutGroup>
-            <div className="flex flex-col gap-6">
-              {/* Top 3 themes (Large cards side-by-side) */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {sortedThemes.slice(0, 3).map((theme, idx) => (
-                  <ThemeCard
-                    key={theme.id}
-                    theme={theme}
-                    size="large"
-                    filters={filters}
-                    index={idx}
-                  />
-                ))}
-              </div>
-
-              {/* Remaining themes (Small cards below) */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {sortedThemes.slice(3).map((theme, idx) => (
-                  <ThemeCard
-                    key={theme.id}
-                    theme={theme}
-                    size="small"
-                    filters={filters}
-                    index={idx + 3}
-                  />
-                ))}
-              </div>
+          {loadingThemes ? (
+            <div className="bg-surface-container-lowest rounded-2xl p-8 text-center shadow-ambient border border-outline-variant/10">
+              <span className="material-symbols-outlined text-4xl text-outline mb-3 block animate-pulse">
+                hourglass_empty
+              </span>
+              <h3 className="text-lg font-bold font-headline text-primary">
+                Loading real theme data
+              </h3>
             </div>
-          </LayoutGroup>
+          ) : hasNoMatchingResponses ? (
+            <div className="bg-surface-container-lowest rounded-2xl p-8 text-center shadow-ambient border border-outline-variant/10">
+              <span className="material-symbols-outlined text-4xl text-outline mb-3 block">
+                filter_alt_off
+              </span>
+              <h3 className="text-lg font-bold font-headline text-primary">
+                No responses match this filter combination
+              </h3>
+              <p className="text-sm text-on-surface-variant mt-2">
+                Try removing one filter or clear everything to return to the full dashboard.
+              </p>
+              <button
+                onClick={clearFilters}
+                className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-white hover:bg-primary/90 transition-colors"
+              >
+                <span className="material-symbols-outlined text-base">refresh</span>
+                Clear filters
+              </button>
+            </div>
+          ) : !hasThemePayload || !hasFilteredThemeData ? (
+            <div className="bg-surface-container-lowest rounded-2xl p-8 text-center shadow-ambient border border-outline-variant/10">
+              <span className="material-symbols-outlined text-4xl text-outline mb-3 block">
+                database_off
+              </span>
+              <h3 className="text-lg font-bold font-headline text-primary">
+                No real theme insights available
+              </h3>
+              <p className="text-sm text-on-surface-variant mt-2">
+                Run insight generation for this filter set to populate the dashboard.
+              </p>
+            </div>
+          ) : (
+            <LayoutGroup>
+              <div className="flex flex-col gap-6">
+                {/* Top 3 themes (Large cards side-by-side) */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {sortedThemes.slice(0, 3).map((theme, idx) => (
+                    <ThemeCard
+                      key={theme.id}
+                      theme={theme}
+                      size="large"
+                      filters={filters}
+                      index={idx}
+                    />
+                  ))}
+                </div>
+
+                {/* Remaining themes (Small cards below) */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {sortedThemes.slice(3).map((theme, idx) => (
+                    <ThemeCard
+                      key={theme.id}
+                      theme={theme}
+                      size="small"
+                      filters={filters}
+                      index={idx + 3}
+                    />
+                  ))}
+                </div>
+              </div>
+            </LayoutGroup>
+          )}
         </section>
 
         {/* Sub-theme Word Cloud */}
-        <SubthemeWordCloud themes={themes} />
-
-        {/* Live response counts (only shown when API is online) */}
-        {isLive && liveThemes && liveThemes.length > 0 && (
-          <section className="bg-surface-container-lowest rounded-2xl p-5 shadow-ambient border border-outline-variant/10">
-            <div className="flex items-center gap-2 mb-4">
-              <span
-                className="material-symbols-outlined text-base text-tertiary-container"
-                style={{ fontVariationSettings: "'FILL' 1" }}
-              >
-                hub
-              </span>
-              <h2 className="text-xs font-bold uppercase tracking-wider text-tertiary-container">
-                Live Pipeline — Response Counts
-              </h2>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {liveThemes.map((t) => (
-                <div
-                  key={t.theme}
-                  className="bg-surface-container-low rounded-xl px-3 py-2 flex items-center justify-between gap-2"
-                >
-                  <span className="text-xs text-on-surface-variant truncate">{t.theme}</span>
-                  <span className="text-sm font-bold text-primary shrink-0">{t.total}</span>
-                </div>
-              ))}
-            </div>
-            <p className="text-[10px] text-on-surface-variant/40 mt-3">
-              Raw counts from the NSE pipeline database · {new Date().toLocaleTimeString()}
-            </p>
-          </section>
-        )}
+        <SubthemeWordCloud
+          themes={displayThemes}
+          empty={hasNoMatchingResponses}
+          missingFilteredData={showNoSubthemeData}
+        />
       </div>
 
 

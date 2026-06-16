@@ -212,7 +212,7 @@ def get_themes_overview():
         "language",
     ]:
         value = request.args.get(key)
-        if value and value != "All":
+        if value and value not in {"All", "all"}:
             filters[key] = value
     try:
         return jsonify(generation.themes_overview_payload(filters))
@@ -232,6 +232,8 @@ def _filters_from_payload(data: dict) -> dict:
         "programme",
         "study_mode",
         "cohort",
+        "sector",
+        "language",
     ]:
         value = raw_filters.get(key) or data.get(key)
         if value and value not in {"All", "all"}:

@@ -1,25 +1,27 @@
+import { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import NavBar from './components/NavBar';
 import Overview from './pages/Overview';
-import PipelineDemo from './pages/PipelineDemo';
-import ThemeDetail from './pages/ThemeDetail';
-import ViewMorePage from './pages/ViewMorePage';
-import Vergelijken from './pages/Vergelijken';
 import { VectorDBProvider } from './context/VectorDBContext';
+
+const PipelineDemo = lazy(() => import('./pages/PipelineDemo'));
+const ViewMorePage = lazy(() => import('./pages/ViewMorePage'));
+const Vergelijken = lazy(() => import('./pages/Vergelijken'));
 
 function App() {
   return (
     <VectorDBProvider>
       <Router>
         <NavBar />
-        <Routes>
-          <Route path="/" element={<Overview />} />
-          <Route path="/pipeline-demo" element={<PipelineDemo />} />
-          <Route path="/thema/:id" element={<ViewMorePage />} />
-          <Route path="/thema/:id/subtheme/:subthemeName" element={<ViewMorePage />} />
-          <Route path="/theme/:id" element={<ThemeDetail />} />
-          <Route path="/vergelijken" element={<Vergelijken />} />
-        </Routes>
+        <Suspense fallback={<main className="max-w-[1280px] mx-auto px-4 py-6 md:px-8">Loading...</main>}>
+          <Routes>
+            <Route path="/" element={<Overview />} />
+            <Route path="/pipeline-demo" element={<PipelineDemo />} />
+            <Route path="/thema/:id" element={<ViewMorePage />} />
+            <Route path="/thema/:id/subtheme/:subthemeName" element={<ViewMorePage />} />
+            <Route path="/vergelijken" element={<Vergelijken />} />
+          </Routes>
+        </Suspense>
       </Router>
     </VectorDBProvider>
   );

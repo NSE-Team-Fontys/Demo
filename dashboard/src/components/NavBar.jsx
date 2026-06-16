@@ -12,7 +12,10 @@ export default function NavBar() {
     <nav className="sticky top-0 z-50 bg-primary/95 glass-panel border-b border-white/10 shadow-lg">
       <div className="max-w-[1280px] mx-auto px-4 md:px-8 flex items-center justify-between h-16">
         {/* Brand */}
-        <Link to="/" className="flex items-center gap-2.5 group no-underline">
+        <Link
+          to={{ pathname: '/', search: location.search }}
+          className="flex items-center gap-2.5 group no-underline"
+        >
           <span
             className="material-symbols-outlined text-2xl text-white/90 group-hover:text-white transition-colors"
             style={{ fontVariationSettings: "'FILL' 1" }}
@@ -31,7 +34,7 @@ export default function NavBar() {
             return (
               <Link
                 key={link.to}
-                to={link.to}
+                to={link.to === '/' ? { pathname: '/', search: location.search } : link.to}
                 className={`
                   relative flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold
                   transition-all duration-200 no-underline

@@ -127,7 +127,7 @@ export default function HeroBanner({ themes, isLive, loading }) {
               ) : (
                 <span className="flex items-center gap-1.5 text-xs font-medium text-white/50">
                   <span className="w-2 h-2 rounded-full bg-white/30" />
-                  Demo data mode
+                  Real data unavailable
                 </span>
               )}
             </motion.div>

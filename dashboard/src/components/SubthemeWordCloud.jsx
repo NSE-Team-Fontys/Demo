@@ -2,27 +2,28 @@ import { useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { getThemeColor } from '../constants/themeColors'
 
-export default function SubthemeWordCloud({ themes }) {
+export default function SubthemeWordCloud({ themes, empty = false, missingFilteredData = false }) {
   const words = useMemo(() => {
+    if (empty || missingFilteredData) return []
     const list = []
     themes.forEach((t) => {
       const mentions = t.cachedInsight?.subtheme_mentions || t.subtheme_mentions || []
       mentions.forEach((m) => {
+        const count = m.mentions || 0
+        if (count <= 0) return
         list.push({
           text: m.subtheme,
-          count: m.mentions || 0,
+          count,
           themeId: t.id,
           themeName: t.name,
         })
       })
     })
     return list.sort((a, b) => b.count - a.count).slice(0, 20)
-  }, [themes])
+  }, [themes, empty, missingFilteredData])
 
   const maxCount = useMemo(() => Math.max(...words.map((w) => w.count), 1), [words])
   const minCount = useMemo(() => Math.min(...words.map((w) => w.count), 0), [words])
-
-  if (words.length === 0) return null
 
   return (
     <div className="bg-surface-container-lowest rounded-2xl p-5 md:p-6 shadow-ambient border border-outline-variant/10">
@@ -38,6 +39,31 @@ export default function SubthemeWordCloud({ themes }) {
         <span className="material-symbols-outlined text-xl text-outline">cloud</span>
       </div>
 
+      {empty ? (
+        <div className="flex flex-col items-center justify-center gap-2 py-8 min-h-[120px] text-center">
+          <span className="material-symbols-outlined text-3xl text-outline">layers_clear</span>
+          <p className="text-sm font-bold text-primary">No sub-themes match these filters</p>
+          <p className="text-xs text-on-surface-variant/70">
+            The selected combination has no matching survey responses.
+          </p>
+        </div>
+      ) : missingFilteredData ? (
+        <div className="flex flex-col items-center justify-center gap-2 py-8 min-h-[120px] text-center">
+          <span className="material-symbols-outlined text-3xl text-outline">cloud_off</span>
+          <p className="text-sm font-bold text-primary">No filtered sub-theme data generated yet</p>
+          <p className="text-xs text-on-surface-variant/70">
+            Theme counts are filtered, but sub-theme insights have not been generated for this filter set.
+          </p>
+        </div>
+      ) : words.length === 0 ? (
+        <div className="flex flex-col items-center justify-center gap-2 py-8 min-h-[120px] text-center">
+          <span className="material-symbols-outlined text-3xl text-outline">cloud_off</span>
+          <p className="text-sm font-bold text-primary">No sub-theme data available</p>
+          <p className="text-xs text-on-surface-variant/70">
+            Try a broader filter combination or precompute sub-theme insights.
+          </p>
+        </div>
+      ) : (
       <div className="flex flex-wrap items-center justify-center gap-2.5 py-4 min-h-[120px]">
         {words.map((word, idx) => {
           const colors = getThemeColor(word.themeId)
@@ -81,6 +107,7 @@ export default function SubthemeWordCloud({ themes }) {
           )
         })}
       </div>
+      )}
     </div>
   )
 }

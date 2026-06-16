@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { getThemeColor } from '../constants/themeColors'
 
@@ -59,6 +59,7 @@ function MiniDonutChart({ subthemeMentions, accentColor }) {
 }
 
 export default function ThemeCard({ theme, size, filters, index = 0 }) {
+  const location = useLocation()
   const transition = { type: 'spring', stiffness: 300, damping: 30 }
   const subthemeMentions = theme.cachedInsight?.subtheme_mentions || theme.subtheme_mentions || []
   const colors = getThemeColor(theme.id)
@@ -80,7 +81,7 @@ export default function ThemeCard({ theme, size, filters, index = 0 }) {
   if (size === 'large') {
     return (
       <Link
-        to={`/thema/${theme.id}`}
+        to={{ pathname: `/thema/${theme.id}`, search: location.search }}
         state={{ theme, filters }}
         onClick={() => window.scrollTo(0, 0)}
         className="block no-underline font-sans"
@@ -171,7 +172,7 @@ export default function ThemeCard({ theme, size, filters, index = 0 }) {
   // small card
   return (
     <Link
-      to={`/thema/${theme.id}`}
+      to={{ pathname: `/thema/${theme.id}`, search: location.search }}
       state={{ theme, filters }}
       onClick={() => window.scrollTo(0, 0)}
       className="block no-underline font-sans"

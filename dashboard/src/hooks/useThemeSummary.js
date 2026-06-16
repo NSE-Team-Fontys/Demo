@@ -1,22 +1,11 @@
 import { useEffect, useState } from 'react'
-import { CITY_TO_BRIN } from '../constants/locations'
-
-function buildApiFilters(filters = {}) {
-  const map = {
-    academic_year: filters.jaar,
-    location: filters.locatie ? CITY_TO_BRIN[filters.locatie] || filters.locatie : undefined,
-    programme: filters.opleiding,
-    study_mode: filters.studievorm,
-    language: filters.taal,
-  }
-  return Object.fromEntries(Object.entries(map).filter(([, v]) => v && v !== 'All'))
-}
+import { filtersToApiParams } from '../utils/filters'
 
 export function useThemeSummary(theme, filters = {}) {
   const [liveData, setLiveData] = useState(null)
   const [loadingLive, setLoadingLive] = useState(false)
 
-  const filterKey = JSON.stringify(buildApiFilters(filters))
+  const filterKey = JSON.stringify(filtersToApiParams(filters))
 
   useEffect(() => {
     if (!theme) {
@@ -26,7 +15,7 @@ export function useThemeSummary(theme, filters = {}) {
     }
 
     let isMounted = true
-    const hasActiveFilters = Object.keys(buildApiFilters(filters)).length > 0
+    const hasActiveFilters = Object.keys(filtersToApiParams(filters)).length > 0
     if (!hasActiveFilters && theme.cachedInsight?.summary) {
       setLiveData(theme.cachedInsight)
       setLoadingLive(false)
@@ -39,7 +28,7 @@ export function useThemeSummary(theme, filters = {}) {
       setLoadingLive(true)
       setLiveData(null)
       try {
-        const apiFilters = buildApiFilters(filters)
+        const apiFilters = filtersToApiParams(filters)
         const res = await fetch('http://localhost:5001/api/theme-summary', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

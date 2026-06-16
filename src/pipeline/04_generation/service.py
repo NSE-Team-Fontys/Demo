@@ -1157,6 +1157,7 @@ def precompute_subthemes_stream(
 def themes_overview_payload(filters: dict) -> dict:
     retrieval.get_collection()
     normalized_filters = _normalized_filters(filters)
+    total_filtered_documents = retrieval.count_filtered_documents(normalized_filters)
     cached_values = [
         _sanitize_cached_subthemes(data)
         for data in load_cache().values()
@@ -1167,8 +1168,14 @@ def themes_overview_payload(filters: dict) -> dict:
         for data in cached_values
         if _cache_filters_match(data, {})
     }
+    themes = cache
     if not normalized_filters:
-        return cache
+        return {
+            "status": "success",
+            "filters_applied": normalized_filters,
+            "total_filtered_documents": total_filtered_documents,
+            "themes": themes,
+        }
 
     exact_filter_cache = {
         data.get("theme"): data
@@ -1177,7 +1184,14 @@ def themes_overview_payload(filters: dict) -> dict:
     }
     try:
         filtered_cache = retrieval.filtered_themes_overview(cache, normalized_filters)
-        return {**filtered_cache, **exact_filter_cache}
+        themes = {**filtered_cache, **exact_filter_cache}
     except Exception as exc:
         print(f"[DYNAMIC FILTER ERROR] {str(exc)}")
-        return {**cache, **exact_filter_cache}
+        themes = {**cache, **exact_filter_cache}
+
+    return {
+        "status": "success",
+        "filters_applied": normalized_filters,
+        "total_filtered_documents": total_filtered_documents,
+        "themes": themes,
+    }
