@@ -1,0 +1,1201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sub-theme Generation Architecture</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #181a20;
+      --surface-raised: #1e2028;
+      --surface-highlight: #252830;
+      --border: #2a2d38;
+      --border-accent: #3a3f4f;
+      --text: #e4e6ed;
+      --text-muted: #8b8fa3;
+      --text-dim: #5e6272;
+      --accent: #7c8aff;
+      --accent-soft: rgba(124, 138, 255, 0.12);
+      --green: #34d399;
+      --green-soft: rgba(52, 211, 153, 0.12);
+      --amber: #fbbf24;
+      --amber-soft: rgba(251, 191, 36, 0.10);
+      --red: #f87171;
+      --red-soft: rgba(248, 113, 113, 0.10);
+      --cyan: #22d3ee;
+      --cyan-soft: rgba(34, 211, 238, 0.10);
+      --purple: #a78bfa;
+      --purple-soft: rgba(167, 139, 250, 0.10);
+      --orange: #fb923c;
+      --orange-soft: rgba(251, 146, 60, 0.10);
+      --radius: 12px;
+      --code-bg: #12131a;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      font-size: 15px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Layout */
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 60px 32px 120px;
+    }
+
+    /* Navigation */
+    .toc {
+      position: fixed;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 260px;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      padding: 24px 20px;
+      overflow-y: auto;
+      z-index: 100;
+      transition: transform 0.3s ease;
+    }
+    .toc-title {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 16px;
+    }
+    .toc a {
+      display: block;
+      padding: 6px 12px;
+      font-size: 13px;
+      color: var(--text-muted);
+      text-decoration: none;
+      border-radius: 6px;
+      transition: all 0.15s;
+      font-weight: 500;
+    }
+    .toc a:hover { background: var(--accent-soft); color: var(--accent); }
+    .toc a.sub { padding-left: 24px; font-size: 12px; color: var(--text-dim); }
+    .toc a.sub:hover { color: var(--accent); }
+
+    .main-content { margin-left: 260px; }
+
+    @media (max-width: 900px) {
+      .toc { transform: translateX(-100%); }
+      .main-content { margin-left: 0; }
+    }
+
+    /* Header */
+    .hero {
+      margin-bottom: 56px;
+      padding-bottom: 40px;
+      border-bottom: 1px solid var(--border);
+    }
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent);
+      background: var(--accent-soft);
+      padding: 5px 12px;
+      border-radius: 20px;
+      margin-bottom: 20px;
+    }
+    .hero h1 {
+      font-size: 38px;
+      font-weight: 800;
+      line-height: 1.15;
+      letter-spacing: -0.02em;
+      margin-bottom: 14px;
+      background: linear-gradient(135deg, var(--text) 0%, var(--accent) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .hero p {
+      font-size: 17px;
+      color: var(--text-muted);
+      max-width: 680px;
+      line-height: 1.7;
+    }
+
+    /* Sections */
+    section { margin-bottom: 56px; }
+    .section-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+    h2 {
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      margin-bottom: 16px;
+    }
+    h3 {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 12px;
+      margin-top: 32px;
+    }
+    p { margin-bottom: 14px; color: var(--text-muted); }
+    p strong, li strong { color: var(--text); }
+
+    /* Flow diagram */
+    .flow {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      margin: 28px 0;
+    }
+    .flow-step {
+      position: relative;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+    }
+    .flow-step + .flow-connector {
+      display: flex;
+      justify-content: center;
+      padding: 4px 0;
+    }
+    .flow-connector svg { opacity: 0.3; }
+    .flow-num {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .flow-body { flex: 1; }
+    .flow-title { font-size: 15px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+    .flow-desc { font-size: 13px; color: var(--text-muted); line-height: 1.6; }
+
+    /* Colored variants */
+    .c-accent .flow-num { background: var(--accent-soft); color: var(--accent); }
+    .c-green .flow-num { background: var(--green-soft); color: var(--green); }
+    .c-amber .flow-num { background: var(--amber-soft); color: var(--amber); }
+    .c-red .flow-num { background: var(--red-soft); color: var(--red); }
+    .c-cyan .flow-num { background: var(--cyan-soft); color: var(--cyan); }
+    .c-purple .flow-num { background: var(--purple-soft); color: var(--purple); }
+    .c-orange .flow-num { background: var(--orange-soft); color: var(--orange); }
+
+    /* Code blocks */
+    .code-block {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+      margin: 16px 0;
+      overflow-x: auto;
+    }
+    code, .code-block {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      line-height: 1.7;
+    }
+    .code-block .comment { color: var(--text-dim); }
+    .code-block .keyword { color: var(--purple); }
+    .code-block .string { color: var(--green); }
+    .code-block .fn { color: var(--accent); }
+    .code-block .type { color: var(--cyan); }
+    .code-block .number { color: var(--orange); }
+
+    /* Inline code */
+    code:not(.code-block code) {
+      background: var(--surface-highlight);
+      padding: 2px 7px;
+      border-radius: 5px;
+      font-size: 13px;
+      color: var(--cyan);
+    }
+
+    /* File path badges */
+    .file-path {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--accent);
+      background: var(--accent-soft);
+      padding: 4px 10px;
+      border-radius: 6px;
+      margin: 4px 2px;
+      white-space: nowrap;
+    }
+    .file-path::before { content: '📄 '; font-size: 11px; }
+
+    /* Cards */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin: 16px 0;
+    }
+    .card-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+
+    /* Tables */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 13px;
+    }
+    th {
+      text-align: left;
+      padding: 10px 14px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      border-bottom: 1px solid var(--border);
+    }
+    td {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-muted);
+      vertical-align: top;
+    }
+    td code { font-size: 12px; }
+    tr:last-child td { border-bottom: none; }
+
+    /* Lists */
+    ul, ol {
+      margin: 12px 0 12px 20px;
+      color: var(--text-muted);
+    }
+    li { margin-bottom: 6px; }
+
+    /* Alert boxes */
+    .alert {
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      margin: 16px 0;
+      font-size: 13px;
+      line-height: 1.6;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+    .alert-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+    .alert p { margin: 0; }
+    .alert-info { background: var(--accent-soft); border: 1px solid rgba(124, 138, 255, 0.2); }
+    .alert-info .alert-icon { color: var(--accent); }
+    .alert-warn { background: var(--amber-soft); border: 1px solid rgba(251, 191, 36, 0.2); }
+    .alert-warn .alert-icon { color: var(--amber); }
+    .alert-critical { background: var(--red-soft); border: 1px solid rgba(248, 113, 113, 0.2); }
+    .alert-critical .alert-icon { color: var(--red); }
+    .alert-success { background: var(--green-soft); border: 1px solid rgba(52, 211, 153, 0.2); }
+    .alert-success .alert-icon { color: var(--green); }
+
+    /* Diagram box */
+    .diagram {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 32px;
+      margin: 24px 0;
+      text-align: center;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      line-height: 1.9;
+      color: var(--text-muted);
+      overflow-x: auto;
+      white-space: pre;
+    }
+    .diagram .highlight { color: var(--accent); font-weight: 600; }
+    .diagram .green { color: var(--green); font-weight: 600; }
+    .diagram .amber { color: var(--amber); font-weight: 600; }
+    .diagram .red { color: var(--red); font-weight: 600; }
+    .diagram .cyan { color: var(--cyan); font-weight: 600; }
+    .diagram .purple { color: var(--purple); }
+    .diagram .dim { color: var(--text-dim); }
+
+    /* Separator */
+    hr {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 48px 0;
+    }
+
+    /* Prompt block */
+    .prompt-block {
+      background: linear-gradient(135deg, rgba(124, 138, 255, 0.06) 0%, rgba(167, 139, 250, 0.04) 100%);
+      border: 1px solid rgba(124, 138, 255, 0.15);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin: 16px 0;
+      font-size: 14px;
+      color: var(--text-muted);
+      line-height: 1.8;
+    }
+    .prompt-block em { color: var(--text); font-style: normal; font-weight: 600; }
+    .prompt-block .json-template {
+      background: var(--code-bg);
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin-top: 14px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: var(--text-dim);
+      white-space: pre;
+      overflow-x: auto;
+    }
+
+    /* Scroll anchor offset */
+    [id] { scroll-margin-top: 24px; }
+
+    /* Branch diagram */
+    .branch-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 20px 0;
+    }
+    .branch-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+    }
+    .branch-card h4 {
+      font-size: 14px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .branch-card p { font-size: 13px; margin: 0; }
+    @media (max-width: 700px) { .branch-grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+
+<!-- Table of Contents -->
+<nav class="toc">
+  <div class="toc-title">Architecture Guide</div>
+  <a href="#overview">Overview</a>
+  <a href="#full-pipeline" class="sub">Full Pipeline Diagram</a>
+  <a href="#files" class="sub">Key Files</a>
+  <a href="#step1">1. Document Retrieval</a>
+  <a href="#step1-parent" class="sub">Parent Theme</a>
+  <a href="#step1-subtheme" class="sub">Sub-theme Drill-down</a>
+  <a href="#step2">2. LLM Prompting</a>
+  <a href="#step2-single" class="sub">Single-prompt Mode</a>
+  <a href="#step2-batch" class="sub">Batch (Map) Prompt</a>
+  <a href="#step2-reduce" class="sub">Reduce Prompt</a>
+  <a href="#step3">3. Map-Reduce Flow</a>
+  <a href="#step3-decision" class="sub">Batch vs Single</a>
+  <a href="#step3-map" class="sub">Map Step</a>
+  <a href="#step3-reduce" class="sub">Reduce Step</a>
+  <a href="#step4">4. Mention Counting</a>
+  <a href="#step4-algorithm" class="sub">Matching Algorithm</a>
+  <a href="#step5">5. Caching</a>
+  <a href="#step5-keys" class="sub">Cache Keys</a>
+  <a href="#step5-invalidation" class="sub">Invalidation</a>
+  <a href="#step6">6. Precompute</a>
+  <a href="#step6-subtheme" class="sub">Sub-theme Pre-caching</a>
+  <a href="#config">Configuration</a>
+  <a href="#data-shape">Output Data Shape</a>
+</nav>
+
+<!-- Main Content -->
+<div class="main-content">
+  <div class="container">
+
+    <!-- Hero -->
+    <header class="hero" id="overview">
+      <div class="hero-badge">🔍 Architecture Reference</div>
+      <h1>Sub-theme Generation</h1>
+      <p>
+        A precise technical walkthrough of how sub-themes are generated, from
+        vector document retrieval through LLM map-reduce prompting, mention scoring,
+        and caching. Written for developers making architectural changes.
+      </p>
+    </header>
+
+    <!-- Full Pipeline Diagram -->
+    <section id="full-pipeline">
+      <div class="section-label" style="color: var(--accent);">System View</div>
+      <h2>Full Pipeline Diagram</h2>
+      <p>The sub-theme lifecycle involves 5 stages. Sub-themes are <strong>not pre-defined</strong> — they are <strong>emergent from the LLM</strong> reading student survey responses.</p>
+
+      <div class="diagram" style="text-align: left;"><span class="dim">┌──────────────────────────────────────────────────────────────────────────┐</span>
+<span class="dim">│</span>  <span class="highlight">POST /api/theme-summary</span>                                              <span class="dim">│</span>
+<span class="dim">│</span>  body: { theme: "Content and Organisation",                            <span class="dim">│</span>
+<span class="dim">│</span>          query: "Curriculum Coherence",   <span class="purple">← sub-theme if drill-down</span>    <span class="dim">│</span>
+<span class="dim">│</span>          filters: { academic_year: "2024/2025" } }                     <span class="dim">│</span>
+<span class="dim">└──────────────────────────┬───────────────────────────────────────────────┘</span>
+                           │
+                           ▼
+<span class="dim">┌──────────────────────────────────────────────────────────────────────────┐</span>
+<span class="dim">│</span>  <span class="green">STEP 1 · DOCUMENT RETRIEVAL</span>                                           <span class="dim">│</span>
+<span class="dim">│</span>                                                                        <span class="dim">│</span>
+<span class="dim">│</span>  Parent theme → <span class="cyan">collect_theme_documents()</span>                               <span class="dim">│</span>
+<span class="dim">│</span>      Uses <span class="amber">persisted theme_primary classification</span> in ChromaDB            <span class="dim">│</span>
+<span class="dim">│</span>      Returns definite + ambiguous evidence rows                        <span class="dim">│</span>
+<span class="dim">│</span>                                                                        <span class="dim">│</span>
+<span class="dim">│</span>  Sub-theme → <span class="cyan">collect_documents_by_query()</span>                                <span class="dim">│</span>
+<span class="dim">│</span>      <span class="amber">Embeds the sub-theme name as a vector query</span>                        <span class="dim">│</span>
+<span class="dim">│</span>      Semantic similarity search + reranker → top N documents            <span class="dim">│</span>
+<span class="dim">│</span>                                                                        <span class="dim">│</span>
+<span class="dim">│</span>  Cap: <span class="number">HIERARCHICAL_RAG_MAX_DOCUMENTS</span> (default <span class="number">240</span>)                      <span class="dim">│</span>
+<span class="dim">└──────────────────────────┬───────────────────────────────────────────────┘</span>
+                           │
+                           ▼
+<span class="dim">┌──────────────────────────────────────────────────────────────────────────┐</span>
+<span class="dim">│</span>  <span class="highlight">STEP 2 · MAP-REDUCE LLM GENERATION</span>                                    <span class="dim">│</span>
+<span class="dim">│</span>                                                                        <span class="dim">│</span>
+<span class="dim">│</span>  ≤60 docs → <span class="green">single prompt</span> → LLM → JSON                                 <span class="dim">│</span>
+<span class="dim">│</span>  >60 docs → <span class="amber">batch into chunks of 60</span> (MAP step)                         <span class="dim">│</span>
+<span class="dim">│</span>             each batch → LLM → partial JSON with <span class="purple">"subthemes": [...]</span>     <span class="dim">│</span>
+<span class="dim">│</span>             all batch JSONs → <span class="red">reduce prompt</span> → LLM → <span class="highlight">final JSON</span>           <span class="dim">│</span>
+<span class="dim">│</span>                                                                        <span class="dim">│</span>
+<span class="dim">│</span>  The LLM is asked:                                                     <span class="dim">│</span>
+<span class="dim">│</span>    <span class="string">"Also extract 3 to 5 short sub-themes or topics mentioned."</span>        <span class="dim">│</span>
+<span class="dim">└──────────────────────────┬───────────────────────────────────────────────┘</span>
+                           │
+                           ▼
+<span class="dim">┌──────────────────────────────────────────────────────────────────────────┐</span>
+<span class="dim">│</span>  <span class="cyan">STEP 3 · MENTION COUNTING</span>          <span class="file-path" style="display:inline; background:none; padding:0; color: var(--text-dim);">insight_metrics.py</span>                <span class="dim">│</span>
+<span class="dim">│</span>                                                                        <span class="dim">│</span>
+<span class="dim">│</span>  For each LLM-generated sub-theme label:                               <span class="dim">│</span>
+<span class="dim">│</span>    1. Tokenize the label → remove stopwords → take 6-char root stems   <span class="dim">│</span>
+<span class="dim">│</span>    2. Scan ALL source documents (not just the batch)                    <span class="dim">│</span>
+<span class="dim">│</span>    3. Count matches: <span class="green">exact phrase OR token word OR prefix root</span>          <span class="dim">│</span>
+<span class="dim">│</span>    4. Compute: mentions, doc_percentage, percentage (of total)          <span class="dim">│</span>
+<span class="dim">└──────────────────────────┬───────────────────────────────────────────────┘</span>
+                           │
+                           ▼
+<span class="dim">┌──────────────────────────────────────────────────────────────────────────┐</span>
+<span class="dim">│</span>  <span class="purple">STEP 4 · CACHE + RESPONSE</span>                                              <span class="dim">│</span>
+<span class="dim">│</span>                                                                        <span class="dim">│</span>
+<span class="dim">│</span>  Cache key = "<span class="string">theme_name::subquery=X::filters={...}</span>"                    <span class="dim">│</span>
+<span class="dim">│</span>  Saved to <span class="amber">gemma_cache.json</span> on disk                                     <span class="dim">│</span>
+<span class="dim">│</span>                                                                        <span class="dim">│</span>
+<span class="dim">│</span>  Response: { subthemes: [...], subtheme_mentions: [...],                <span class="dim">│</span>
+<span class="dim">│</span>             summary, quotes, sentiments, student_suggestions }          <span class="dim">│</span>
+<span class="dim">└──────────────────────────────────────────────────────────────────────────┘</span></div>
+    </section>
+
+    <!-- Key files -->
+    <section id="files">
+      <h3>Key Files</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>File</th>
+            <th>Role</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="file-path">src/pipeline/04_generation/service.py</span></td>
+            <td>Orchestrator — retrieves docs, decides single vs map-reduce, calls LLM, assembles payload, manages cache</td>
+          </tr>
+          <tr>
+            <td><span class="file-path">src/pipeline/04_generation/prompts.py</span></td>
+            <td>All LLM prompt templates — <code>default_prompt()</code>, <code>build_batch_summary_prompt()</code>, <code>build_reduce_prompt()</code></td>
+          </tr>
+          <tr>
+            <td><span class="file-path">src/pipeline/04_generation/insight_metrics.py</span></td>
+            <td>Post-LLM mention counting — <code>subtheme_mention_rows()</code></td>
+          </tr>
+          <tr>
+            <td><span class="file-path">src/pipeline/03_retrieval/service.py</span></td>
+            <td>ChromaDB retrieval — <code>collect_theme_documents()</code> and <code>collect_documents_by_query()</code></td>
+          </tr>
+          <tr>
+            <td><span class="file-path">src/pipeline/04_generation/cache.py</span></td>
+            <td>JSON disk cache read/write and freshness validation</td>
+          </tr>
+          <tr>
+            <td><span class="file-path">src/config/settings.py</span></td>
+            <td>Batch size, max docs, cache version, LLM provider defaults</td>
+          </tr>
+          <tr>
+            <td><span class="file-path">src/config/themes.py</span></td>
+            <td>Parent theme definitions, <code>THEME_LLM_DEFINITIONS</code> scope strings</td>
+          </tr>
+          <tr>
+            <td><span class="file-path">src/api/insight_routes.py</span></td>
+            <td>Flask routes — <code>POST /api/theme-summary</code>, <code>POST /api/precompute-insights</code></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <hr />
+
+    <!-- Step 1: Document Retrieval -->
+    <section id="step1">
+      <div class="section-label" style="color: var(--green);">Step 1</div>
+      <h2>Document Retrieval</h2>
+      <p>
+        The first decision point: <strong>how are relevant student responses selected?</strong>
+        This depends on whether the request is for a parent theme or a sub-theme drill-down.
+        Both paths go through <code>_select_theme_documents()</code> in <code>service.py</code>.
+      </p>
+
+      <div class="branch-grid">
+        <div class="branch-card" id="step1-parent">
+          <h4 style="color: var(--green);">🏠 Parent Theme</h4>
+          <p>
+            Uses <code>collect_theme_documents()</code>. Queries ChromaDB for documents where
+            <code>theme_primary == theme_name</code> (definite evidence) plus documents flagged
+            <code>theme_ambiguous == True</code> that have this theme as a candidate (ambiguous evidence).
+            <br /><br />
+            <strong>Documents are pre-classified</strong> during embedding — this is NOT a semantic search.
+            It's a metadata filter lookup.
+          </p>
+        </div>
+        <div class="branch-card" id="step1-subtheme">
+          <h4 style="color: var(--cyan);">🔍 Sub-theme Drill-down</h4>
+          <p>
+            Uses <code>collect_documents_by_query()</code>. The sub-theme name (e.g. <code>"Curriculum Coherence"</code>)
+            is embedded as a vector and used for <strong>semantic similarity search</strong> across the entire collection (with any active filters applied).
+            <br /><br />
+            Results are reranked and capped at <code>n_results</code> (default 500). Low-information responses are filtered out.
+          </p>
+        </div>
+      </div>
+
+      <div class="alert alert-info">
+        <span class="alert-icon">💡</span>
+        <div>
+          <p><strong>Key distinction:</strong> Parent themes use classification-based retrieval (docs were assigned to themes at embedding time).
+          Sub-theme drill-downs use live semantic search (the sub-theme name is the query). This means a sub-theme drill-down
+          may return documents from <em>any</em> parent theme if they're semantically close to the sub-theme name.</p>
+        </div>
+      </div>
+
+      <h3>Document Cap</h3>
+      <p>
+        After retrieval, documents are capped at <code>HIERARCHICAL_RAG_MAX_DOCUMENTS</code> (default: <strong>240</strong>).
+        If a <code>max_documents</code> override is passed in the API request, that takes priority.
+        Setting this to <code>0</code> means no cap — use all retrieved documents.
+      </p>
+
+      <div class="code-block">
+<span class="comment"># service.py line 106</span>
+<span class="keyword">cap</span> = max_documents <span class="keyword">if</span> max_documents <span class="keyword">and</span> max_documents > <span class="number">0</span> <span class="keyword">else</span> <span class="type">HIERARCHICAL_RAG_MAX_DOCUMENTS</span>
+      </div>
+    </section>
+
+    <hr />
+
+    <!-- Step 2: LLM Prompting -->
+    <section id="step2">
+      <div class="section-label" style="color: var(--accent);">Step 2</div>
+      <h2>LLM Prompting</h2>
+      <p>
+        Sub-themes are extracted by instructing the LLM to identify them while reading student responses.
+        There are three prompt templates. The one used depends on whether the corpus fits in a single context or requires batching.
+      </p>
+
+      <!-- Single prompt -->
+      <h3 id="step2-single">Single-prompt Mode (<code>default_prompt</code>)</h3>
+      <p>Used when ≤60 documents. The full evidence set fits in one LLM call.</p>
+
+      <div class="prompt-block">
+        You are an expert data analyst. Read the following student survey responses about '<em>{theme_name}</em>'.<br />
+        Theme scope: <em>{THEME_LLM_DEFINITIONS[theme_name]}</em><br /><br />
+        Only analyze comments as evidence for this theme. Do not drift into Support / Mentoring unless the selected theme is Support / Mentoring.<br />
+        Write generated fields in English: summary, sentiment points, positive_comments, critical_comments, and subthemes. Keep only student_suggestions as exact verbatim student comments in their original language.<br /><br />
+        Summarize the general consensus in 2 sentences. Extract 3 key sentiments...<br />
+        <em>Also extract 3 to 5 short sub-themes or topics mentioned.</em><br /><br />
+        Respond EXACTLY in this JSON format:
+        <div class="json-template">{
+  "summary": "...",
+  "sentiments": [ {"sentiment": "Positive", "point": "..."} ],
+  "positive_comments": ["..."],
+  "critical_comments": ["..."],
+  "student_suggestions": ["..."],
+  <span style="color: var(--accent); font-weight: 600;">"subthemes": ["...", "..."]</span>
+}</div>
+      </div>
+
+      <div class="alert alert-warn">
+        <span class="alert-icon">⚠️</span>
+        <div>
+          <p><strong>The sub-theme instruction is minimal:</strong> just <em>"extract 3 to 5 short sub-themes or topics mentioned"</em>.
+          There is no definition, no examples, no constraints on naming. The LLM has total freedom to choose names, granularity, and scope.</p>
+        </div>
+      </div>
+
+      <!-- Batch prompt -->
+      <h3 id="step2-batch">Batch (Map) Prompt (<code>build_batch_summary_prompt</code>)</h3>
+      <p>Used for each batch of 60 documents during the map step. Identical sub-theme instruction, but with additional context:</p>
+
+      <div class="prompt-block">
+        You are analyzing <em>batch {i} of {N}</em> for the survey theme '<em>{theme_name}</em>'.<br /><br />
+        This is an <em>intermediate map step</em>, not the final theme summary. Summarize only this batch without making whole-theme prevalence claims.<br /><br />
+        Respond EXACTLY in this JSON format:<br />
+        <div class="json-template">{
+  "summary": "...",
+  "sentiments": [...],
+  "positive_comments": ["..."],
+  "critical_comments": ["..."],
+  "student_suggestions": ["..."],
+  <span style="color: var(--accent); font-weight: 600;">"subthemes": ["...", "..."]</span>
+}</div>
+      </div>
+
+      <p>
+        Each batch independently produces 3–5 sub-theme labels. Different batches <strong>will likely produce
+        overlapping but inconsistently named sub-themes</strong> (e.g. "Workload Issues" vs "Heavy Workload" vs "Study Load").
+      </p>
+
+      <!-- Reduce prompt -->
+      <h3 id="step2-reduce">Reduce Prompt (<code>build_reduce_prompt</code>)</h3>
+      <p>Receives ALL batch JSON summaries serialized as a JSON array. Asks the LLM to merge them:</p>
+
+      <div class="prompt-block">
+        Merge the batch-level survey insights for '<em>{theme_name}</em>' into one final dashboard insight.<br /><br />
+        The batch summaries together represent <em>{N}</em> source student responses.<br />
+        Only make claims supported by repeated or strong evidence. Do not invent quotes or details.<br /><br />
+        <em>Deduplicate repeated points across batches.</em> Prefer patterns that appear in multiple batches, but keep a strong minority concern if it is concrete and important.<br /><br />
+        Also extract <em>3 to 5 short sub-themes or topics mentioned across the batch summaries</em>.<br /><br />
+        Batch summaries:<br />
+        <div class="json-template">[
+  {
+    "batch_number": 1,
+    "source_document_count": 60,
+    "summary": "...",
+    "subthemes": ["Workload Issues", "Portfolio System", "Feedback Quality"],
+    ...
+  },
+  {
+    "batch_number": 2,
+    "source_document_count": 60,
+    "summary": "...",
+    "subthemes": ["Study Load", "Assessment Clarity", "Feedback Quality"],
+    ...
+  }
+]</div>
+      </div>
+
+      <div class="alert alert-critical">
+        <span class="alert-icon">🔴</span>
+        <div>
+          <p><strong>The reduce step deduplication is entirely done by the LLM — there is no code-level deduplication of sub-theme names.</strong>
+          The LLM reads all batch-level sub-theme arrays and decides which to keep, merge, or drop. If the LLM doesn't notice
+          "Workload Issues" and "Study Load" are the same concept, both end up in the final list.</p>
+        </div>
+      </div>
+
+      <!-- Evidence appending -->
+      <h3>How Evidence is Appended to Prompts</h3>
+      <p>
+        The <code>_append_evidence()</code> function splits documents into two labeled sections within the prompt:
+      </p>
+      <div class="code-block">
+<span class="comment"># Definite evidence (theme_primary match or free-text retrieval)</span>
+Definite evidence:
+- Student comment 1...
+- Student comment 2...
+
+<span class="comment"># Ambiguous evidence (close classification candidates)</span>
+Ambiguous candidate evidence:
+These responses were close classification candidates for this theme.
+Ignore any candidate evidence that is not genuinely relevant.
+- Student comment 3...
+      </div>
+      <p>
+        The LLM is told to use ambiguous evidence with caution. For sub-theme drill-downs, all documents come as
+        <code>free_text_retrieval</code> type and appear in the definite section.
+      </p>
+    </section>
+
+    <hr />
+
+    <!-- Step 3: Map-Reduce Flow -->
+    <section id="step3">
+      <div class="section-label" style="color: var(--amber);">Step 3</div>
+      <h2>Map-Reduce Flow</h2>
+      <p>
+        The function <code>_generate_hierarchical_json()</code> orchestrates the LLM calls.
+        The batch size and the decision logic are straightforward.
+      </p>
+
+      <!-- Decision -->
+      <h3 id="step3-decision">Single vs Batched Decision</h3>
+      <div class="code-block">
+<span class="keyword">def</span> <span class="fn">_generate_hierarchical_json</span>(client, llm_model, theme_name, evidence, ...):
+    batches = <span class="fn">_document_batches</span>(evidence)  <span class="comment"># chunks of 60</span>
+
+    <span class="keyword">if</span> len(batches) <= <span class="number">1</span>:
+        <span class="comment"># ≤60 docs: single prompt, done</span>
+        prompt = prompts.<span class="fn">build_prompt</span>(theme_name, evidence)
+        <span class="keyword">return</span> prompts.<span class="fn">parse_llm_json</span>(client.<span class="fn">generate_json</span>(llm_model, prompt))
+
+    <span class="comment"># >60 docs: map-reduce</span>
+    <span class="comment"># ... (see map and reduce steps below)</span>
+      </div>
+
+      <div class="alert alert-info">
+        <span class="alert-icon">📊</span>
+        <div>
+          <p>
+            <strong>Example:</strong> 180 documents → 3 batches of 60 → 3 LLM map calls + 1 LLM reduce call = <strong>4 total LLM calls</strong>.
+            <br />240 documents (default cap) → 4 batches → 5 LLM calls.
+            <br />55 documents → 1 batch → 1 LLM call (no reduce needed).
+          </p>
+        </div>
+      </div>
+
+      <!-- Map Step -->
+      <h3 id="step3-map">Map Step (per batch)</h3>
+      <div class="flow">
+        <div class="flow-step c-amber">
+          <div class="flow-num">B1</div>
+          <div class="flow-body">
+            <div class="flow-title">Batch 1 → LLM</div>
+            <div class="flow-desc">60 documents → <code>build_batch_summary_prompt()</code> → LLM generates JSON<br />
+            Output: <code>{ "subthemes": ["Topic A", "Topic B", "Topic C"], ... }</code></div>
+          </div>
+        </div>
+        <div class="flow-connector"><svg width="24" height="24" viewBox="0 0 24 24"><path d="M12 4v16m0 0l-4-4m4 4l4-4" stroke="currentColor" stroke-width="2" fill="none"/></svg></div>
+        <div class="flow-step c-amber">
+          <div class="flow-num">B2</div>
+          <div class="flow-body">
+            <div class="flow-title">Batch 2 → LLM</div>
+            <div class="flow-desc">60 documents → Same prompt template → LLM generates JSON<br />
+            Output: <code>{ "subthemes": ["Topic A", "Topic D", "Topic E"], ... }</code></div>
+          </div>
+        </div>
+        <div class="flow-connector"><svg width="24" height="24" viewBox="0 0 24 24"><path d="M12 4v16m0 0l-4-4m4 4l4-4" stroke="currentColor" stroke-width="2" fill="none"/></svg></div>
+        <div class="flow-step c-amber">
+          <div class="flow-num">B3</div>
+          <div class="flow-body">
+            <div class="flow-title">Batch 3 → LLM</div>
+            <div class="flow-desc">60 documents → Same prompt template → LLM generates JSON<br />
+            Output: <code>{ "subthemes": ["Topic B", "Topic D", "Topic F"], ... }</code></div>
+          </div>
+        </div>
+      </div>
+
+      <p>
+        Each batch result is enriched with metadata before being passed to the reduce step:
+      </p>
+      <div class="code-block">
+parsed[<span class="string">"batch_number"</span>] = i
+parsed[<span class="string">"source_document_count"</span>] = len(batch)
+batch_summaries.append(parsed)
+      </div>
+
+      <!-- Reduce Step -->
+      <h3 id="step3-reduce">Reduce Step</h3>
+      <div class="flow">
+        <div class="flow-step c-red">
+          <div class="flow-num">R</div>
+          <div class="flow-body">
+            <div class="flow-title">Reduce: Merge all batch summaries</div>
+            <div class="flow-desc">
+              <code>build_reduce_prompt()</code> serializes all batch JSON summaries into a single prompt.<br />
+              The LLM reads every batch's <code>subthemes</code> array and produces one final merged list.<br /><br />
+              <strong>The LLM is the deduplicator.</strong> It sees: ["Topic A", "Topic B", "Topic C"] + ["Topic A", "Topic D", "Topic E"] + ["Topic B", "Topic D", "Topic F"]<br />
+              And might produce: <code>["Topic A", "Topic B", "Topic D", "Topic E"]</code><br /><br />
+              There is <strong>zero programmatic deduplication</strong>. The code takes whatever the reduce LLM returns as-is.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="code-block">
+<span class="comment"># The reduce call — service.py line 194</span>
+reduce_prompt = prompts.<span class="fn">build_reduce_prompt</span>(
+    theme_name,
+    batch_summaries,
+    source_document_count=len(evidence),
+)
+<span class="keyword">return</span> prompts.<span class="fn">parse_llm_json</span>(
+    client.<span class="fn">generate_json</span>(llm_model, reduce_prompt, timeout=<span class="number">600</span>)
+)
+      </div>
+    </section>
+
+    <hr />
+
+    <!-- Step 4: Mention Counting -->
+    <section id="step4">
+      <div class="section-label" style="color: var(--cyan);">Step 4</div>
+      <h2>Mention Counting</h2>
+      <p>
+        After the LLM produces the final <code>subthemes</code> array, <code>subtheme_mention_rows()</code>
+        counts how many of the <strong>ALL source documents</strong> (not just the batched ones) mention each sub-theme.
+        This scoring is <strong>entirely deterministic and code-based</strong> — no LLM involved.
+      </p>
+
+      <h3 id="step4-algorithm">Matching Algorithm</h3>
+      <p>For each LLM-generated sub-theme label, the algorithm:</p>
+
+      <div class="flow">
+        <div class="flow-step c-cyan">
+          <div class="flow-num">1</div>
+          <div class="flow-body">
+            <div class="flow-title">Tokenize the sub-theme label</div>
+            <div class="flow-desc">
+              Lowercase, extract alphanumeric tokens, remove stopwords (EN + NL), keep tokens with length &gt; 3.<br />
+              Example: <code>"Curriculum Coherence and Relevance"</code> → <code>["curriculum", "coherence", "relevance"]</code>
+            </div>
+          </div>
+        </div>
+        <div class="flow-connector"><svg width="24" height="24" viewBox="0 0 24 24"><path d="M12 4v16m0 0l-4-4m4 4l4-4" stroke="currentColor" stroke-width="2" fill="none"/></svg></div>
+        <div class="flow-step c-cyan">
+          <div class="flow-num">2</div>
+          <div class="flow-body">
+            <div class="flow-title">Generate 6-char prefix roots</div>
+            <div class="flow-desc">
+              For tokens longer than 6 chars, take the first 6 characters as a stem.<br />
+              Example: <code>"curriculum"</code> → root <code>"curric"</code>, <code>"coherence"</code> → root <code>"cohere"</code>
+            </div>
+          </div>
+        </div>
+        <div class="flow-connector"><svg width="24" height="24" viewBox="0 0 24 24"><path d="M12 4v16m0 0l-4-4m4 4l4-4" stroke="currentColor" stroke-width="2" fill="none"/></svg></div>
+        <div class="flow-step c-cyan">
+          <div class="flow-num">3</div>
+          <div class="flow-body">
+            <div class="flow-title">Scan every document</div>
+            <div class="flow-desc">
+              A document is a "mention" if <strong>any</strong> of these match:<br />
+              <strong>a)</strong> The full lowercase label appears as a substring: <code>"curriculum coherence and relevance" in doc</code><br />
+              <strong>b)</strong> Any token appears as a whole word in the document: <code>"coherence" in doc_words</code><br />
+              <strong>c)</strong> Any word in the document starts with a 6-char root: <code>word.startswith("curric")</code>
+            </div>
+          </div>
+        </div>
+        <div class="flow-connector"><svg width="24" height="24" viewBox="0 0 24 24"><path d="M12 4v16m0 0l-4-4m4 4l4-4" stroke="currentColor" stroke-width="2" fill="none"/></svg></div>
+        <div class="flow-step c-cyan">
+          <div class="flow-num">4</div>
+          <div class="flow-body">
+            <div class="flow-title">Compute percentages</div>
+            <div class="flow-desc">
+              <code>doc_percentage</code> = mentions / total_docs × 100<br />
+              <code>percentage</code> = mentions / total_mentions_across_all_subthemes × 100
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="alert alert-warn">
+        <span class="alert-icon">⚠️</span>
+        <div>
+          <p><strong>Matching is very loose.</strong> The root-prefix approach means <code>"curriculum"</code> will match
+          <code>"curriculumherziening"</code> (Dutch for curriculum revision). Token matching means a sub-theme label
+          <code>"Communication"</code> will match any document containing the word "communication" even if the context is unrelated.
+          The matching rules use <strong>OR</strong> logic — any single match counts.</p>
+        </div>
+      </div>
+
+      <p>The function is called in <code>_theme_payload_from_parsed()</code>:</p>
+      <div class="code-block">
+<span class="comment"># service.py line 413</span>
+<span class="string">"subtheme_mentions"</span>: insight_metrics.<span class="fn">subtheme_mention_rows</span>(subthemes, all_docs),
+      </div>
+      <p>
+        Note: <code>all_docs</code> here is the <strong>full set of retrieved documents</strong> (before the batch cap),
+        not just the documents that were sent to the LLM. So if 500 documents were retrieved but only 240 went to the LLM,
+        mentions are counted across all 500.
+      </p>
+    </section>
+
+    <hr />
+
+    <!-- Step 5: Caching -->
+    <section id="step5">
+      <div class="section-label" style="color: var(--purple);">Step 5</div>
+      <h2>Caching</h2>
+      <p>
+        Generated payloads (including sub-themes) are cached to <code>gemma_cache.json</code> on disk.
+        Cache logic lives in <code>cache.py</code>.
+      </p>
+
+      <h3 id="step5-keys">Cache Key Structure</h3>
+      <table>
+        <thead>
+          <tr><th>Scenario</th><th>Cache Key Format</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Parent theme, no filters</td>
+            <td><code>"Content and Organisation"</code></td>
+          </tr>
+          <tr>
+            <td>Parent theme + filters</td>
+            <td><code>"Content and Organisation::filters={\"academic_year\":\"2024/2025\"}"</code></td>
+          </tr>
+          <tr>
+            <td>Sub-theme drill-down</td>
+            <td><code>"Content and Organisation::subquery=Curriculum Coherence"</code></td>
+          </tr>
+          <tr>
+            <td>Sub-theme + filters</td>
+            <td><code>"Content and Organisation::subquery=Curriculum Coherence::filters={...}"</code></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="code-block">
+<span class="comment"># service.py line 54</span>
+<span class="keyword">def</span> <span class="fn">_cache_key</span>(theme_name, filters=<span class="keyword">None</span>, theme_query=<span class="keyword">None</span>):
+    key = theme_name
+    <span class="keyword">if</span> theme_query <span class="keyword">and</span> theme_query != theme_name:
+        key = <span class="string">f"{theme_name}::subquery={theme_query}"</span>
+    <span class="keyword">if</span> <span class="keyword">not</span> normalized:
+        <span class="keyword">return</span> key
+    <span class="keyword">return</span> <span class="string">f"{key}::filters={filters_json}"</span>
+      </div>
+
+      <h3 id="step5-invalidation">Cache Invalidation</h3>
+      <p>A cached entry is considered valid when <strong>all</strong> of these match:</p>
+      <ul>
+        <li><code>cache_version</code> == <code>INSIGHT_CACHE_VERSION</code> (currently <strong>11</strong>)</li>
+        <li><code>llm_context_documents</code> == current <code>LLM_CONTEXT_DOCUMENTS</code> setting</li>
+        <li><code>hierarchical_batch_documents</code> == current <code>HIERARCHICAL_RAG_BATCH_DOCUMENTS</code> setting</li>
+        <li>All classification metadata matches (embedding model, reranker, theme taxonomy version)</li>
+        <li>If <code>match_llm_identity=True</code>: <code>llm_provider</code> and <code>llm_model</code> must match</li>
+        <li>Filter values must match</li>
+      </ul>
+
+      <div class="alert alert-info">
+        <span class="alert-icon">💡</span>
+        <div>
+          <p><strong>Changing the batch size, the cache version, or the LLM model will automatically invalidate all cached entries.</strong>
+          The cache check happens before any LLM call. If the cached entry passes validation, no LLM call is made at all.</p>
+        </div>
+      </div>
+
+      <p>For parent themes, the cache is checked with full dashboard field validation (requires <code>subthemes</code>, <code>subtheme_mentions</code>, <code>quotes</code>, etc. to all be present). For sub-theme queries, only the generation settings are checked.</p>
+    </section>
+
+    <hr />
+
+    <!-- Step 6: Precompute -->
+    <section id="step6">
+      <div class="section-label" style="color: var(--orange);">Step 6</div>
+      <h2>Precompute Flow</h2>
+      <p>
+        The <code>POST /api/precompute-insights</code> endpoint generates summaries for all themes in batch.
+        It streams NDJSON progress events. There's a specific sub-theme pre-caching feature.
+      </p>
+
+      <h3 id="step6-subtheme">Sub-theme Pre-caching</h3>
+      <p>
+        When <code>precache_subthemes: true</code> is set in the request, after generating a parent theme summary,
+        the system takes the LLM-generated <code>subthemes</code> array and makes an additional
+        <code>_generate_theme_payload()</code> call for each sub-theme:
+      </p>
+
+      <div class="code-block">
+<span class="comment"># service.py line 648–702</span>
+<span class="keyword">if</span> precache_subthemes:
+    subthemes = [
+        str(s).strip()
+        <span class="keyword">for</span> s <span class="keyword">in</span> (response_data.get(<span class="string">"subthemes"</span>) <span class="keyword">or</span> [])
+        <span class="keyword">if</span> str(s).strip() <span class="keyword">and</span> str(s).strip() != theme_name
+    ]
+    <span class="keyword">for</span> subtheme <span class="keyword">in</span> subthemes:
+        sub_data = <span class="fn">_generate_theme_payload</span>(
+            ...,
+            theme_query=subtheme,  <span class="comment"># ← triggers collect_documents_by_query</span>
+        )
+        cache[<span class="fn">_cache_key</span>(theme_name, combo, subtheme)] = sub_data
+      </div>
+
+      <p>
+        This means each sub-theme gets its own: semantic retrieval → batching → LLM map-reduce → mention counting → cache entry.
+        And those sub-theme results themselves contain a <code>subthemes</code> field — creating the potential for recursive sub-sub-themes.
+      </p>
+
+      <div class="alert alert-warn">
+        <span class="alert-icon">⚠️</span>
+        <div>
+          <p><strong>Cost implication:</strong> With 7 themes × 4 sub-themes each × N filter combinations, pre-caching sub-themes
+          can multiply LLM calls dramatically. Each sub-theme may itself trigger 4+ LLM calls (if it retrieves enough documents for map-reduce).</p>
+        </div>
+      </div>
+    </section>
+
+    <hr />
+
+    <!-- Configuration -->
+    <section id="config">
+      <div class="section-label" style="color: var(--text-dim);">Reference</div>
+      <h2>Configuration</h2>
+      <table>
+        <thead>
+          <tr><th>Setting</th><th>Default</th><th>Effect on Sub-themes</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>HIERARCHICAL_RAG_BATCH_DOCUMENTS</code></td>
+            <td><strong>60</strong></td>
+            <td>How many documents per map-step batch. Each batch produces its own sub-theme list. Larger = fewer batches, fewer LLM calls, but each batch sees more context.</td>
+          </tr>
+          <tr>
+            <td><code>HIERARCHICAL_RAG_MAX_DOCUMENTS</code></td>
+            <td><strong>240</strong></td>
+            <td>Total cap on documents sent to the LLM. 0 = no cap. More documents = more batches = more diverse sub-themes, but higher cost.</td>
+          </tr>
+          <tr>
+            <td><code>LLM_CONTEXT_DOCUMENTS</code></td>
+            <td><strong>240</strong></td>
+            <td>Legacy setting for single-prompt compatibility. Part of cache validation (changing it invalidates cache).</td>
+          </tr>
+          <tr>
+            <td><code>INSIGHT_CACHE_VERSION</code></td>
+            <td><strong>11</strong></td>
+            <td>Bump this to force re-generation of all cached insights (including all sub-theme entries).</td>
+          </tr>
+          <tr>
+            <td><code>DEFAULT_LLM_MODEL</code></td>
+            <td><strong>gemma-4-E4B-it-GGUF</strong></td>
+            <td>The model that generates sub-themes. Different models will produce different sub-theme names and groupings.</td>
+          </tr>
+          <tr>
+            <td><code>DEFAULT_LLM_PROVIDER</code></td>
+            <td><strong>llama.cpp</strong></td>
+            <td>Local LLM inference via llama.cpp. Provider is part of cache identity.</td>
+          </tr>
+          <tr>
+            <td><code>RERANKER_CANDIDATE_MULTIPLIER</code></td>
+            <td><strong>5</strong></td>
+            <td>For sub-theme drill-downs: retrieves 5× the requested results before reranking. Affects which documents feed into sub-theme generation.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <hr />
+
+    <!-- Output Data Shape -->
+    <section id="data-shape">
+      <div class="section-label" style="color: var(--green);">Reference</div>
+      <h2>Output Data Shape</h2>
+      <p>The final API response that the frontend consumes. Sub-theme-relevant fields are highlighted:</p>
+
+      <div class="code-block">{
+  <span class="string">"status"</span>: <span class="string">"success"</span>,
+  <span class="string">"theme"</span>: <span class="string">"Content and Organisation"</span>,
+
+  <span class="comment">// Retrieval metrics</span>
+  <span class="string">"frequency"</span>: <span class="number">32</span>,                <span class="comment">// theme's % of all responses</span>
+  <span class="string">"document_count"</span>: <span class="number">487</span>,           <span class="comment">// total docs retrieved</span>
+  <span class="string">"hierarchical_document_count"</span>: <span class="number">240</span>, <span class="comment">// docs actually sent to LLM</span>
+  <span class="string">"definite_evidence_count"</span>: <span class="number">412</span>,
+  <span class="string">"ambiguous_evidence_count"</span>: <span class="number">75</span>,
+
+  <span class="comment">// LLM-generated content</span>
+  <span class="string">"summary"</span>: <span class="string">"Students generally appreciate..."</span>,
+  <span class="string">"sentiments"</span>: [
+    { <span class="string">"sentiment"</span>: <span class="string">"Positive"</span>, <span class="string">"point"</span>: <span class="string">"..."</span> },
+    { <span class="string">"sentiment"</span>: <span class="string">"Critical"</span>, <span class="string">"point"</span>: <span class="string">"..."</span> }
+  ],
+  <span class="string">"positive_comments"</span>: [<span class="string">"..."</span>, <span class="string">"..."</span>],
+  <span class="string">"critical_comments"</span>: [<span class="string">"..."</span>, <span class="string">"..."</span>],
+  <span class="string">"student_suggestions"</span>: [<span class="string">"verbatim comment..."</span>],
+
+  <span class="comment" style="color: var(--accent);">// ═══ SUB-THEME DATA ═══</span>
+  <span style="color: var(--accent); font-weight: 600;">"subthemes"</span>: [             <span class="comment">// LLM-generated names (3–5)</span>
+    <span class="string">"Curriculum Coherence"</span>,
+    <span class="string">"Portfolio System"</span>,
+    <span class="string">"Workload Distribution"</span>,
+    <span class="string">"Feedback Clarity"</span>
+  ],
+  <span style="color: var(--accent); font-weight: 600;">"subtheme_mentions"</span>: [    <span class="comment">// Code-computed mention stats</span>
+    {
+      <span class="string">"subtheme"</span>: <span class="string">"Curriculum Coherence"</span>,
+      <span class="string">"mentions"</span>: <span class="number">48</span>,           <span class="comment">// docs containing this sub-theme</span>
+      <span class="string">"doc_percentage"</span>: <span class="number">10</span>,     <span class="comment">// 48 / 487 × 100</span>
+      <span class="string">"percentage"</span>: <span class="number">32</span>          <span class="comment">// 48 / total_mentions × 100</span>
+    },
+    ...
+  ],
+
+  <span class="comment">// All source documents (verbatim student text)</span>
+  <span class="string">"quotes"</span>: [<span class="string">"student comment 1..."</span>, <span class="string">"student comment 2..."</span>, ...],
+
+  <span class="comment">// Cache & identity metadata</span>
+  <span class="string">"cache_version"</span>: <span class="number">11</span>,
+  <span class="string">"llm_provider"</span>: <span class="string">"llama.cpp"</span>,
+  <span class="string">"llm_model"</span>: <span class="string">"unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL"</span>,
+  <span class="string">"filters_applied"</span>: {},
+  <span class="string">"rag_strategy"</span>: <span class="string">"semantic_theme_map_reduce_v2"</span>
+}</div>
+    </section>
+
+    <hr />
+
+    <!-- Summary -->
+    <section>
+      <div class="section-label" style="color: var(--red);">Key Takeaways</div>
+      <h2>What to Know Before Changing the Architecture</h2>
+
+      <div class="card" style="border-color: rgba(248, 113, 113, 0.3);">
+        <div class="card-label" style="color: var(--red);">Critical Design Decisions</div>
+        <ol>
+          <li>
+            <strong>Sub-themes are 100% LLM-generated.</strong> No pre-defined taxonomy. The prompt says "extract 3–5 sub-themes" and the LLM decides what they are. Different runs with the same data may produce different sub-theme names.
+          </li>
+          <li style="margin-top: 12px;">
+            <strong>Deduplication in map-reduce is 100% LLM-handled.</strong> The reduce prompt tells the LLM to "deduplicate repeated points across batches" but there is no code that normalizes, clusters, or fuzzy-matches sub-theme names.
+          </li>
+          <li style="margin-top: 12px;">
+            <strong>Mention counting is keyword-based, not semantic.</strong> After the LLM generates sub-theme labels, <code>subtheme_mention_rows()</code> does naive token/prefix matching against all docs. A sub-theme called "Communication" will match any doc with that word regardless of context.
+          </li>
+          <li style="margin-top: 12px;">
+            <strong>Sub-theme drill-down uses a completely different retrieval path.</strong> Parent themes use classification-based lookup; sub-themes use semantic vector search. This means a sub-theme drill-down may pull in documents from other themes.
+          </li>
+          <li style="margin-top: 12px;">
+            <strong>The cache is keyed on exact sub-theme name strings.</strong> If you regenerate parent themes and the LLM produces slightly different sub-theme names, old sub-theme cache entries become orphaned and will never be served.
+          </li>
+          <li style="margin-top: 12px;">
+            <strong>Sub-theme results themselves contain sub-themes.</strong> When you drill into a sub-theme, the LLM generates sub-sub-themes. The frontend renders these via <code>SubthemesList</code> — creating a recursive navigation pattern with no depth limit in the data.
+          </li>
+        </ol>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+</body>
+</html>
