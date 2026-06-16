@@ -228,12 +228,59 @@ Batch summaries:
 """
 
 
+def _strip_thinking_block(text: str) -> str:
+    """Remove Gemma-style <think>...</think> blocks before JSON extraction."""
+    return re.sub(r"<think>[\s\S]*?</think>", "", text, flags=re.IGNORECASE).strip()
+
+
+def _repair_truncated_json(json_str: str) -> dict:
+    """Close open brackets/strings in a truncated JSON and attempt to parse it."""
+    stack: list[str] = []
+    in_string = False
+    escape_next = False
+
+    for char in json_str:
+        if escape_next:
+            escape_next = False
+            continue
+        if char == "\\" and in_string:
+            escape_next = True
+            continue
+        if char == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if char == "{":
+            stack.append("}")
+        elif char == "[":
+            stack.append("]")
+        elif char in "}]" and stack and stack[-1] == char:
+            stack.pop()
+
+    repaired = json_str
+    if in_string:
+        repaired += '"'
+    repaired += "".join(reversed(stack))
+    return json.loads(repaired)
+
+
 def parse_llm_json(result_text: str) -> dict:
-    match = re.search(r"\{[\s\S]*\}", result_text)
-    json_str = match.group(0) if match else result_text
+    cleaned = _strip_thinking_block(result_text)
+    match = re.search(r"\{[\s\S]*\}", cleaned)
+    json_str = match.group(0) if match else cleaned
     try:
         return json.loads(json_str)
-    except json.JSONDecodeError as exc:
+    except json.JSONDecodeError:
+        pass
+    try:
+        result = _repair_truncated_json(json_str)
+        print(
+            f"[LLM] Warning: model output was truncated; partial JSON recovered "
+            f"(first 80 chars: {json_str[:80]!r})"
+        )
+        return result
+    except Exception as exc:
         raise RuntimeError(
             f"Invalid JSON structure returned by model: {json_str[:150]}"
         ) from exc

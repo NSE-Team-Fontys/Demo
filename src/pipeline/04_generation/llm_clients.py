@@ -258,7 +258,14 @@ class LlamaCppClient:
         choices = data.get("choices") or []
         if not choices:
             return "{}"
-        message = choices[0].get("message") or {}
+        choice = choices[0]
+        finish_reason = choice.get("finish_reason") or ""
+        if finish_reason == "length":
+            print(
+                f"[LLM] Warning: model '{model_name}' hit max_tokens limit "
+                f"(finish_reason=length). Output may be truncated."
+            )
+        message = choice.get("message") or {}
         return message.get("content") or "{}"
 
     def unload(self, model_name: str) -> None:

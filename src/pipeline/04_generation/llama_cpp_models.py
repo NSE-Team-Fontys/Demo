@@ -139,7 +139,7 @@ GEMMA_LLAMA_CPP_MODELS = (
         ),
         generation=LlamaCppGenerationSettings(
             context_size=127000,
-            max_tokens=10192,
+            max_tokens=32768,
             temperature=1.0,
             top_p=0.95,
             top_k=64,

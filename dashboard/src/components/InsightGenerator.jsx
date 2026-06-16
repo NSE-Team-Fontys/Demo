@@ -637,8 +637,8 @@ export default function InsightGenerator({ onComplete }) {
         </div>
       )}
 
-      {/* --- GENERATING PROGRESS --- */}
-      {generating && (
+      {/* --- GENERATING PROGRESS (also stays visible on error so logs don't vanish) --- */}
+      {(generating || (progress > 0 && progress < 100)) && (
         <div className="space-y-6 animate-in fade-in zoom-in-95 duration-500">
           <div className="p-8 bg-gray-900 rounded-3xl shadow-2xl relative overflow-hidden ring-1 ring-white/10">
             {/* Animated Background */}
@@ -655,15 +655,15 @@ export default function InsightGenerator({ onComplete }) {
             <div className="flex flex-col gap-5 relative z-10">
               <div className="flex items-center justify-between">
                 <h3 className="text-xl font-bold text-white flex items-center gap-3">
-                  {progress < 100 ? (
+                  {generating ? (
                     <div className="relative flex h-4 w-4">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-75"></span>
                       <span className="relative inline-flex rounded-full h-4 w-4 bg-violet-500"></span>
                     </div>
                   ) : (
-                    <span className="text-emerald-400">✓</span>
+                    <span className="text-red-400">✕</span>
                   )}
-                  {progress < 100 ? 'Generating AI Insights' : 'Insights Complete!'}
+                  {generating ? 'Generating AI Insights' : 'Generation stopped'}
                 </h3>
                 <span className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-violet-400 to-blue-400">
                   {progress}%
@@ -687,6 +687,16 @@ export default function InsightGenerator({ onComplete }) {
                   <div className="text-gray-500 animate-pulse mt-1">▌</div>
                 )}
               </div>
+
+              {/* Back button shown only when stopped mid-way (error state) */}
+              {!generating && progress > 0 && progress < 100 && (
+                <button
+                  onClick={() => { setProgress(0); setLogs([]); }}
+                  className="self-start flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-semibold transition-colors"
+                >
+                  ← Back to settings
+                </button>
+              )}
             </div>
           </div>
         </div>
