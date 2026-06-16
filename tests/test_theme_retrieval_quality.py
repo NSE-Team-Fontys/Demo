@@ -359,6 +359,78 @@ class PersistedThemeRetrievalTests(unittest.TestCase):
         self.assertEqual(payload["quotes"], ["The teacher explains clearly."])
         self.assertIn("Subtheme focus: Clear explanations", client.prompts[0])
 
+    def test_subtheme_normalization_prefers_evidence_backed_manifest(self) -> None:
+        selected = {
+            "all_evidence": [
+                {"evidence_id": "E0001"},
+                {"evidence_id": "E0002"},
+            ]
+        }
+        parsed = {
+            "subthemes": [
+                "Verbose duplicate label with no evidence",
+                "Clear explanations",
+            ],
+            "subtheme_manifest": [
+                {
+                    "name": "Verbose duplicate label with no evidence",
+                    "description": "",
+                    "evidence_ids": [],
+                },
+                {
+                    "name": "Clear explanations",
+                    "description": "Students mention clear explanations.",
+                    "evidence_ids": ["E0001"],
+                },
+                {
+                    "name": "Helpful teachers",
+                    "description": "Students mention helpful teachers.",
+                    "evidence_ids": ["E0002"],
+                },
+            ],
+        }
+
+        labels, manifest = generation._normalize_subtheme_manifest(parsed, selected)
+
+        self.assertEqual(labels, ["Clear explanations", "Helpful teachers"])
+        self.assertEqual([item["name"] for item in manifest], labels)
+        self.assertEqual(manifest[0]["evidence_ids"], ["E0001"])
+
+    def test_cached_subtheme_sanitizer_removes_empty_manifest_labels(self) -> None:
+        cached = {
+            "subthemes": [
+                "Long empty label",
+                "Clear explanations",
+                "Helpful teachers",
+            ],
+            "subtheme_manifest": [
+                {"name": "Long empty label", "description": "", "evidence_ids": []},
+                {
+                    "name": "Clear explanations",
+                    "description": "Students mention clear explanations.",
+                    "evidence_ids": ["E0001"],
+                },
+                {
+                    "name": "Helpful teachers",
+                    "description": "Students mention helpful teachers.",
+                    "evidence_ids": ["E0002"],
+                },
+            ],
+            "subtheme_mentions": [
+                {"subtheme": "Long empty label", "mentions": 10, "percentage": 50},
+                {"subtheme": "Clear explanations", "mentions": 3, "percentage": 15},
+                {"subtheme": "Helpful teachers", "mentions": 7, "percentage": 35},
+            ],
+        }
+
+        sanitized = generation._sanitize_cached_subthemes(cached)
+
+        self.assertEqual(sanitized["subthemes"], ["Clear explanations", "Helpful teachers"])
+        self.assertEqual(
+            [row["percentage"] for row in sanitized["subtheme_mentions"]],
+            [30, 70],
+        )
+
     def test_precompute_subthemes_uses_cached_manifest_without_models(self) -> None:
         client = FakeLlmClient()
         saved_subtheme_cache = {}
@@ -438,6 +510,84 @@ class PersistedThemeRetrievalTests(unittest.TestCase):
         self.assertEqual(
             saved_subtheme_cache["Teachers::subquery=Clear explanations"]["quotes"],
             ["The teacher explains clearly."],
+        )
+
+    def test_precompute_subthemes_skips_empty_manifest_labels(self) -> None:
+        client = FakeLlmClient()
+        saved_subtheme_cache = {}
+        main_entry = {
+            "status": "success",
+            "theme": "Teachers",
+            "frequency": 40,
+            "vector_relevant_count": 3,
+            "total_filtered_documents": 5,
+            "llm_document_count": 3,
+            "hierarchical_document_count": 3,
+            "hierarchical_batch_documents": HIERARCHICAL_RAG_BATCH_DOCUMENTS,
+            "rag_strategy": generation.HIERARCHICAL_RAG_STRATEGY,
+            "filters_applied": {},
+            "cache_version": INSIGHT_CACHE_VERSION,
+            "llm_context_documents": LLM_CONTEXT_DOCUMENTS,
+            "llm_provider": "test",
+            "llm_model": "fake-llm",
+            "llm_generation_settings": None,
+            "reranker": self.config.reranker_model_id,
+            "definite_evidence_count": 1,
+            "ambiguous_evidence_count": 2,
+            **self.config.cache_metadata(),
+            "summary": "Theme summary.",
+            "sentiments": [],
+            "positive_comments": [],
+            "critical_comments": [],
+            "student_suggestions": [],
+            "subthemes": [
+                "Verbose duplicate label with no evidence",
+                "Clear explanations",
+            ],
+            "subtheme_manifest": [
+                {
+                    "name": "Verbose duplicate label with no evidence",
+                    "description": "",
+                    "evidence_ids": [],
+                },
+                {
+                    "name": "Clear explanations",
+                    "description": "Students mention clear teacher explanations.",
+                    "evidence_ids": ["E0001"],
+                },
+            ],
+            "subtheme_mentions": [],
+            "quotes": [],
+        }
+
+        with (
+            mock.patch.object(generation, "load_cache", return_value={"Teachers": main_entry}),
+            mock.patch.object(generation, "load_subtheme_cache", return_value={}),
+            mock.patch.object(
+                generation,
+                "save_subtheme_cache",
+                side_effect=lambda cache: saved_subtheme_cache.update(cache),
+            ),
+            mock.patch.object(generation, "get_llm_client", return_value=client),
+            mock.patch.object(retrieval, "get_collection", return_value=self.collection),
+            mock.patch.object(
+                retrieval,
+                "classification_cache_metadata",
+                return_value=self.config.cache_metadata(),
+            ),
+        ):
+            events = list(
+                generation.precompute_subthemes_stream(
+                    themes=[{"name": "Teachers"}],
+                    provider="test",
+                    llm_model="fake-llm",
+                )
+            )
+
+        self.assertTrue(any("All subtheme insights generated" in line for line in events))
+        self.assertEqual(
+            list(saved_subtheme_cache),
+            ["Teachers::subquery=Clear explanations"],
         )
 
     def test_classification_settings_invalidate_stale_cache(self) -> None:

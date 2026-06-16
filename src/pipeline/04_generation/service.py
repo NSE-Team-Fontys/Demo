@@ -32,6 +32,7 @@ clear_subtheme_cache = cache_store.clear_subtheme_cache
 
 HIERARCHICAL_RAG_STRATEGY = "semantic_theme_map_reduce_v2"
 SUBTHEME_MANIFEST_FIELD = "subtheme_manifest"
+MAX_SUBTHEMES = 5
 
 
 def _ensure_llm_eligible_theme(theme_name: str) -> None:
@@ -115,12 +116,14 @@ def _normalize_subtheme_manifest(parsed: dict, selected: dict) -> tuple[list[str
     labels = _clean_string_list(raw_subthemes)
     manifest_by_name: dict[str, dict] = {}
 
-    for item in raw_manifest:
+    def upsert_manifest_item(item: dict) -> None:
         if not isinstance(item, dict):
-            continue
-        name = str(item.get("name") or item.get("subtheme") or item.get("label") or "").strip()
+            return
+        name = str(
+            item.get("name") or item.get("subtheme") or item.get("label") or ""
+        ).strip()
         if not name:
-            continue
+            return
         if name not in labels:
             labels.append(name)
         evidence_ids = [
@@ -142,30 +145,11 @@ def _normalize_subtheme_manifest(parsed: dict, selected: dict) -> tuple[list[str
             if evidence_id not in existing["evidence_ids"]:
                 existing["evidence_ids"].append(evidence_id)
 
+    for item in raw_manifest:
+        upsert_manifest_item(item)
+
     for item in raw_subthemes:
-        if not isinstance(item, dict):
-            continue
-        name = str(item.get("name") or item.get("subtheme") or item.get("label") or "").strip()
-        if not name:
-            continue
-        if name not in labels:
-            labels.append(name)
-        evidence_ids = [
-            str(evidence_id).strip()
-            for evidence_id in (item.get("evidence_ids") or [])
-            if str(evidence_id).strip() in valid_ids
-        ]
-        existing = manifest_by_name.setdefault(
-            name,
-            {
-                "name": name,
-                "description": str(item.get("description") or "").strip(),
-                "evidence_ids": [],
-            },
-        )
-        for evidence_id in evidence_ids:
-            if evidence_id not in existing["evidence_ids"]:
-                existing["evidence_ids"].append(evidence_id)
+        upsert_manifest_item(item)
 
     for label in labels:
         manifest_by_name.setdefault(
@@ -173,6 +157,15 @@ def _normalize_subtheme_manifest(parsed: dict, selected: dict) -> tuple[list[str
             {"name": label, "description": "", "evidence_ids": []},
         )
 
+    evidence_backed_labels = [
+        label
+        for label in labels
+        if manifest_by_name.get(label, {}).get("evidence_ids")
+    ]
+    if evidence_backed_labels:
+        labels = evidence_backed_labels
+
+    labels = labels[:MAX_SUBTHEMES]
     ordered_manifest = [manifest_by_name[label] for label in labels if label in manifest_by_name]
     return labels, ordered_manifest
 
@@ -185,6 +178,65 @@ def _manifest_for_subtheme(main_entry: dict, subtheme: str) -> dict:
         if str(item.get("name") or "").strip() == target:
             return item
     return {"name": target, "description": "", "evidence_ids": []}
+
+
+def _subthemes_for_precompute(main_entry: dict) -> list[str]:
+    manifest_subthemes = []
+    for item in main_entry.get(SUBTHEME_MANIFEST_FIELD) or []:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or "").strip()
+        evidence_ids = [
+            str(evidence_id).strip()
+            for evidence_id in (item.get("evidence_ids") or [])
+            if str(evidence_id).strip()
+        ]
+        if name and evidence_ids:
+            manifest_subthemes.append(name)
+
+    if manifest_subthemes:
+        return _clean_string_list(manifest_subthemes)[:MAX_SUBTHEMES]
+    return _clean_string_list(main_entry.get("subthemes") or [])[:MAX_SUBTHEMES]
+
+
+def _sanitize_cached_subthemes(cached_data: dict) -> dict:
+    if not isinstance(cached_data, dict):
+        return cached_data
+
+    subthemes = _subthemes_for_precompute(cached_data)
+    if not subthemes:
+        return cached_data
+
+    sanitized = dict(cached_data)
+    sanitized["subthemes"] = subthemes
+
+    manifest_by_name = {
+        str(item.get("name") or "").strip(): item
+        for item in cached_data.get(SUBTHEME_MANIFEST_FIELD) or []
+        if isinstance(item, dict)
+    }
+    sanitized[SUBTHEME_MANIFEST_FIELD] = [
+        manifest_by_name.get(
+            subtheme,
+            {"name": subtheme, "description": "", "evidence_ids": []},
+        )
+        for subtheme in subthemes
+    ]
+
+    mention_rows = [
+        dict(row)
+        for row in cached_data.get("subtheme_mentions") or []
+        if isinstance(row, dict) and str(row.get("subtheme") or "").strip() in subthemes
+    ]
+    total_mentions = sum(int(row.get("mentions") or 0) for row in mention_rows)
+    if total_mentions > 0:
+        for row in mention_rows:
+            row["percentage"] = int(
+                round((int(row.get("mentions") or 0) / total_mentions) * 100)
+            )
+    sanitized["subtheme_mentions"] = mention_rows
+
+    return sanitized
 
 
 def _cached_dashboard_response(
@@ -206,7 +258,7 @@ def _cached_dashboard_response(
         match_llm_identity=match_llm_identity,
     ) or not _cache_filters_match(cached_data, filters):
         return None
-    response_data = dict(cached_data)
+    response_data = _sanitize_cached_subthemes(cached_data)
     response_data["status"] = "success"
     response_data.setdefault("theme", theme_name)
     return response_data
@@ -777,7 +829,7 @@ def precompute_insights_stream(
                     continue
                 subthemes = [
                     subtheme
-                    for subtheme in _clean_string_list(response_data.get("subthemes") or [])
+                    for subtheme in _subthemes_for_precompute(response_data)
                     if subtheme != theme_name
                 ]
                 for st_idx, subtheme in enumerate(subthemes):
@@ -909,9 +961,7 @@ def precompute_insights_stream(
                         subtheme_cache = load_subtheme_cache()
                         subthemes = [
                             subtheme
-                            for subtheme in _clean_string_list(
-                                response_data.get("subthemes") or []
-                            )
+                            for subtheme in _subthemes_for_precompute(response_data)
                             if subtheme != theme_name
                         ]
                         for st_idx, subtheme in enumerate(subthemes):
@@ -1027,7 +1077,7 @@ def precompute_subthemes_stream(
                     continue
                 subtheme_labels = [
                     subtheme
-                    for subtheme in _clean_string_list(main_entry.get("subthemes") or [])
+                    for subtheme in _subthemes_for_precompute(main_entry)
                     if subtheme != theme_name
                 ]
                 for subtheme in subtheme_labels:
@@ -1108,7 +1158,7 @@ def themes_overview_payload(filters: dict) -> dict:
     retrieval.get_collection()
     normalized_filters = _normalized_filters(filters)
     cached_values = [
-        data
+        _sanitize_cached_subthemes(data)
         for data in load_cache().values()
         if cache_has_full_dashboard_payload(data)
     ]
