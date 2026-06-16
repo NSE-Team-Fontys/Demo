@@ -90,6 +90,22 @@ def clear_subtheme_cache():
         return jsonify({"status": "error", "error": str(exc)}), 500
 
 
+@insight_bp.route("/api/cache-status", methods=["GET"])
+def cache_status():
+    try:
+        main = generation.load_cache()
+        sub = generation.load_subtheme_cache()
+        def is_filtered(key): return "::filters=" in key
+        return jsonify({
+            "main_baseline": sum(1 for k in main if not is_filtered(k)),
+            "main_filtered": sum(1 for k in main if is_filtered(k)),
+            "subtheme_baseline": sum(1 for k in sub if not is_filtered(k)),
+            "subtheme_filtered": sum(1 for k in sub if is_filtered(k)),
+        })
+    except Exception as exc:
+        return jsonify({"status": "error", "error": str(exc)}), 500
+
+
 @insight_bp.route("/api/precompute-insights", methods=["POST"])
 def precompute_insights():
     data = request.get_json(silent=True) or {}

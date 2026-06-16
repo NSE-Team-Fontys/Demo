@@ -23,6 +23,24 @@ Respond EXACTLY in this JSON format:
   ]
 }`;
 
+function CacheBadge({ cached, total }) {
+  if (cached === 0 && !total) return null;
+  const full = total !== undefined && cached >= total;
+  const partial = total !== undefined && cached > 0 && cached < total;
+  const none = cached === 0;
+
+  const dot = full ? 'bg-emerald-400' : partial ? 'bg-amber-400' : 'bg-white/30';
+  const label = total !== undefined ? `${cached}/${total}` : cached > 0 ? `${cached} cached` : null;
+  if (!label) return null;
+
+  return (
+    <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded ${none ? 'bg-white/10 text-white/50' : 'bg-white/20 text-white'}`}>
+      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dot}`}></span>
+      {label}
+    </span>
+  );
+}
+
 export default function InsightGenerator({ onComplete }) {
   const [progress, setProgress] = useState(0);
   const [logs, setLogs] = useState([]);
@@ -54,6 +72,24 @@ export default function InsightGenerator({ onComplete }) {
     modelId: null,
     message: ''
   });
+
+  const [cacheStatus, setCacheStatus] = useState({
+    main_baseline: 0,
+    main_filtered: 0,
+    subtheme_baseline: 0,
+    subtheme_filtered: 0,
+  });
+
+  const refreshCacheStatus = async () => {
+    try {
+      const res = await fetch('http://localhost:5001/api/cache-status');
+      const data = await res.json();
+      if (data && typeof data.main_baseline === 'number') setCacheStatus(data);
+    } catch {}
+  };
+
+  useEffect(() => { refreshCacheStatus(); }, []);
+  useEffect(() => { if (progress === 100) refreshCacheStatus(); }, [progress]);
 
   const logRef = useRef(null);
   const activationRequestRef = useRef(0);
@@ -543,7 +579,10 @@ export default function InsightGenerator({ onComplete }) {
                   <span>Dashboard Themes</span>
                   <span>✨</span>
                 </div>
-                <div className="text-xs font-normal text-white/80 mt-0.5">Main 7 themes, baseline only</div>
+                <div className="flex items-center justify-between mt-0.5">
+                  <span className="text-xs font-normal text-white/80">Main 7 themes, baseline only</span>
+                  <CacheBadge cached={cacheStatus.main_baseline} total={THEME_COUNT} />
+                </div>
               </button>
 
               <button
@@ -554,7 +593,10 @@ export default function InsightGenerator({ onComplete }) {
                   <span>Dashboard Subthemes</span>
                   <span>🔍</span>
                 </div>
-                <div className="text-xs font-normal text-white/80 mt-0.5">Subthemes for baseline themes</div>
+                <div className="flex items-center justify-between mt-0.5">
+                  <span className="text-xs font-normal text-white/80">Subthemes for baseline themes</span>
+                  <CacheBadge cached={cacheStatus.subtheme_baseline} />
+                </div>
               </button>
 
               <button
@@ -566,8 +608,11 @@ export default function InsightGenerator({ onComplete }) {
                   <span>Filtered Themes</span>
                   <span>🎛️</span>
                 </div>
-                <div className="text-xs font-normal text-white/80 mt-0.5">
-                  {filterDimensions.length > 0 ? `${extraCombos} combos × 7 themes` : 'Select dimensions first'}
+                <div className="flex items-center justify-between mt-0.5">
+                  <span className="text-xs font-normal text-white/80">
+                    {filterDimensions.length > 0 ? `${extraCombos} combos × 7 themes` : 'Select dimensions first'}
+                  </span>
+                  <CacheBadge cached={cacheStatus.main_filtered} total={filterDimensions.length > 0 ? extraThemeInsights : undefined} />
                 </div>
               </button>
 
@@ -580,8 +625,11 @@ export default function InsightGenerator({ onComplete }) {
                   <span>Filtered Subthemes</span>
                   <span>🪢</span>
                 </div>
-                <div className="text-xs font-normal text-white/80 mt-0.5">
-                  {filterDimensions.length > 0 ? `Subthemes for each combo` : 'Select dimensions first'}
+                <div className="flex items-center justify-between mt-0.5">
+                  <span className="text-xs font-normal text-white/80">
+                    {filterDimensions.length > 0 ? `Subthemes for each combo` : 'Select dimensions first'}
+                  </span>
+                  <CacheBadge cached={cacheStatus.subtheme_filtered} />
                 </div>
               </button>
             </div>
