@@ -10,6 +10,7 @@ ANONYMIZED_CSV_PATH = DATA_DIR / "anonymized_survey.csv"
 SEP_FILE = DATA_DIR / "detected_sep.txt"
 VECTOR_DB_PATH = ROOT_DIR / "survey_vector_db"
 CACHE_FILE = ROOT_DIR / "gemma_cache.json"
+SUBTHEME_CACHE_FILE = ROOT_DIR / "gemma_subtheme_cache.json"
 
 ANON_CHECKPOINT_CSV = DATA_DIR / "anon_checkpoint.csv"
 ANON_CHECKPOINT_META = DATA_DIR / "anon_checkpoint_meta.json"

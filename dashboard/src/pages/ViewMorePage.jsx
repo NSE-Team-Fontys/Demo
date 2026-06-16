@@ -720,7 +720,14 @@ export default function ViewMorePage() {
       }),
     })
       .then((r) => r.json())
-      .then((data) => { if (isMounted && data.status === 'success') setSubthemeLiveData(data) })
+      .then((data) => {
+        if (!isMounted) return
+        if (data.status === 'success') {
+          setSubthemeLiveData(data)
+        } else if (data.status === 'not_cached') {
+          setSubthemeLiveData({ not_cached: true, message: data.message })
+        }
+      })
       .catch(() => {})
       .finally(() => { if (isMounted) setLoadingSubtheme(false) })
     return () => { isMounted = false }
@@ -766,11 +773,12 @@ export default function ViewMorePage() {
       }
     }
 
-    if (decodedSubtheme && !subthemeLiveData) {
+    if (decodedSubtheme && (!subthemeLiveData || subthemeLiveData.not_cached)) {
       return {
         isSubtheme: true,
         name: decodedSubtheme,
         summary: null,
+        not_cached: subthemeLiveData?.not_cached ?? false,
         subthemes: [],
         subtheme_mentions: [],
         quotes: [],
@@ -987,14 +995,29 @@ export default function ViewMorePage() {
         {/* ── Main Content Grid ── */}
         <section className="grid grid-cols-1 lg:grid-cols-12 gap-5 md:gap-6 mt-6">
           <div className="lg:col-span-8 space-y-5">
-            <InsightBento
-              insights={insightCards}
-              accentColor={colors.accent}
-              gradient={colors.gradient}
-              loading={loadingLive || loadingSubtheme}
-              showOfflineNotice={hasLlmError}
-              isSubtheme={activeData.isSubtheme}
-            />
+            {activeData.not_cached ? (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-8 text-center">
+                <span
+                  className="material-symbols-outlined text-amber-500 text-4xl mb-3 block"
+                  style={{ fontVariationSettings: "'FILL' 1" }}
+                >
+                  hourglass_empty
+                </span>
+                <p className="text-sm font-bold text-amber-900">Subtheme insights not generated yet</p>
+                <p className="text-xs text-amber-700 mt-1">
+                  Go to the Pipeline tab and run <strong>Precompute Subthemes</strong> first.
+                </p>
+              </div>
+            ) : (
+              <InsightBento
+                insights={insightCards}
+                accentColor={colors.accent}
+                gradient={colors.gradient}
+                loading={loadingLive || loadingSubtheme}
+                showOfflineNotice={hasLlmError}
+                isSubtheme={activeData.isSubtheme}
+              />
+            )}
 
             {!activeData.isSubtheme && (
               <SuggestionSection suggestions={activeData.student_suggestions} accentColor={colors.accent} />

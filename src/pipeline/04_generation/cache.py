@@ -1,7 +1,7 @@
 from importlib import import_module
 import json
 
-from src.config.paths import CACHE_FILE
+from src.config.paths import CACHE_FILE, SUBTHEME_CACHE_FILE
 from src.config.settings import (
     HIERARCHICAL_RAG_BATCH_DOCUMENTS,
     INSIGHT_CACHE_VERSION,
@@ -102,3 +102,26 @@ def cache_has_full_dashboard_payload(
         "quotes",
     ]
     return all(field in cached_theme for field in required_fields)
+
+
+def load_subtheme_cache():
+    if SUBTHEME_CACHE_FILE.exists():
+        try:
+            with open(SUBTHEME_CACHE_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+
+def save_subtheme_cache(cache_data):
+    tmp_file = SUBTHEME_CACHE_FILE.with_suffix(f"{SUBTHEME_CACHE_FILE.suffix}.tmp")
+    with open(tmp_file, "w", encoding="utf-8") as f:
+        json.dump(cache_data, f, indent=2)
+    tmp_file.replace(SUBTHEME_CACHE_FILE)
+
+
+def clear_subtheme_cache() -> dict:
+    if SUBTHEME_CACHE_FILE.exists():
+        SUBTHEME_CACHE_FILE.unlink()
+    return {"status": "success", "message": "Subtheme cache cleared"}

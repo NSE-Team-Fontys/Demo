@@ -82,6 +82,14 @@ def clear_cache():
         return jsonify({"status": "error", "error": str(exc)}), 500
 
 
+@insight_bp.route("/api/clear-subtheme-cache", methods=["POST"])
+def clear_subtheme_cache():
+    try:
+        return jsonify(generation.clear_subtheme_cache())
+    except Exception as exc:
+        return jsonify({"status": "error", "error": str(exc)}), 500
+
+
 @insight_bp.route("/api/precompute-insights", methods=["POST"])
 def precompute_insights():
     data = request.get_json(silent=True) or {}
@@ -108,6 +116,34 @@ def precompute_insights():
             max_documents=max_documents,
             filter_grid=filter_grid,
             precache_subthemes=precache_subthemes,
+        ),
+        mimetype="application/x-ndjson",
+    )
+
+
+@insight_bp.route("/api/precompute-subthemes", methods=["POST"])
+def precompute_subthemes():
+    data = request.get_json(silent=True) or {}
+    themes = data.get("themes", [])
+    if not themes:
+        return jsonify({"error": "No themes provided"}), 400
+
+    raw_max = data.get("max_documents")
+    max_documents = int(raw_max) if raw_max and str(raw_max).isdigit() else None
+
+    raw_dims = data.get("filter_dimensions") or []
+    dimension_keys = [str(d) for d in raw_dims if isinstance(d, str)]
+    filter_grid = _build_filter_grid(dimension_keys)
+
+    return Response(
+        generation.precompute_subthemes_stream(
+            themes=themes,
+            llm_model=data.get("llm_model") or settings.DEFAULT_LLM_MODEL,
+            allow_model_download=bool(data.get("allow_model_download", False)),
+            provider=data.get("provider", settings.DEFAULT_LLM_PROVIDER),
+            filters=_filters_from_payload(data),
+            max_documents=max_documents,
+            filter_grid=filter_grid,
         ),
         mimetype="application/x-ndjson",
     )

@@ -54,6 +54,10 @@ export default function InsightGenerator({ onComplete }) {
     message: ''
   });
 
+  const [generatingSubthemes, setGeneratingSubthemes] = useState(false);
+  const [subthemeProgress, setSubthemeProgress] = useState(0);
+  const [subthemeLogs, setSubthemeLogs] = useState([]);
+
   const logRef = useRef(null);
   const activationRequestRef = useRef(0);
 
@@ -261,6 +265,71 @@ export default function InsightGenerator({ onComplete }) {
     } catch (e) {
       setLogs(prev => [...prev, "❌ Connection Error: " + e.message]);
       setGenerating(false);
+    }
+  };
+
+  const startSubthemeGeneration = async () => {
+    setGeneratingSubthemes(true);
+    setSubthemeLogs([`Starting subtheme precompute with ${activeModel?.name || selectedModel}...`]);
+    setSubthemeProgress(0);
+    let completed = false;
+
+    const handleEvent = (data) => {
+      if (data.status === 'progress') {
+        setSubthemeProgress(data.progress);
+        const prefix = data.theme ? `[${data.theme}] ` : '';
+        setSubthemeLogs(prev => [...prev, `${prefix}${data.message}`]);
+      } else if (data.status === 'success') {
+        completed = true;
+        setSubthemeProgress(100);
+        setSubthemeLogs(prev => [...prev, '✅ ' + data.message]);
+        setGeneratingSubthemes(false);
+        setTimeout(onComplete, 1500);
+      } else if (data.status === 'error') {
+        completed = true;
+        setSubthemeLogs(prev => [...prev, '❌ Error: ' + (data.message || data.error || 'Failed')]);
+        setGeneratingSubthemes(false);
+      }
+    };
+
+    try {
+      const { THEMES } = await import('../data/themes.js');
+      const res = await fetch('http://localhost:5001/api/precompute-subthemes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          themes: THEMES,
+          llm_model: selectedModel,
+          provider: LLM_PROVIDER,
+          allow_model_download: allowModelDownload,
+          max_documents: maxDocuments,
+          filter_dimensions: filterDimensions,
+        }),
+      });
+
+      if (!res.ok || !res.body) throw new Error(`Backend error HTTP ${res.status}`);
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) { buffer += decoder.decode(); break; }
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        for (const line of lines) {
+          try { handleEvent(JSON.parse(line)); } catch {}
+        }
+      }
+      if (buffer.trim()) { try { handleEvent(JSON.parse(buffer.trim())); } catch {} }
+      if (!completed) {
+        setSubthemeLogs(prev => [...prev, '❌ Stream ended before completion.']);
+        setGeneratingSubthemes(false);
+      }
+    } catch (e) {
+      setSubthemeLogs(prev => [...prev, '❌ Connection Error: ' + e.message]);
+      setGeneratingSubthemes(false);
     }
   };
 
@@ -645,6 +714,69 @@ export default function InsightGenerator({ onComplete }) {
           </div>
         </div>
       )}
+
+      {/* ── SUBTHEME PRECOMPUTE SECTION ── */}
+      <div className="border-t border-gray-100 pt-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-base font-bold text-gray-900">Subtheme Precompute</h3>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Run after main themes are cached. Generates full analysis for each sub-theme.
+            </p>
+          </div>
+          {!generatingSubthemes && subthemeProgress < 100 && (
+            <button
+              onClick={startSubthemeGeneration}
+              disabled={generating}
+              className="px-6 py-2.5 bg-gradient-to-r from-teal-600 to-cyan-600 text-white rounded-xl font-bold shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed text-sm"
+            >
+              Generate Subthemes ✨
+            </button>
+          )}
+        </div>
+
+        {generatingSubthemes && (
+          <div className="p-6 bg-gray-900 rounded-2xl shadow-xl relative overflow-hidden ring-1 ring-white/10">
+            <div className="absolute top-0 left-0 w-full h-1 bg-gray-800">
+              <div
+                className="h-full bg-gradient-to-r from-teal-500 via-cyan-500 to-blue-500 transition-all duration-500 ease-out"
+                style={{ width: `${subthemeProgress}%` }}
+              />
+            </div>
+            <div className="flex items-center justify-between mb-4 relative z-10">
+              <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                <div className="relative flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-teal-500" />
+                </div>
+                Generating Subtheme Insights
+              </h4>
+              <span className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-teal-400 to-cyan-400">
+                {subthemeProgress}%
+              </span>
+            </div>
+            <div className="bg-black/50 rounded-xl p-4 h-40 overflow-y-auto font-mono text-xs border border-white/5">
+              {subthemeLogs.map((log, i) => (
+                <div key={i} className={`py-0.5 ${log.startsWith('✅') ? 'text-emerald-400' : log.startsWith('❌') ? 'text-red-400' : 'text-teal-400/80'}`}>
+                  {log}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {!generatingSubthemes && subthemeProgress === 100 && (
+          <div className="p-4 bg-teal-50 border border-teal-100 rounded-2xl flex items-center gap-3">
+            <div className="p-2 bg-teal-100 text-teal-600 rounded-full">
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+            </div>
+            <div>
+              <p className="text-sm font-bold text-teal-900">All Subtheme Insights Generated</p>
+              <p className="text-xs text-teal-700 mt-0.5">Sub-theme drilldowns will now load instantly from cache.</p>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
