@@ -6,6 +6,7 @@ import os
 from src.config.settings import LLAMA_CPP_N_GPU_LAYERS
 
 DEFAULT_QUANTIZATION = "UD-Q4_K_XL"
+DEFAULT_SERVER_ARGS = ("--skip-chat-parsing",)
 
 
 @dataclass(frozen=True)
@@ -18,7 +19,7 @@ class LlamaCppGenerationSettings:
     min_p: float | None = None
     repeat_penalty: float | None = None
     enable_thinking: bool = False
-    json_mode: bool = True
+    json_mode: bool = False
 
     @property
     def server_args(self) -> list[str]:
@@ -103,6 +104,7 @@ class LlamaCppModel:
                 "-hf",
                 self.llama_server_model_id,
                 *self.generation.server_args,
+                *DEFAULT_SERVER_ARGS,
                 *self.extra_server_args,
             ]
         )
@@ -113,6 +115,7 @@ class LlamaCppModel:
             "-hf",
             self.llama_server_model_id,
             *self.generation.server_args,
+            *DEFAULT_SERVER_ARGS,
             *self.extra_server_args,
         ]
 

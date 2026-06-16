@@ -79,3 +79,5 @@ data/
 llama.cpp/
 .python-version
 gemma_subtheme_cache.json
+
+graphify-out/*
