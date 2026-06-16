@@ -593,7 +593,6 @@ def _empty_theme_payload(
         "ambiguous_evidence_count": selected["ambiguous_evidence_count"],
         **selected["classification_metadata"],
         "summary": "No responses were semantically assigned to this theme.",
-        "sentiments": [],
         "positive_comments": [],
         "critical_comments": [],
         "student_suggestions": [],
@@ -619,7 +618,6 @@ def _theme_payload_from_parsed(
     relevant_docs = selected["relevant_docs"]
     all_docs = selected.get("all_docs", relevant_docs)
     quotes = [doc for doc in all_docs if len(doc.strip()) > 1]
-    sentiments = parsed.get("sentiments", [])
     subthemes, subtheme_manifest = _normalize_subtheme_manifest(parsed, selected)
     return {
         "status": "success",
@@ -645,7 +643,6 @@ def _theme_payload_from_parsed(
         "ambiguous_evidence_count": selected["ambiguous_evidence_count"],
         **selected["classification_metadata"],
         "summary": parsed.get("summary", "Summary could not be parsed."),
-        "sentiments": sentiments,
         "positive_comments": parsed.get("positive_comments", [])[:3],
         "critical_comments": parsed.get("critical_comments", [])[:3],
         "student_suggestions": parsed.get("student_suggestions", [])[:3],

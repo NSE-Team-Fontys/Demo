@@ -405,6 +405,49 @@ function SuggestionSection({ suggestions, accentColor }) {
   )
 }
 
+// ── AI Point Section — renders LLM-generated positive/critical points ────────
+function AIPointSection({ points, icon, title, accentColor, sentimentColor }) {
+  if (!points || points.length === 0) return null
+  const borderColor = sentimentColor || accentColor
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, delay: 0.12, ease: [0.16, 1, 0.3, 1] }}
+      className="bg-surface-container-lowest rounded-2xl p-4 md:p-6 shadow-sm border border-outline-variant/10"
+    >
+      <div className="flex items-center justify-between gap-3 mb-4">
+        <div className="flex items-center gap-2">
+          <span
+            className="material-symbols-outlined text-xl"
+            style={{ color: borderColor, fontVariationSettings: "'FILL' 1" }}
+          >
+            {icon}
+          </span>
+          <h2 className="text-base md:text-lg font-bold font-headline text-on-surface">{title}</h2>
+        </div>
+        <span className="flex items-center gap-1 text-[10px] uppercase tracking-wider font-bold text-on-surface-variant/70">
+          <span className="material-symbols-outlined text-[12px]" style={{ fontVariationSettings: "'FILL' 1" }}>
+            auto_awesome
+          </span>
+          AI · from real comments
+        </span>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        {points.slice(0, 3).map((point, i) => (
+          <div
+            key={i}
+            className="p-4 rounded-xl border-l-4 text-sm leading-relaxed text-on-surface"
+            style={{ borderColor, backgroundColor: `${borderColor}08` }}
+          >
+            {normaliseComment(point)}
+          </div>
+        ))}
+      </div>
+    </motion.div>
+  )
+}
+
 // ── Donut chart — uses shades of one accent color ───────────────────────────
 function DonutChart({ rows, title, accentColor }) {
   if (!rows || rows.length === 0) return null
@@ -806,6 +849,8 @@ export default function ViewMorePage() {
         subtheme_mentions: subthemeLiveData.subtheme_mentions || [],
         quotes: subthemeLiveData.quotes || [],
         student_suggestions: subthemeLiveData.student_suggestions || [],
+        positive_comments: subthemeLiveData.positive_comments || [],
+        critical_comments: subthemeLiveData.critical_comments || [],
       }
     }
 
@@ -819,6 +864,8 @@ export default function ViewMorePage() {
         subtheme_mentions: [],
         quotes: [],
         student_suggestions: [],
+        positive_comments: [],
+        critical_comments: [],
       }
     }
 
@@ -840,6 +887,8 @@ export default function ViewMorePage() {
       subtheme_mentions: chartRows,
       quotes: comments,
       student_suggestions: studentSuggestions,
+      positive_comments: cached.positive_comments?.length > 0 ? cached.positive_comments : [],
+      critical_comments: cached.critical_comments?.length > 0 ? cached.critical_comments : [],
     }
   }, [theme, effectiveData, decodedSubtheme, subthemeLiveData])
 
@@ -1069,6 +1118,22 @@ export default function ViewMorePage() {
             {!activeData.isSubtheme && (
               <SuggestionSection suggestions={activeData.student_suggestions} accentColor={colors.accent} />
             )}
+
+            <AIPointSection
+              points={activeData.positive_comments}
+              icon="thumb_up"
+              title="Positive Highlights"
+              accentColor={colors.accent}
+              sentimentColor="#005119"
+            />
+
+            <AIPointSection
+              points={activeData.critical_comments}
+              icon="report"
+              title="Critical Concerns"
+              accentColor={colors.accent}
+              sentimentColor="#ba1a1a"
+            />
 
             {/* Scrollable Comments Grid */}
             {displayedComments.length > 0 && (

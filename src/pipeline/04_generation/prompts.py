@@ -4,7 +4,7 @@ import re
 from src.config.themes import THEME_LLM_DEFINITIONS
 
 ENGLISH_OUTPUT_INSTRUCTION = (
-    "Write generated fields in English: summary, sentiment points, positive_comments, "
+    "Write generated fields in English: summary, positive_comments, "
     "critical_comments, and subthemes. Keep only student_suggestions as exact "
     "verbatim student comments in their original language."
 )
@@ -18,9 +18,6 @@ SUBTHEME_MANIFEST_INSTRUCTION = (
 
 DASHBOARD_JSON_SCHEMA = """{
   "summary": "...",
-  "sentiments": [
-    {"sentiment": "Positive", "point": "..."}
-  ],
   "positive_comments": ["..."],
   "critical_comments": ["..."],
   "student_suggestions": ["..."],
@@ -37,7 +34,7 @@ Theme scope: {THEME_LLM_DEFINITIONS.get(theme_name, theme_name)}
 Only analyze comments as evidence for this theme. Do not drift into Support / Mentoring unless the selected theme is Support / Mentoring.
 {ENGLISH_OUTPUT_INSTRUCTION}
 These responses may be the complete theme evidence set or one small enough to fit in a single prompt.
-Summarize the general consensus in 2 sentences. Extract 3 key sentiments (Positive, Neutral, or Critical) and provide a 1-sentence point for each.
+Summarize the general consensus in 2 sentences.
 Write up to 3 concise English summaries of the strongest positive points students make. Write up to 3 concise English summaries of the strongest critical points students make. Do not present these as verbatim quotes.
 Select up to 3 exact student suggestions where students propose a solution, improvement, or concrete next step instead of only complaining. Use verbatim text only; return an empty array if no clear suggestions exist.
 Also extract 3 to 5 short sub-themes or topics mentioned.
@@ -140,7 +137,7 @@ Theme scope: {THEME_LLM_DEFINITIONS.get(theme_name, theme_name)}
 The batch summaries together represent {source_document_count} source student responses.
 Only make claims supported by repeated or strong evidence in the batch summaries. Do not invent quotes or details.
 {ENGLISH_OUTPUT_INSTRUCTION}
-Summarize the general consensus in 2 sentences. Extract 3 key sentiments (Positive, Neutral, or Critical) and provide a 1-sentence point for each.
+Summarize the general consensus in 2 sentences.
 Write up to 3 concise English summaries of the strongest positive points students make. Write up to 3 concise English summaries of the strongest critical points students make. Do not present these as verbatim quotes.
 Select up to 3 exact student suggestions from the batch summaries. Use verbatim text only; return an empty array if no clear suggestions exist.
 Deduplicate repeated points across batches. Prefer patterns that appear in multiple batches, but keep a strong minority concern if it is concrete and important.
@@ -165,7 +162,7 @@ Subtheme focus: {subtheme_name}
 Parent theme scope: {THEME_LLM_DEFINITIONS.get(parent_theme_name, parent_theme_name)}
 Only analyze comments as evidence for the subtheme focus. Ignore responses, or parts of responses, that do not support this subtheme.
 {ENGLISH_OUTPUT_INSTRUCTION}
-Summarize the subtheme consensus in 2 sentences. Extract 3 key sentiments (Positive, Neutral, or Critical) and provide a 1-sentence point for each.
+Summarize the subtheme consensus in 2 sentences.
 Write up to 3 concise English summaries of the strongest positive points students make for this subtheme. Write up to 3 concise English summaries of the strongest critical points students make for this subtheme. Do not present these as verbatim quotes.
 Select up to 3 exact student suggestions where students propose a solution, improvement, or concrete next step for this subtheme. Use verbatim text only; return an empty array if no clear suggestions exist.
 Also extract 3 to 5 more specific sub-topics within this subtheme, or return an empty list if the evidence is too narrow.
@@ -218,7 +215,7 @@ def build_subtheme_reduce_prompt(
 The batch summaries together represent {source_document_count} candidate source student responses.
 Only make claims supported by repeated or strong evidence in the batch summaries. Do not invent quotes or details.
 {ENGLISH_OUTPUT_INSTRUCTION}
-Summarize the subtheme consensus in 2 sentences. Extract 3 key sentiments (Positive, Neutral, or Critical) and provide a 1-sentence point for each.
+Summarize the subtheme consensus in 2 sentences.
 Write up to 3 concise English summaries of the strongest positive points students make. Write up to 3 concise English summaries of the strongest critical points students make. Do not present these as verbatim quotes.
 Select up to 3 exact student suggestions from the batch summaries. Use verbatim text only; return an empty array if no clear suggestions exist.
 Deduplicate repeated points across batches. Prefer patterns that appear in multiple batches, but keep a strong minority concern if it is concrete and important.

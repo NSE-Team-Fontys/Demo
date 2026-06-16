@@ -93,7 +93,6 @@ def cache_has_full_dashboard_payload(
         "vector_relevant_count",
         "llm_document_count",
         "summary",
-        "sentiments",
         "positive_comments",
         "critical_comments",
         "student_suggestions",

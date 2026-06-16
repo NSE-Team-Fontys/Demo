@@ -37,7 +37,6 @@ export default function InsightGenerator({ onComplete }) {
   const [maxDocuments, setMaxDocuments] = useState(240);
   const [totalDocs, setTotalDocs] = useState(null);
   const [filterDimensions, setFilterDimensions] = useState([]);
-  const [precacheSubthemes, setPrecacheSubthemes] = useState(false);
   const [dimensionSizes, setDimensionSizes] = useState({
     academic_year: 0,
     location: 0,
@@ -50,17 +49,11 @@ export default function InsightGenerator({ onComplete }) {
   // Empirical: measured 50–101s per call on RTX 4050 Laptop GPU, avg ~75s; using 90s to be conservative.
   const SECONDS_PER_INSIGHT = 90;
   const THEME_COUNT = 7;
-  // Rough sub-theme multiplier: prompts typically yield 3-5 sub-themes per theme.
-  const SUBTHEMES_PER_THEME = 4;
   const [modelActivation, setModelActivation] = useState({
     status: 'idle',
     modelId: null,
     message: ''
   });
-
-  const [generatingSubthemes, setGeneratingSubthemes] = useState(false);
-  const [subthemeProgress, setSubthemeProgress] = useState(0);
-  const [subthemeLogs, setSubthemeLogs] = useState([]);
 
   const logRef = useRef(null);
   const activationRequestRef = useRef(0);
@@ -106,11 +99,7 @@ export default function InsightGenerator({ onComplete }) {
     filterDimensions.length > 0 ? 1 : 0
   );
   const extraThemeInsights = extraCombos * THEME_COUNT;
-  const extraSubthemeInsights = precacheSubthemes
-    ? extraThemeInsights * SUBTHEMES_PER_THEME
-    : 0;
-  const extraInsights = extraThemeInsights + extraSubthemeInsights;
-  const estimatedMinutes = Math.round((extraInsights * SECONDS_PER_INSIGHT) / 60);
+  const estimatedMinutes = Math.round((extraThemeInsights * SECONDS_PER_INSIGHT) / 60);
 
   const selectAndStartModel = async (model) => {
     setSelectedModel(model.id);
@@ -161,9 +150,9 @@ export default function InsightGenerator({ onComplete }) {
     }
   };
 
-  const startGeneration = async () => {
+  const launchPrecompute = async ({ endpoint, useFilterGrid, label }) => {
     setGenerating(true);
-    setLogs([`Starting insight generation with ${activeModel?.name || selectedModel}...`]);
+    setLogs([`Starting ${label} with ${activeModel?.name || selectedModel}...`]);
     setProgress(0);
     let completed = false;
 
@@ -184,33 +173,38 @@ export default function InsightGenerator({ onComplete }) {
         setGenerating(false);
       }
     };
-    
+
     try {
-      // If clearing cache, delete it first
       if (clearCache) {
-        setLogs([`⚙️ Clearing cached insights...`]);
+        const clearEndpoint = endpoint === '/api/precompute-subthemes'
+          ? '/api/clear-subtheme-cache'
+          : '/api/clear-cache';
+        const cacheLabel = endpoint === '/api/precompute-subthemes' ? 'subtheme' : 'main theme';
+        setLogs([`⚙️ Clearing ${cacheLabel} cache...`]);
         try {
-          await fetch('http://localhost:5001/api/clear-cache', { method: 'POST' });
-          setLogs(prev => [...prev, `✅ Cache cleared. All insights will be regenerated.`]);
+          await fetch(`http://localhost:5001${clearEndpoint}`, { method: 'POST' });
+          setLogs(prev => [...prev, `✅ ${cacheLabel} cache cleared.`]);
         } catch (e) {
           setLogs(prev => [...prev, `⚠️ Could not clear cache: ${e.message}`]);
         }
       }
 
       const { THEMES } = await import('../data/themes.js');
-      const res = await fetch('http://localhost:5001/api/precompute-insights', {
+      const body = {
+        themes: THEMES,
+        llm_model: selectedModel,
+        provider: LLM_PROVIDER,
+        allow_model_download: allowModelDownload,
+        max_documents: maxDocuments,
+        filter_dimensions: useFilterGrid ? filterDimensions : [],
+      };
+      if (endpoint === '/api/precompute-insights') {
+        body.custom_prompt = customPrompt !== DEFAULT_PROMPT ? customPrompt : '';
+      }
+      const res = await fetch(`http://localhost:5001${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          themes: THEMES,
-          llm_model: selectedModel,
-          provider: LLM_PROVIDER,
-          custom_prompt: customPrompt !== DEFAULT_PROMPT ? customPrompt : '',
-          allow_model_download: allowModelDownload,
-          max_documents: maxDocuments,
-          filter_dimensions: filterDimensions,
-          precache_subthemes: precacheSubthemes,
-        })
+        body: JSON.stringify(body),
       });
 
       if (!res.ok) {
@@ -228,22 +222,20 @@ export default function InsightGenerator({ onComplete }) {
       if (!res.body) {
         throw new Error('The backend did not return a progress stream.');
       }
-      
+
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
-      
+
       while (true) {
         const { done, value } = await reader.read();
         if (done) {
           buffer += decoder.decode();
           break;
         }
-        
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
         buffer = lines.pop() || '';
-        
         for (let line of lines) {
           try {
             handleStreamEvent(JSON.parse(line));
@@ -269,71 +261,6 @@ export default function InsightGenerator({ onComplete }) {
     } catch (e) {
       setLogs(prev => [...prev, "❌ Connection Error: " + e.message]);
       setGenerating(false);
-    }
-  };
-
-  const startSubthemeGeneration = async () => {
-    setGeneratingSubthemes(true);
-    setSubthemeLogs([`Starting subtheme precompute with ${activeModel?.name || selectedModel}...`]);
-    setSubthemeProgress(0);
-    let completed = false;
-
-    const handleEvent = (data) => {
-      if (data.status === 'progress') {
-        setSubthemeProgress(data.progress);
-        const prefix = data.theme ? `[${data.theme}] ` : '';
-        setSubthemeLogs(prev => [...prev, `${prefix}${data.message}`]);
-      } else if (data.status === 'success') {
-        completed = true;
-        setSubthemeProgress(100);
-        setSubthemeLogs(prev => [...prev, '✅ ' + data.message]);
-        setGeneratingSubthemes(false);
-        setTimeout(onComplete, 1500);
-      } else if (data.status === 'error') {
-        completed = true;
-        setSubthemeLogs(prev => [...prev, '❌ Error: ' + (data.message || data.error || 'Failed')]);
-        setGeneratingSubthemes(false);
-      }
-    };
-
-    try {
-      const { THEMES } = await import('../data/themes.js');
-      const res = await fetch('http://localhost:5001/api/precompute-subthemes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          themes: THEMES,
-          llm_model: selectedModel,
-          provider: LLM_PROVIDER,
-          allow_model_download: allowModelDownload,
-          max_documents: maxDocuments,
-          filter_dimensions: filterDimensions,
-        }),
-      });
-
-      if (!res.ok || !res.body) throw new Error(`Backend error HTTP ${res.status}`);
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) { buffer += decoder.decode(); break; }
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-        for (const line of lines) {
-          try { handleEvent(JSON.parse(line)); } catch {}
-        }
-      }
-      if (buffer.trim()) { try { handleEvent(JSON.parse(buffer.trim())); } catch {} }
-      if (!completed) {
-        setSubthemeLogs(prev => [...prev, '❌ Stream ended before completion.']);
-        setGeneratingSubthemes(false);
-      }
-    } catch (e) {
-      setSubthemeLogs(prev => [...prev, '❌ Connection Error: ' + e.message]);
-      setGeneratingSubthemes(false);
     }
   };
 
@@ -535,31 +462,11 @@ export default function InsightGenerator({ onComplete }) {
                       );
                     })}
                   </div>
-                  <label
-                    onClick={() => setPrecacheSubthemes(v => !v)}
-                    className={`flex items-start gap-2 p-2 rounded-lg border-2 cursor-pointer transition-colors text-xs ${
-                      precacheSubthemes
-                        ? 'border-violet-500 bg-violet-50/60 text-violet-900'
-                        : 'border-gray-100 hover:border-gray-200 bg-white text-gray-700'
-                    }`}
-                  >
-                    <div className={`flex items-center justify-center w-4 h-4 mt-0.5 rounded flex-shrink-0 ${precacheSubthemes ? 'bg-violet-500' : 'border border-gray-300'}`}>
-                      {precacheSubthemes && (
-                        <svg className="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
-                      )}
-                    </div>
-                    <div>
-                      <p className="font-semibold">Also pre-cache sub-theme drilldowns</p>
-                      <p className="text-[10px] text-gray-500 mt-0.5">
-                        Adds ~{SUBTHEMES_PER_THEME}× extra LLM calls per combo. Without this, drilldowns generate on-demand.
-                      </p>
-                    </div>
-                  </label>
                   {filterDimensions.length > 0 && (
                     <div className={`text-xs rounded-lg px-2.5 py-2 border space-y-0.5 ${
-                      extraInsights > 500
+                      extraThemeInsights > 500
                         ? 'border-red-200 bg-red-50 text-red-700'
-                        : extraInsights > 150
+                        : extraThemeInsights > 150
                           ? 'border-amber-200 bg-amber-50 text-amber-700'
                           : 'border-emerald-200 bg-emerald-50 text-emerald-700'
                     }`}>
@@ -567,14 +474,8 @@ export default function InsightGenerator({ onComplete }) {
                         <span className="font-bold">{extraCombos}</span> combos × {THEME_COUNT} themes ={' '}
                         <span className="font-bold">{extraThemeInsights}</span> theme insights
                       </div>
-                      {precacheSubthemes && (
-                        <div>
-                          + ~{SUBTHEMES_PER_THEME} sub-themes ={' '}
-                          <span className="font-bold">{extraSubthemeInsights}</span> sub-theme insights
-                        </div>
-                      )}
                       <div className="text-gray-500">
-                        Total <span className="font-bold">{extraInsights}</span> extra calls · ~{estimatedMinutes} min
+                        ~{estimatedMinutes} min for filtered themes (subthemes have their own launcher)
                       </div>
                     </div>
                   )}
@@ -605,9 +506,9 @@ export default function InsightGenerator({ onComplete }) {
             </div>
           </div>
 
-          {/* Summary + Launch */}
-          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-100">
-            <div className="text-sm text-gray-600 flex items-center gap-2">
+          {/* Summary + 4 Launchers */}
+          <div className="space-y-3 p-4 bg-gray-50 rounded-xl border border-gray-100">
+            <div className="text-sm text-gray-600 flex items-center gap-2 flex-wrap">
               <span className="font-semibold text-gray-800">{activeModel?.name}</span>
               <span className="text-gray-300">•</span>
               <span className="text-gray-500">7 themes · {maxDocuments} docs/theme</span>
@@ -615,7 +516,7 @@ export default function InsightGenerator({ onComplete }) {
                 <>
                   <span className="text-gray-300">•</span>
                   <span className="text-violet-600 font-medium text-xs">
-                    +{extraInsights} filtered insights (~{estimatedMinutes} min)
+                    +{extraCombos} filter combos
                   </span>
                 </>
               )}
@@ -625,12 +526,6 @@ export default function InsightGenerator({ onComplete }) {
                   <span className="text-amber-600 font-medium text-xs">Cache will be cleared</span>
                 </>
               )}
-              {allowModelDownload && (
-                <>
-                  <span className="text-gray-300">•</span>
-                  <span className="text-violet-600 font-medium text-xs">llama-server auto-start enabled</span>
-                </>
-              )}
               {customPrompt !== DEFAULT_PROMPT && (
                 <>
                   <span className="text-gray-300">•</span>
@@ -638,12 +533,58 @@ export default function InsightGenerator({ onComplete }) {
                 </>
               )}
             </div>
-            <button
-              onClick={startGeneration}
-              className="px-8 py-3 bg-gradient-to-r from-violet-600 to-blue-600 text-white rounded-xl font-bold shadow-lg shadow-violet-200 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300"
-            >
-              Generate Insights ✨
-            </button>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <button
+                onClick={() => launchPrecompute({ endpoint: '/api/precompute-insights', useFilterGrid: false, label: 'Dashboard Themes' })}
+                className="px-5 py-3 bg-gradient-to-r from-violet-600 to-blue-600 text-white rounded-xl font-bold shadow hover:shadow-lg hover:-translate-y-0.5 transition-all text-sm text-left"
+              >
+                <div className="flex items-center justify-between">
+                  <span>Dashboard Themes</span>
+                  <span>✨</span>
+                </div>
+                <div className="text-xs font-normal text-white/80 mt-0.5">Main 7 themes, baseline only</div>
+              </button>
+
+              <button
+                onClick={() => launchPrecompute({ endpoint: '/api/precompute-subthemes', useFilterGrid: false, label: 'Dashboard Subthemes' })}
+                className="px-5 py-3 bg-gradient-to-r from-teal-600 to-cyan-600 text-white rounded-xl font-bold shadow hover:shadow-lg hover:-translate-y-0.5 transition-all text-sm text-left"
+              >
+                <div className="flex items-center justify-between">
+                  <span>Dashboard Subthemes</span>
+                  <span>🔍</span>
+                </div>
+                <div className="text-xs font-normal text-white/80 mt-0.5">Subthemes for baseline themes</div>
+              </button>
+
+              <button
+                onClick={() => launchPrecompute({ endpoint: '/api/precompute-insights', useFilterGrid: true, label: 'Filtered Themes' })}
+                disabled={filterDimensions.length === 0}
+                className="px-5 py-3 bg-gradient-to-r from-amber-600 to-orange-600 text-white rounded-xl font-bold shadow hover:shadow-lg hover:-translate-y-0.5 transition-all disabled:opacity-40 disabled:cursor-not-allowed text-sm text-left"
+              >
+                <div className="flex items-center justify-between">
+                  <span>Filtered Themes</span>
+                  <span>🎛️</span>
+                </div>
+                <div className="text-xs font-normal text-white/80 mt-0.5">
+                  {filterDimensions.length > 0 ? `${extraCombos} combos × 7 themes` : 'Select dimensions first'}
+                </div>
+              </button>
+
+              <button
+                onClick={() => launchPrecompute({ endpoint: '/api/precompute-subthemes', useFilterGrid: true, label: 'Filtered Subthemes' })}
+                disabled={filterDimensions.length === 0}
+                className="px-5 py-3 bg-gradient-to-r from-fuchsia-600 to-pink-600 text-white rounded-xl font-bold shadow hover:shadow-lg hover:-translate-y-0.5 transition-all disabled:opacity-40 disabled:cursor-not-allowed text-sm text-left"
+              >
+                <div className="flex items-center justify-between">
+                  <span>Filtered Subthemes</span>
+                  <span>🪢</span>
+                </div>
+                <div className="text-xs font-normal text-white/80 mt-0.5">
+                  {filterDimensions.length > 0 ? `Subthemes for each combo` : 'Select dimensions first'}
+                </div>
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -719,68 +660,6 @@ export default function InsightGenerator({ onComplete }) {
         </div>
       )}
 
-      {/* ── SUBTHEME PRECOMPUTE SECTION ── */}
-      <div className="border-t border-gray-100 pt-6 space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-base font-bold text-gray-900">Subtheme Precompute</h3>
-            <p className="text-xs text-gray-500 mt-0.5">
-              Run after main themes are cached. Generates full analysis for each sub-theme.
-            </p>
-          </div>
-          {!generatingSubthemes && subthemeProgress < 100 && (
-            <button
-              onClick={startSubthemeGeneration}
-              disabled={generating}
-              className="px-6 py-2.5 bg-gradient-to-r from-teal-600 to-cyan-600 text-white rounded-xl font-bold shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed text-sm"
-            >
-              Generate Subthemes ✨
-            </button>
-          )}
-        </div>
-
-        {generatingSubthemes && (
-          <div className="p-6 bg-gray-900 rounded-2xl shadow-xl relative overflow-hidden ring-1 ring-white/10">
-            <div className="absolute top-0 left-0 w-full h-1 bg-gray-800">
-              <div
-                className="h-full bg-gradient-to-r from-teal-500 via-cyan-500 to-blue-500 transition-all duration-500 ease-out"
-                style={{ width: `${subthemeProgress}%` }}
-              />
-            </div>
-            <div className="flex items-center justify-between mb-4 relative z-10">
-              <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                <div className="relative flex h-3 w-3">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-teal-500" />
-                </div>
-                Generating Subtheme Insights
-              </h4>
-              <span className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-teal-400 to-cyan-400">
-                {subthemeProgress}%
-              </span>
-            </div>
-            <div className="bg-black/50 rounded-xl p-4 h-40 overflow-y-auto font-mono text-xs border border-white/5">
-              {subthemeLogs.map((log, i) => (
-                <div key={i} className={`py-0.5 ${log.startsWith('✅') ? 'text-emerald-400' : log.startsWith('❌') ? 'text-red-400' : 'text-teal-400/80'}`}>
-                  {log}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {!generatingSubthemes && subthemeProgress === 100 && (
-          <div className="p-4 bg-teal-50 border border-teal-100 rounded-2xl flex items-center gap-3">
-            <div className="p-2 bg-teal-100 text-teal-600 rounded-full">
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
-            </div>
-            <div>
-              <p className="text-sm font-bold text-teal-900">All Subtheme Insights Generated</p>
-              <p className="text-xs text-teal-700 mt-0.5">Sub-theme drilldowns will now load instantly from cache.</p>
-            </div>
-          </div>
-        )}
-      </div>
     </div>
   );
 }
