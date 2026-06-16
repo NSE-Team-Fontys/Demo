@@ -1,6 +1,6 @@
 # Retrieval Pipeline (03_retrieval)
 
-The `03_retrieval` module has two deliberately separate paths. Predefined dashboard themes read persisted assignments from Chroma metadata without loading ML models. Arbitrary queries and generated subthemes use dense retrieval followed by optional cross-encoder reranking.
+The `03_retrieval` module has two deliberately separate paths. Predefined dashboard themes read persisted assignments from Chroma metadata without loading ML models. Arbitrary user queries use dense retrieval followed by optional cross-encoder reranking. Generated subthemes do not use this runtime query path; they are summarized from parent-theme evidence selected by persisted metadata.
 
 ## Architecture & Workflow
 

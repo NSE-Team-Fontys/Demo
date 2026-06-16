@@ -98,6 +98,7 @@ def cache_has_full_dashboard_payload(
         "critical_comments",
         "student_suggestions",
         "subthemes",
+        "subtheme_manifest",
         "subtheme_mentions",
         "quotes",
     ]

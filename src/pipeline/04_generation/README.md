@@ -11,14 +11,14 @@ Every answer has exactly one primary theme for frequency counting. A response ma
 
 Conservative whole-response matching reserves empty, placeholder, refusal, and generic Dutch, English, and German answers for `No Meaningful Response`. The sink is persisted deterministically and is not sent to normal educational-theme generation.
 
-Normal predefined summaries never load the embedding model or reranker. Free-text and generated subtheme searches remain a separate runtime vector-search/reranking path.
+Normal predefined summaries never load the embedding model or reranker. Generated subthemes follow the same principle: the main theme summary caches a `subtheme_manifest` with parent evidence IDs, and subtheme precompute re-summarizes only those parent-theme documents with the LLM. Arbitrary free-text searches remain a separate runtime vector-search/reranking path.
 
 ### 2. Hierarchical Map-Reduce RAG
 After semantic assignment, generation does not send only the top `LLM_CONTEXT_DOCUMENTS` answers. Instead, it reads the full assigned evidence set unless `HIERARCHICAL_RAG_MAX_DOCUMENTS` is set above `0`.
 
 The assigned answers are split into batches controlled by `HIERARCHICAL_RAG_BATCH_DOCUMENTS`. The default is `60`, so one small summary reads up to 60 student answers. A theme with 145 assigned answers produces three map prompts: answers 1-60, 61-120, and 121-145.
 
-Each map prompt returns the same compact JSON structure as the final insight: summary, sentiments, positive points, critical points, exact student suggestions, and subthemes. The reduce prompt then receives only these batch summaries and merges them into the final dashboard JSON. This lets the pipeline consider hundreds or thousands of unique answers without forcing all raw answers into one context window.
+Each map prompt returns the same compact JSON structure as the final insight: summary, sentiments, positive points, critical points, exact student suggestions, subthemes, and a `subtheme_manifest` that grounds each discovered subtheme to evidence IDs. The reduce prompt then receives only these batch summaries and merges them into the final dashboard JSON. This lets the pipeline consider hundreds or thousands of unique answers without forcing all raw answers into one context window.
 
 ### 3. Prompt Engineering & Scope Enforcement
 To prevent "hallucinations" and topic drift, the generation stage bounds the LLM explicitly. Using definitions from `THEME_LLM_DEFINITIONS`, the model focuses entirely on extracting information relevant to the current theme (e.g., *Support / Mentoring*). The system prompt mathematically constrains the outputs required, demanding exactly 3 positive/critical comments, up to 3 student suggestions (concrete next steps), sentiments, and discrete subthemes.

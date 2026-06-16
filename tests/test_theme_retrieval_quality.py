@@ -327,6 +327,119 @@ class PersistedThemeRetrievalTests(unittest.TestCase):
         self.assertGreater(len(reranker.pairs), 0)
         self.assertEqual(len(result["documents"]), 2)
 
+    def test_subtheme_payload_uses_parent_theme_evidence_without_models(self) -> None:
+        client = FakeLlmClient()
+        with (
+            mock.patch.object(
+                retrieval,
+                "get_theme_embedding_model",
+            ) as load_embedding,
+            mock.patch.object(
+                retrieval,
+                "load_reranker_model",
+            ) as load_reranker,
+        ):
+            payload = generation._generate_theme_payload(
+                client=client,
+                collection=self.collection,
+                theme_name="Teachers",
+                filters={},
+                provider="test",
+                llm_model="fake-llm",
+                llm_generation_settings=None,
+                theme_query="Clear explanations",
+                evidence_ids=["E0001"],
+            )
+
+        load_embedding.assert_not_called()
+        load_reranker.assert_not_called()
+        self.assertTrue(payload["is_subtheme"])
+        self.assertEqual(payload["query"], "Clear explanations")
+        self.assertEqual(payload["document_count"], 1)
+        self.assertEqual(payload["quotes"], ["The teacher explains clearly."])
+        self.assertIn("Subtheme focus: Clear explanations", client.prompts[0])
+
+    def test_precompute_subthemes_uses_cached_manifest_without_models(self) -> None:
+        client = FakeLlmClient()
+        saved_subtheme_cache = {}
+        main_entry = {
+            "status": "success",
+            "theme": "Teachers",
+            "frequency": 40,
+            "vector_relevant_count": 3,
+            "total_filtered_documents": 5,
+            "llm_document_count": 3,
+            "hierarchical_document_count": 3,
+            "hierarchical_batch_documents": HIERARCHICAL_RAG_BATCH_DOCUMENTS,
+            "rag_strategy": generation.HIERARCHICAL_RAG_STRATEGY,
+            "filters_applied": {},
+            "cache_version": INSIGHT_CACHE_VERSION,
+            "llm_context_documents": LLM_CONTEXT_DOCUMENTS,
+            "llm_provider": "test",
+            "llm_model": "fake-llm",
+            "llm_generation_settings": None,
+            "reranker": self.config.reranker_model_id,
+            "definite_evidence_count": 1,
+            "ambiguous_evidence_count": 2,
+            **self.config.cache_metadata(),
+            "summary": "Theme summary.",
+            "sentiments": [],
+            "positive_comments": [],
+            "critical_comments": [],
+            "student_suggestions": [],
+            "subthemes": ["Clear explanations"],
+            "subtheme_manifest": [
+                {
+                    "name": "Clear explanations",
+                    "description": "Students mention clear teacher explanations.",
+                    "evidence_ids": ["E0001"],
+                }
+            ],
+            "subtheme_mentions": [],
+            "quotes": [],
+        }
+
+        with (
+            mock.patch.object(generation, "load_cache", return_value={"Teachers": main_entry}),
+            mock.patch.object(generation, "load_subtheme_cache", return_value={}),
+            mock.patch.object(
+                generation,
+                "save_subtheme_cache",
+                side_effect=lambda cache: saved_subtheme_cache.update(cache),
+            ),
+            mock.patch.object(generation, "get_llm_client", return_value=client),
+            mock.patch.object(retrieval, "get_collection", return_value=self.collection),
+            mock.patch.object(
+                retrieval,
+                "classification_cache_metadata",
+                return_value=self.config.cache_metadata(),
+            ),
+            mock.patch.object(
+                retrieval,
+                "get_theme_embedding_model",
+            ) as load_embedding,
+            mock.patch.object(
+                retrieval,
+                "load_reranker_model",
+            ) as load_reranker,
+        ):
+            events = list(
+                generation.precompute_subthemes_stream(
+                    themes=[{"name": "Teachers"}],
+                    provider="test",
+                    llm_model="fake-llm",
+                )
+            )
+
+        load_embedding.assert_not_called()
+        load_reranker.assert_not_called()
+        self.assertTrue(any("All subtheme insights generated" in line for line in events))
+        self.assertIn("Teachers::subquery=Clear explanations", saved_subtheme_cache)
+        self.assertEqual(
+            saved_subtheme_cache["Teachers::subquery=Clear explanations"]["quotes"],
+            ["The teacher explains clearly."],
+        )
+
     def test_classification_settings_invalidate_stale_cache(self) -> None:
         current = self.config.cache_metadata()
         base = {

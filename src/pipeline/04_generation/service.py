@@ -31,6 +31,7 @@ save_subtheme_cache = cache_store.save_subtheme_cache
 clear_subtheme_cache = cache_store.clear_subtheme_cache
 
 HIERARCHICAL_RAG_STRATEGY = "semantic_theme_map_reduce_v2"
+SUBTHEME_MANIFEST_FIELD = "subtheme_manifest"
 
 
 def _ensure_llm_eligible_theme(theme_name: str) -> None:
@@ -74,6 +75,118 @@ def _cache_filters_match(cached_data: dict | None, filters: dict | None) -> bool
     )
 
 
+def _evidence_id(index: int) -> str:
+    return f"E{index + 1:04d}"
+
+
+def _with_evidence_ids(evidence: list[dict]) -> list[dict]:
+    return [
+        {
+            **item,
+            "evidence_id": str(item.get("evidence_id") or _evidence_id(index)),
+        }
+        for index, item in enumerate(evidence)
+    ]
+
+
+def _clean_string_list(values) -> list[str]:
+    if not isinstance(values, list):
+        return []
+    cleaned = []
+    seen = set()
+    for value in values:
+        if isinstance(value, dict):
+            value = value.get("name") or value.get("subtheme") or value.get("label")
+        text = str(value or "").strip()
+        if text and text not in seen:
+            cleaned.append(text)
+            seen.add(text)
+    return cleaned
+
+
+def _normalize_subtheme_manifest(parsed: dict, selected: dict) -> tuple[list[str], list[dict]]:
+    valid_ids = {
+        str(item.get("evidence_id"))
+        for item in selected.get("all_evidence", [])
+        if item.get("evidence_id")
+    }
+    raw_subthemes = parsed.get("subthemes") or []
+    raw_manifest = parsed.get(SUBTHEME_MANIFEST_FIELD) or []
+    labels = _clean_string_list(raw_subthemes)
+    manifest_by_name: dict[str, dict] = {}
+
+    for item in raw_manifest:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or item.get("subtheme") or item.get("label") or "").strip()
+        if not name:
+            continue
+        if name not in labels:
+            labels.append(name)
+        evidence_ids = [
+            str(evidence_id).strip()
+            for evidence_id in (item.get("evidence_ids") or [])
+            if str(evidence_id).strip() in valid_ids
+        ]
+        existing = manifest_by_name.setdefault(
+            name,
+            {
+                "name": name,
+                "description": str(item.get("description") or "").strip(),
+                "evidence_ids": [],
+            },
+        )
+        if not existing["description"]:
+            existing["description"] = str(item.get("description") or "").strip()
+        for evidence_id in evidence_ids:
+            if evidence_id not in existing["evidence_ids"]:
+                existing["evidence_ids"].append(evidence_id)
+
+    for item in raw_subthemes:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or item.get("subtheme") or item.get("label") or "").strip()
+        if not name:
+            continue
+        if name not in labels:
+            labels.append(name)
+        evidence_ids = [
+            str(evidence_id).strip()
+            for evidence_id in (item.get("evidence_ids") or [])
+            if str(evidence_id).strip() in valid_ids
+        ]
+        existing = manifest_by_name.setdefault(
+            name,
+            {
+                "name": name,
+                "description": str(item.get("description") or "").strip(),
+                "evidence_ids": [],
+            },
+        )
+        for evidence_id in evidence_ids:
+            if evidence_id not in existing["evidence_ids"]:
+                existing["evidence_ids"].append(evidence_id)
+
+    for label in labels:
+        manifest_by_name.setdefault(
+            label,
+            {"name": label, "description": "", "evidence_ids": []},
+        )
+
+    ordered_manifest = [manifest_by_name[label] for label in labels if label in manifest_by_name]
+    return labels, ordered_manifest
+
+
+def _manifest_for_subtheme(main_entry: dict, subtheme: str) -> dict:
+    target = str(subtheme or "").strip()
+    for item in main_entry.get(SUBTHEME_MANIFEST_FIELD) or []:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("name") or "").strip() == target:
+            return item
+    return {"name": target, "description": "", "evidence_ids": []}
+
+
 def _cached_dashboard_response(
     cache: dict,
     theme_name: str,
@@ -105,32 +218,45 @@ def _select_theme_documents(
     *,
     filters: dict | None = None,
     theme_query: str | None = None,
+    evidence_ids: list[str] | None = None,
     max_documents: int | None = None,
 ):
     cap = max_documents if max_documents and max_documents > 0 else HIERARCHICAL_RAG_MAX_DOCUMENTS
-    if theme_query and theme_query != theme_name:
-        embedding_model = retrieval.collection_embedding_model(collection)
-        collected = retrieval.collect_documents_by_query(
-            collection,
-            theme_query,
-            filters=_normalized_filters(filters),
-            model_id=embedding_model,
-            n_results=cap or 500,
-        )
-        all_evidence = [
-            {
-                "document": document,
-                "evidence_type": "free_text_retrieval",
-            }
-            for document in collected["documents"]
-        ]
-    else:
-        collected = retrieval.collect_theme_documents(
-            collection,
-            theme_name,
-            filters=_normalized_filters(filters),
-        )
-        all_evidence = collected["evidence"]
+    is_subtheme = bool(theme_query and theme_query != theme_name)
+    collected = retrieval.collect_theme_documents(
+        collection,
+        theme_name,
+        filters=_normalized_filters(filters),
+    )
+    all_evidence = _with_evidence_ids(collected["evidence"])
+    if is_subtheme:
+        requested_ids = {
+            str(evidence_id).strip()
+            for evidence_id in (evidence_ids or [])
+            if str(evidence_id).strip()
+        }
+        if requested_ids:
+            all_evidence = [
+                item
+                for item in all_evidence
+                if str(item.get("evidence_id")) in requested_ids
+            ]
+        else:
+            all_evidence = [
+                {**item, "evidence_type": "subtheme_candidate"}
+                for item in all_evidence
+            ]
+        collected = {
+            **collected,
+            "frequency": (
+                round(
+                    (len(all_evidence) / collected["total_filtered_documents"]) * 100
+                )
+                if collected["total_filtered_documents"]
+                else 0
+            ),
+            "vector_relevant_count": len(all_evidence),
+        }
     selected_evidence = all_evidence[:cap] if cap > 0 else all_evidence
     all_docs = [evidence["document"] for evidence in all_evidence]
     selected_docs = [evidence["document"] for evidence in selected_evidence]
@@ -140,6 +266,7 @@ def _select_theme_documents(
         "total_filtered_documents": collected["total_filtered_documents"],
         "relevant_docs": selected_docs,
         "relevant_evidence": selected_evidence,
+        "all_evidence": all_evidence,
         "all_docs": all_docs,
         "source_document_count": len(all_docs),
         "analyzed_document_count": len(selected_docs),
@@ -169,25 +296,45 @@ def _generate_hierarchical_json(
     evidence: list[dict],
     *,
     custom_prompt: str = "",
+    theme_query: str | None = None,
 ) -> dict:
+    is_subtheme = bool(theme_query and theme_query != theme_name)
     batches = _document_batches(evidence)
     if len(batches) <= 1:
-        prompt = prompts.build_prompt(
-            theme_name,
-            evidence,
-            custom_prompt=custom_prompt,
-        )
+        if is_subtheme:
+            prompt = prompts.build_subtheme_prompt(
+                theme_name,
+                str(theme_query),
+                evidence,
+                custom_prompt=custom_prompt,
+            )
+        else:
+            prompt = prompts.build_prompt(
+                theme_name,
+                evidence,
+                custom_prompt=custom_prompt,
+            )
         return prompts.parse_llm_json(client.generate_json(llm_model, prompt, timeout=600))
 
     batch_summaries = []
     for i, batch in enumerate(batches, start=1):
-        prompt = prompts.build_batch_summary_prompt(
-            theme_name,
-            batch,
-            batch_number=i,
-            total_batches=len(batches),
-            custom_prompt=custom_prompt,
-        )
+        if is_subtheme:
+            prompt = prompts.build_subtheme_batch_summary_prompt(
+                theme_name,
+                str(theme_query),
+                batch,
+                batch_number=i,
+                total_batches=len(batches),
+                custom_prompt=custom_prompt,
+            )
+        else:
+            prompt = prompts.build_batch_summary_prompt(
+                theme_name,
+                batch,
+                batch_number=i,
+                total_batches=len(batches),
+                custom_prompt=custom_prompt,
+            )
         parsed = prompts.parse_llm_json(
             client.generate_json(llm_model, prompt, timeout=600)
         )
@@ -195,11 +342,19 @@ def _generate_hierarchical_json(
         parsed["source_document_count"] = len(batch)
         batch_summaries.append(parsed)
 
-    reduce_prompt = prompts.build_reduce_prompt(
-        theme_name,
-        batch_summaries,
-        source_document_count=len(evidence),
-    )
+    if is_subtheme:
+        reduce_prompt = prompts.build_subtheme_reduce_prompt(
+            theme_name,
+            str(theme_query),
+            batch_summaries,
+            source_document_count=len(evidence),
+        )
+    else:
+        reduce_prompt = prompts.build_reduce_prompt(
+            theme_name,
+            batch_summaries,
+            source_document_count=len(evidence),
+        )
     return prompts.parse_llm_json(
         client.generate_json(llm_model, reduce_prompt, timeout=600)
     )
@@ -216,10 +371,18 @@ def _generate_theme_payload(
     llm_generation_settings: dict | None,
     custom_prompt: str = "",
     theme_query: str | None = None,
+    evidence_ids: list[str] | None = None,
     max_documents: int | None = None,
 ) -> dict:
     _ensure_llm_eligible_theme(theme_name)
-    selected = _select_theme_documents(collection, theme_name, filters=filters, theme_query=theme_query, max_documents=max_documents)
+    selected = _select_theme_documents(
+        collection,
+        theme_name,
+        filters=filters,
+        theme_query=theme_query,
+        evidence_ids=evidence_ids,
+        max_documents=max_documents,
+    )
     relevant_evidence = selected["relevant_evidence"]
     if not relevant_evidence:
         return _empty_theme_payload(
@@ -229,6 +392,7 @@ def _generate_theme_payload(
             provider=provider,
             llm_model=llm_model,
             llm_generation_settings=llm_generation_settings,
+            theme_query=theme_query,
         )
 
     parsed = _generate_hierarchical_json(
@@ -237,6 +401,7 @@ def _generate_theme_payload(
         theme_name,
         relevant_evidence,
         custom_prompt=custom_prompt,
+        theme_query=theme_query,
     )
     return _theme_payload_from_parsed(
         theme_name,
@@ -246,6 +411,7 @@ def _generate_theme_payload(
         provider=provider,
         llm_model=llm_model,
         llm_generation_settings=llm_generation_settings,
+        theme_query=theme_query,
     )
 
 
@@ -348,10 +514,14 @@ def _empty_theme_payload(
     provider: str,
     llm_model: str,
     llm_generation_settings: dict | None,
+    theme_query: str | None = None,
 ) -> dict:
+    is_subtheme = bool(theme_query and theme_query != theme_name)
     return {
         "status": "success",
         "theme": theme_name,
+        "query": theme_query if is_subtheme else theme_name,
+        "is_subtheme": is_subtheme,
         "frequency": selected["frequency"],
         "document_count": selected["source_document_count"],
         "vector_relevant_count": selected["vector_relevant_count"],
@@ -376,6 +546,7 @@ def _empty_theme_payload(
         "critical_comments": [],
         "student_suggestions": [],
         "subthemes": [],
+        SUBTHEME_MANIFEST_FIELD: [],
         "subtheme_mentions": [],
         "quotes": [],
     }
@@ -390,15 +561,19 @@ def _theme_payload_from_parsed(
     provider: str,
     llm_model: str,
     llm_generation_settings: dict | None,
+    theme_query: str | None = None,
 ) -> dict:
+    is_subtheme = bool(theme_query and theme_query != theme_name)
     relevant_docs = selected["relevant_docs"]
     all_docs = selected.get("all_docs", relevant_docs)
     quotes = [doc for doc in all_docs if len(doc.strip()) > 1]
     sentiments = parsed.get("sentiments", [])
-    subthemes = parsed.get("subthemes", [])
+    subthemes, subtheme_manifest = _normalize_subtheme_manifest(parsed, selected)
     return {
         "status": "success",
         "theme": theme_name,
+        "query": theme_query if is_subtheme else theme_name,
+        "is_subtheme": is_subtheme,
         "frequency": selected["frequency"],
         "document_count": selected["source_document_count"],
         "vector_relevant_count": selected["vector_relevant_count"],
@@ -423,6 +598,7 @@ def _theme_payload_from_parsed(
         "critical_comments": parsed.get("critical_comments", [])[:3],
         "student_suggestions": parsed.get("student_suggestions", [])[:3],
         "subthemes": subthemes,
+        SUBTHEME_MANIFEST_FIELD: subtheme_manifest,
         "subtheme_mentions": insight_metrics.subtheme_mention_rows(subthemes, all_docs),
         "quotes": quotes,
     }
@@ -473,7 +649,11 @@ def precompute_insights_stream(
             )
             is not None
         }
-        if len(cached_theme_names) == len(themes) and not normalized_grid:
+        if (
+            len(cached_theme_names) == len(themes)
+            and not normalized_grid
+            and not precache_subthemes
+        ):
             for i, theme in enumerate(themes):
                 theme_name = theme.get("name")
                 yield json.dumps(
@@ -582,6 +762,73 @@ def precompute_insights_stream(
                 return
             save_cache(cache)
 
+        if precache_subthemes:
+            subtheme_cache = load_subtheme_cache()
+            for i, theme in enumerate(themes):
+                theme_name = theme.get("name")
+                response_data = cache.get(_cache_key(theme_name, filters))
+                if not cache_has_full_dashboard_payload(
+                    response_data,
+                    llm_provider=provider,
+                    llm_model=llm_model,
+                    llm_generation_settings=llm_generation_settings,
+                    match_llm_identity=True,
+                ):
+                    continue
+                subthemes = [
+                    subtheme
+                    for subtheme in _clean_string_list(response_data.get("subthemes") or [])
+                    if subtheme != theme_name
+                ]
+                for st_idx, subtheme in enumerate(subthemes):
+                    sub_key = _cache_key(theme_name, filters, subtheme)
+                    if sub_key in subtheme_cache and cache_matches_generation_settings(
+                        subtheme_cache[sub_key],
+                        llm_provider=provider,
+                        llm_model=llm_model,
+                        llm_generation_settings=llm_generation_settings,
+                        match_llm_identity=True,
+                    ):
+                        continue
+                    yield json.dumps(
+                        {
+                            "status": "progress",
+                            "theme": theme_name,
+                            "progress": _pct(i + 1),
+                            "message": (
+                                f"Sub-theme {st_idx + 1}/{len(subthemes)}: "
+                                f"{subtheme}"
+                            ),
+                        }
+                    ) + "\n"
+                    try:
+                        manifest = _manifest_for_subtheme(response_data, subtheme)
+                        sub_data = _generate_theme_payload(
+                            client=client,
+                            collection=collection,
+                            theme_name=theme_name,
+                            filters=filters,
+                            provider=provider,
+                            llm_model=llm_model,
+                            llm_generation_settings=llm_generation_settings,
+                            custom_prompt=custom_prompt,
+                            max_documents=max_documents,
+                            theme_query=subtheme,
+                            evidence_ids=manifest.get("evidence_ids") or [],
+                        )
+                        subtheme_cache[sub_key] = sub_data
+                        save_subtheme_cache(subtheme_cache)
+                    except Exception as exc:
+                        yield json.dumps(
+                            {
+                                "status": "progress",
+                                "theme": theme_name,
+                                "message": f"Sub-theme skipped {subtheme}: {str(exc)}",
+                                "progress": _pct(i + 1),
+                            }
+                        ) + "\n"
+                        continue
+
         # Optional pre-cache pass: cross-product of filter combinations.
         if normalized_grid:
             total_combos = len(normalized_grid)
@@ -659,15 +906,18 @@ def precompute_insights_stream(
                     save_cache(cache)
 
                     if precache_subthemes:
+                        subtheme_cache = load_subtheme_cache()
                         subthemes = [
-                            str(s).strip()
-                            for s in (response_data.get("subthemes") or [])
-                            if str(s).strip() and str(s).strip() != theme_name
+                            subtheme
+                            for subtheme in _clean_string_list(
+                                response_data.get("subthemes") or []
+                            )
+                            if subtheme != theme_name
                         ]
                         for st_idx, subtheme in enumerate(subthemes):
                             sub_key = _cache_key(theme_name, combo, subtheme)
-                            if sub_key in cache and cache_matches_generation_settings(
-                                cache[sub_key],
+                            if sub_key in subtheme_cache and cache_matches_generation_settings(
+                                subtheme_cache[sub_key],
                                 llm_provider=provider,
                                 llm_model=llm_model,
                                 llm_generation_settings=llm_generation_settings,
@@ -686,6 +936,9 @@ def precompute_insights_stream(
                                 }
                             ) + "\n"
                             try:
+                                manifest = _manifest_for_subtheme(
+                                    response_data, subtheme
+                                )
                                 sub_data = _generate_theme_payload(
                                     client=client,
                                     collection=collection,
@@ -697,9 +950,10 @@ def precompute_insights_stream(
                                     custom_prompt=custom_prompt,
                                     max_documents=max_documents,
                                     theme_query=subtheme,
+                                    evidence_ids=manifest.get("evidence_ids") or [],
                                 )
-                                cache[sub_key] = sub_data
-                                save_cache(cache)
+                                subtheme_cache[sub_key] = sub_data
+                                save_subtheme_cache(subtheme_cache)
                             except Exception as exc:
                                 yield json.dumps(
                                     {
@@ -763,12 +1017,18 @@ def precompute_subthemes_stream(
                 theme_name = theme.get("name")
                 main_key = _cache_key(theme_name, combo)
                 main_entry = main_cache.get(main_key)
-                if not main_entry:
+                if not cache_has_full_dashboard_payload(
+                    main_entry,
+                    llm_provider=provider,
+                    llm_model=llm_model,
+                    llm_generation_settings=llm_generation_settings,
+                    match_llm_identity=True,
+                ):
                     continue
                 subtheme_labels = [
-                    str(s).strip()
-                    for s in (main_entry.get("subthemes") or [])
-                    if str(s).strip() and str(s).strip() != theme_name
+                    subtheme
+                    for subtheme in _clean_string_list(main_entry.get("subthemes") or [])
+                    if subtheme != theme_name
                 ]
                 for subtheme in subtheme_labels:
                     sub_key = _cache_key(theme_name, combo, subtheme)
@@ -780,7 +1040,16 @@ def precompute_subthemes_stream(
                         match_llm_identity=True,
                     ):
                         continue
-                    work_items.append((theme_name, subtheme, combo, sub_key))
+                    manifest = _manifest_for_subtheme(main_entry, subtheme)
+                    work_items.append(
+                        (
+                            theme_name,
+                            subtheme,
+                            combo,
+                            sub_key,
+                            manifest.get("evidence_ids") or [],
+                        )
+                    )
 
         if not work_items:
             yield json.dumps({"status": "success", "message": "All subtheme insights already cached!", "progress": 100}) + "\n"
@@ -793,7 +1062,7 @@ def precompute_subthemes_stream(
         client.ensure_model_available(llm_model, allow_download=allow_model_download)
 
         total = len(work_items)
-        for idx, (theme_name, subtheme, combo, sub_key) in enumerate(work_items):
+        for idx, (theme_name, subtheme, combo, sub_key, evidence_ids) in enumerate(work_items):
             progress = min(99, int((idx / total) * 100))
             combo_label = ", ".join(f"{k}={v}" for k, v in combo.items()) or "baseline"
             yield json.dumps({
@@ -812,6 +1081,7 @@ def precompute_subthemes_stream(
                     llm_model=llm_model,
                     llm_generation_settings=llm_generation_settings,
                     theme_query=subtheme,
+                    evidence_ids=evidence_ids,
                     max_documents=max_documents,
                 )
                 subtheme_cache[sub_key] = sub_data

@@ -7,6 +7,7 @@ Summarize the general consensus in 2 sentences. Extract 3 key sentiments (Positi
 Select up to 3 exact positive student comments and up to 3 exact critical student comments from the responses. Use verbatim text only; do not invent comments.
 Select up to 3 exact student suggestions where students propose a solution, improvement, or concrete next step instead of only complaining. Use verbatim text only; return an empty array if no clear suggestions exist.
 Also extract 3 to 5 short sub-themes or topics mentioned.
+For every subtheme, also return subtheme_manifest entries with the same name, a one-sentence description, and evidence_ids copied exactly from the response IDs shown in brackets, such as E0001.
 Respond EXACTLY in this JSON format:
 {
   "summary": "...",
@@ -16,7 +17,10 @@ Respond EXACTLY in this JSON format:
   "positive_comments": ["..."],
   "critical_comments": ["..."],
   "student_suggestions": ["..."],
-  "subthemes": ["...", "..."]
+  "subthemes": ["...", "..."],
+  "subtheme_manifest": [
+    {"name": "...", "description": "...", "evidence_ids": ["E0001", "E0002"]}
+  ]
 }`;
 
 export default function InsightGenerator({ onComplete }) {
