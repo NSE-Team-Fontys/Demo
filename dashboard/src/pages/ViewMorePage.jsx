@@ -77,12 +77,17 @@ function summaryPoints(summary) {
 
 function buildInsightCards(summary, comments) {
   const points = summaryPoints(summary)
+  return buildPointCards(points, comments)
+}
+
+function buildPointCards(points, comments) {
   const sourceComments = (comments || [])
     .map(normaliseComment)
     .filter((comment) => comment.length > 1)
   const usedCommentIndexes = new Set()
 
-  return points.map((point, pointIndex) => {
+  return (points || []).map((point, pointIndex) => {
+    const cleanPoint = cleanInsightPoint(point)
     const pointRoots = new Set(insightTokens(point).map((token) => token.slice(0, 6)))
     const ranked = sourceComments
       .map((comment, commentIndex) => {
@@ -95,13 +100,17 @@ function buildInsightCards(summary, comments) {
 
     const relatedComments = []
     ranked.forEach((candidate) => {
-      if (relatedComments.length >= 3 || usedCommentIndexes.has(candidate.commentIndex)) return
+      if (
+        relatedComments.length >= 3 ||
+        (candidate.overlap === 0 && relatedComments.length > 0) ||
+        usedCommentIndexes.has(candidate.commentIndex)
+      ) return
       usedCommentIndexes.add(candidate.commentIndex)
       relatedComments.push(candidate.comment)
     })
 
-    return { point, relatedComments }
-  })
+    return { point: cleanPoint, relatedComments }
+  }).filter((item) => item.point)
 }
 
 function subthemeTokens(subtheme) {
@@ -448,6 +457,176 @@ function AIPointSection({ points, icon, title, accentColor, sentimentColor }) {
   )
 }
 
+function FeedbackSummaryBlock({ title, eyebrow, points, comments, icon, color, emptyText }) {
+  const [expandedIndex, setExpandedIndex] = useState(null)
+  const cards = useMemo(
+    () => buildPointCards((points || []).slice(0, 3), comments),
+    [points, comments],
+  )
+
+  return (
+    <div
+      className="rounded-2xl border p-4 md:p-5 min-h-[280px] flex flex-col"
+      style={{ borderColor: `${color}24`, backgroundColor: `${color}07` }}
+    >
+      <div className="flex items-start justify-between gap-3 mb-4">
+        <div className="flex items-start gap-2.5">
+          <span
+            className="material-symbols-outlined mt-0.5"
+            style={{ color, fontVariationSettings: "'FILL' 1" }}
+          >
+            {icon}
+          </span>
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color }}>
+              {eyebrow}
+            </p>
+            <h3 className="text-base md:text-lg font-bold font-headline text-on-surface">
+              {title}
+            </h3>
+          </div>
+        </div>
+        <span
+          className="shrink-0 text-[10px] font-bold uppercase tracking-wider rounded-full px-2.5 py-1"
+          style={{ color, backgroundColor: `${color}12` }}
+        >
+          Top {cards.length || 3}
+        </span>
+      </div>
+
+      {cards.length > 0 ? (
+        <div className="space-y-3">
+          {cards.map((card, index) => {
+            const expanded = expandedIndex === index
+            return (
+              <motion.article
+                layout
+                key={`${title}-${card.point}-${index}`}
+                className="rounded-xl bg-surface-container-lowest border border-outline-variant/10 p-4"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.35, delay: index * 0.06, ease: [0.16, 1, 0.3, 1] }}
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <span
+                    className="text-[10px] font-bold uppercase tracking-wider rounded-full px-2 py-0.5"
+                    style={{ color, backgroundColor: `${color}10` }}
+                  >
+                    AI summary {index + 1}
+                  </span>
+                </div>
+                <p className="text-sm leading-relaxed text-on-surface">
+                  {card.point}
+                </p>
+                <button
+                  type="button"
+                  aria-expanded={expanded}
+                  onClick={() => setExpandedIndex(expanded ? null : index)}
+                  disabled={card.relatedComments.length === 0}
+                  className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold border-none bg-transparent cursor-pointer disabled:cursor-default disabled:opacity-50 p-0"
+                  style={{ color }}
+                >
+                  <span className="material-symbols-outlined text-base">forum</span>
+                  {card.relatedComments.length > 0
+                    ? `${expanded ? 'Hide' : 'Read'} ${card.relatedComments.length} real comments`
+                    : 'No matching comments found'}
+                  <span className="material-symbols-outlined text-base">
+                    {expanded ? 'expand_less' : 'expand_more'}
+                  </span>
+                </button>
+
+                {expanded && card.relatedComments.length > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    className="mt-3 space-y-2"
+                  >
+                    {card.relatedComments.map((comment, commentIndex) => (
+                      <blockquote
+                        key={`${comment.slice(0, 24)}-${commentIndex}`}
+                        className="rounded-lg border-l-2 bg-surface-container px-3 py-2 text-xs leading-relaxed italic text-on-surface-variant"
+                        style={{ borderColor: color }}
+                      >
+                        "{comment}"
+                      </blockquote>
+                    ))}
+                  </motion.div>
+                )}
+              </motion.article>
+            )
+          })}
+        </div>
+      ) : (
+        <p className="text-sm text-on-surface-variant bg-surface-container-lowest border border-outline-variant/10 rounded-xl p-4">
+          {emptyText}
+        </p>
+      )}
+    </div>
+  )
+}
+
+function AIFeedbackBento({ positivePoints, negativePoints, comments, accentColor, loading }) {
+  if (loading) {
+    return (
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {[0, 1].map((index) => (
+          <div key={index} className="h-[320px] rounded-2xl skeleton-shimmer" />
+        ))}
+      </div>
+    )
+  }
+
+  return (
+    <motion.section
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
+      className="rounded-3xl p-4 md:p-6 shadow-sm border bg-surface-container-lowest"
+      style={{ borderColor: `${accentColor}18` }}
+    >
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2 mb-5">
+        <div>
+          <div className="flex items-center gap-2">
+            <span
+              className="material-symbols-outlined"
+              style={{ color: accentColor, fontVariationSettings: "'FILL' 1" }}
+            >
+              auto_awesome
+            </span>
+            <h2 className="text-base md:text-lg font-bold font-headline text-on-surface">
+              AI-generated comment summary
+            </h2>
+          </div>
+          <p className="text-xs text-on-surface-variant/65 mt-1">
+            Summaries are generated from real survey comments. Expand each summary to read the source comments.
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
+        <FeedbackSummaryBlock
+          title="Top 3 Positive Signals"
+          eyebrow="First metric"
+          points={positivePoints}
+          comments={comments}
+          icon="thumb_up"
+          color="#005119"
+          emptyText="No AI-generated positive summaries are available for this theme yet."
+        />
+        <FeedbackSummaryBlock
+          title="Top 3 Negative Signals"
+          eyebrow="Second metric"
+          points={negativePoints}
+          comments={comments}
+          icon="report"
+          color="#BA1A1A"
+          emptyText="No AI-generated negative summaries are available for this theme yet."
+        />
+      </div>
+    </motion.section>
+  )
+}
+
 // ── Donut chart — uses shades of one accent color ───────────────────────────
 function DonutChart({ rows, title, accentColor }) {
   if (!rows || rows.length === 0) return null
@@ -683,200 +862,6 @@ function QuickStats({ activeData, accentColor }) {
         </motion.div>
       ))}
     </div>
-  )
-}
-
-// ── Comment scoring helpers ──────────────────────────────────────────────────
-const NEGATIVE_WORDS = new Set([
-  'bad', 'poor', 'terrible', 'worst', 'awful', 'disappointing', 'disappointed',
-  'frustrating', 'frustrated', 'difficult', 'issue', 'problem', 'fail', 'failed',
-  'lack', 'lacking', 'missing', 'never', 'insufficient', 'unhappy', 'dislike',
-  'boring', 'confusing', 'unclear', 'unsatisfied', 'inadequate', 'wrong', 'broken',
-  'worse', 'useless', 'ignored', 'neglected', 'unresponsive', 'unprepared',
-  'ineffective', 'disorganized', 'outdated', 'irrelevant', 'waste', 'too hard',
-  'too long', 'too short', 'too much', 'too little', 'nothing', 'nobody',
-])
-
-const CRITICAL_WORDS = new Set([
-  'should', 'could', 'improve', 'improvement', 'better', 'need', 'needs',
-  'must', 'recommend', 'suggest', 'suggestion', 'consider', 'change', 'fix',
-  'update', 'wish', 'hope', 'prefer', 'want', 'expect', 'require', 'necessary',
-  'important', 'please', 'provide', 'add', 'increase', 'enhance', 'revise',
-  'ideally', 'would like', 'more', 'less',
-])
-
-function scoreComment(text, wordSet) {
-  const tokens = String(text).toLowerCase().match(/[a-z]+/g) || []
-  return tokens.filter((t) => wordSet.has(t)).length
-}
-
-function classifyComments(quotes) {
-  const scored = quotes
-    .map((q) => {
-      const text = normaliseComment(q)
-      return {
-        text,
-        negScore: scoreComment(text, NEGATIVE_WORDS),
-        critScore: scoreComment(text, CRITICAL_WORDS),
-      }
-    })
-    .filter((c) => c.text.length > 20)
-
-  const critical = [...scored]
-    .sort((a, b) => b.critScore - a.critScore || a.negScore - b.negScore)
-    .slice(0, 3)
-
-  const criticalTexts = new Set(critical.map((c) => c.text))
-  const negative = [...scored]
-    .filter((c) => !criticalTexts.has(c.text))
-    .sort((a, b) => b.negScore - a.negScore)
-    .slice(0, 3)
-
-  return { critical, negative }
-}
-
-// ── Single expandable comment pill ──────────────────────────────────────────
-function CommentPill({ comment, index, type, accentColor }) {
-  const [expanded, setExpanded] = useState(false)
-  const THRESHOLD = 250
-  const isLong = comment.text.length > THRESHOLD
-  const displayed = expanded ? comment.text : (isLong ? comment.text.slice(0, THRESHOLD) + '…' : comment.text)
-  const isCritical = type === 'critical'
-  const color = isCritical ? accentColor : '#EF4444'
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, delay: index * 0.07, ease: [0.16, 1, 0.3, 1] }}
-      className="rounded-xl border p-4 flex flex-col gap-2"
-      style={{
-        backgroundColor: isCritical ? `${accentColor}07` : '#FFF5F5',
-        borderColor: isCritical ? `${accentColor}20` : '#FECACA',
-      }}
-    >
-      <div className="flex items-center gap-1.5">
-        <span
-          className="material-symbols-outlined text-sm"
-          style={{ color, fontVariationSettings: "'FILL' 1" }}
-        >
-          {isCritical ? 'edit_note' : 'sentiment_dissatisfied'}
-        </span>
-        <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color }}>
-          {isCritical ? `Critical ${index + 1}` : `Negative ${index + 1}`}
-        </span>
-      </div>
-      <blockquote className="text-sm text-on-surface-variant leading-relaxed italic">
-        "{displayed}"
-      </blockquote>
-      {isLong && (
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className="self-end flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider bg-transparent border-none cursor-pointer p-0 hover:opacity-70 transition-opacity"
-          style={{ color }}
-        >
-          {expanded ? 'Show Less' : 'Show More'}
-          <span className="material-symbols-outlined text-xs">
-            {expanded ? 'keyboard_arrow_up' : 'keyboard_arrow_down'}
-          </span>
-        </button>
-      )}
-    </motion.div>
-  )
-}
-
-// ── Negative & Critical feedback panel (replaces InsightBento on main theme) ─
-function NegativeCriticalPanel({ quotes, accentColor, loading }) {
-  const { critical, negative } = useMemo(
-    () => classifyComments(quotes || []),
-    [quotes],
-  )
-
-  if (loading) {
-    return (
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        {[0, 1].map((i) => (
-          <div key={i} className="space-y-3">
-            <div className="h-7 w-44 rounded-xl skeleton-shimmer" />
-            {[0, 1, 2].map((j) => <div key={j} className="h-28 rounded-xl skeleton-shimmer" />)}
-          </div>
-        ))}
-      </div>
-    )
-  }
-
-  return (
-    <motion.section
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
-      className="rounded-3xl p-4 md:p-6 shadow-sm border bg-surface-container-lowest"
-      style={{ borderColor: `${accentColor}18` }}
-    >
-      <div className="flex items-center gap-2 mb-5">
-        <span
-          className="material-symbols-outlined"
-          style={{ color: accentColor, fontVariationSettings: "'FILL' 1" }}
-        >
-          reviews
-        </span>
-        <h2 className="text-base md:text-lg font-bold font-headline text-on-surface">
-          Top Student Feedback
-        </h2>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Left — Critical */}
-        <div className="space-y-3">
-          <div className="flex items-center gap-2 pb-2 border-b border-outline-variant/10">
-            <span
-              className="material-symbols-outlined text-base"
-              style={{ color: accentColor, fontVariationSettings: "'FILL' 1" }}
-            >
-              edit_note
-            </span>
-            <h3 className="text-sm font-bold text-on-surface">Critical Comments</h3>
-            <span
-              className="ml-auto text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
-              style={{ color: accentColor, backgroundColor: `${accentColor}12` }}
-            >
-              Top {critical.length}
-            </span>
-          </div>
-          {critical.length > 0
-            ? critical.map((c, i) => (
-                <CommentPill key={i} comment={c} index={i} type="critical" accentColor={accentColor} />
-              ))
-            : <p className="text-sm text-on-surface-variant/60 italic">No critical comments found.</p>
-          }
-        </div>
-
-        {/* Right — Negative */}
-        <div className="space-y-3">
-          <div className="flex items-center gap-2 pb-2 border-b border-outline-variant/10">
-            <span
-              className="material-symbols-outlined text-base"
-              style={{ color: '#EF4444', fontVariationSettings: "'FILL' 1" }}
-            >
-              sentiment_dissatisfied
-            </span>
-            <h3 className="text-sm font-bold text-on-surface">Negative Comments</h3>
-            <span
-              className="ml-auto text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
-              style={{ color: '#EF4444', backgroundColor: '#FEF2F2' }}
-            >
-              Top {negative.length}
-            </span>
-          </div>
-          {negative.length > 0
-            ? negative.map((c, i) => (
-                <CommentPill key={i} comment={c} index={i} type="negative" accentColor={accentColor} />
-              ))
-            : <p className="text-sm text-on-surface-variant/60 italic">No negative comments found.</p>
-          }
-        </div>
-      </div>
-    </motion.section>
   )
 }
 
@@ -1318,8 +1303,10 @@ export default function ViewMorePage() {
                 />
               )
             ) : (
-              <NegativeCriticalPanel
-                quotes={activeData.quotes}
+              <AIFeedbackBento
+                positivePoints={activeData.positive_comments}
+                negativePoints={activeData.critical_comments}
+                comments={activeData.quotes}
                 accentColor={colors.accent}
                 loading={loadingLive}
               />
@@ -1329,21 +1316,25 @@ export default function ViewMorePage() {
               <SuggestionSection suggestions={activeData.student_suggestions} accentColor={colors.accent} />
             )}
 
-            <AIPointSection
-              points={activeData.positive_comments}
-              icon="thumb_up"
-              title="Positive Highlights"
-              accentColor={colors.accent}
-              sentimentColor="#005119"
-            />
+            {activeData.isSubtheme && (
+              <>
+                <AIPointSection
+                  points={activeData.positive_comments}
+                  icon="thumb_up"
+                  title="Positive Highlights"
+                  accentColor={colors.accent}
+                  sentimentColor="#005119"
+                />
 
-            <AIPointSection
-              points={activeData.critical_comments}
-              icon="report"
-              title="Critical Concerns"
-              accentColor={colors.accent}
-              sentimentColor="#ba1a1a"
-            />
+                <AIPointSection
+                  points={activeData.critical_comments}
+                  icon="report"
+                  title="Critical Concerns"
+                  accentColor={colors.accent}
+                  sentimentColor="#ba1a1a"
+                />
+              </>
+            )}
 
             {/* Scrollable Comments Grid */}
             {displayedComments.length > 0 && (
