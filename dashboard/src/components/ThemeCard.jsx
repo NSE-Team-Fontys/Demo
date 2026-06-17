@@ -9,9 +9,7 @@ function MiniDonutChart({ subthemeMentions, accentColor }) {
   const strokeWidth = 5
   const circ = 2 * Math.PI * radius // ~100.5
 
-  let currentOffset = 0
   const baseColor = accentColor || '#002F59'
-  // Generate shades from the accent color
   const colors = [
     baseColor,
     `${baseColor}cc`,
@@ -19,6 +17,12 @@ function MiniDonutChart({ subthemeMentions, accentColor }) {
     `${baseColor}66`,
     `${baseColor}44`,
   ]
+  // Highest percentage gets the darkest shade
+  const sorted = [...subthemeMentions]
+    .filter(sm => (sm.percentage || 0) > 0)
+    .sort((a, b) => (b.percentage || 0) - (a.percentage || 0))
+
+  let currentOffset = 0
 
   return (
     <svg width="40" height="40" viewBox="0 0 40 40" className="transform -rotate-90 shrink-0">
@@ -31,10 +35,8 @@ function MiniDonutChart({ subthemeMentions, accentColor }) {
         stroke="#E6E8EE"
         strokeWidth={strokeWidth}
       />
-      {subthemeMentions.map((sm, idx) => {
-        const pct = sm.percentage || 0
-        if (pct <= 0) return null
-        const strokeLength = (pct / 100) * circ
+      {sorted.map((sm, idx) => {
+        const strokeLength = (sm.percentage / 100) * circ
         const offset = currentOffset
         currentOffset += strokeLength
         const color = colors[idx % colors.length]
@@ -48,9 +50,9 @@ function MiniDonutChart({ subthemeMentions, accentColor }) {
             fill="transparent"
             stroke={color}
             strokeWidth={strokeWidth}
-            strokeDasharray={`${strokeLength} ${circ}`}
+            strokeDasharray={`${Math.max(0, strokeLength - 1.5)} ${circ}`}
             strokeDashoffset={-offset}
-            strokeLinecap="round"
+            strokeLinecap="butt"
           />
         )
       })}

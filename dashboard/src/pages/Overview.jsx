@@ -188,9 +188,6 @@ export default function Overview() {
               <h2 className="text-2xl font-bold font-headline text-primary">
                 Theme Frequency Insights
               </h2>
-              <p className="text-xs text-tertiary-container mt-0.5">
-                Live response frequencies from VectorDB
-              </p>
             </div>
           </div>
 

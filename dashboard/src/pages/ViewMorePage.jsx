@@ -420,8 +420,12 @@ function DonutChart({ rows, title, accentColor }) {
   const mentionTotal = safeRows.reduce((sum, row) => sum + row.mentions, 0)
   const usePercentages = percentageTotal > 0
   const valueTotal = usePercentages ? percentageTotal : mentionTotal
+  // Sort highest → lowest so darkest shade always maps to the largest slice
+  const sortedSafeRows = [...safeRows].sort((a, b) =>
+    usePercentages ? b.percentage - a.percentage : b.mentions - a.mentions
+  )
   let currentOffset = 0
-  const segments = safeRows.map((row, index) => {
+  const segments = sortedSafeRows.map((row, index) => {
     const value = usePercentages ? row.percentage : row.mentions
     const normalizedPercentage = valueTotal > 0 ? (value / valueTotal) * 100 : 0
     const segmentLength = (normalizedPercentage / 100) * circ
@@ -429,7 +433,7 @@ function DonutChart({ rows, title, accentColor }) {
       ...row,
       color: shades[index % shades.length],
       normalizedPercentage,
-      strokeLength: Math.max(0, segmentLength - 2.5),
+      strokeLength: Math.max(0, segmentLength - 4),
       strokeOffset: currentOffset,
     }
     currentOffset += segmentLength
@@ -458,7 +462,7 @@ function DonutChart({ rows, title, accentColor }) {
           />
           <g transform="rotate(-90 70 70)">
             {segments.map((segment, index) => (
-              <circle
+              <motion.circle
                 key={`${segment.subtheme}-${index}`}
                 cx="70"
                 cy="70"
@@ -466,13 +470,16 @@ function DonutChart({ rows, title, accentColor }) {
                 fill="transparent"
                 stroke={segment.color}
                 strokeWidth={strokeWidth}
-                strokeDasharray={`${segment.strokeLength} ${circ - segment.strokeLength}`}
                 strokeDashoffset={-segment.strokeOffset}
-                strokeLinecap="round"
-                className="transition-all duration-500 hover:stroke-[16px] cursor-pointer"
+                strokeLinecap="butt"
+                className="cursor-pointer"
+                initial={{ strokeDasharray: `0 ${circ}` }}
+                animate={{ strokeDasharray: `${segment.strokeLength} ${circ - segment.strokeLength}` }}
+                transition={{ duration: 0.7, delay: 0.1 + index * 0.12, ease: [0.16, 1, 0.3, 1] }}
+                whileHover={{ strokeWidth: strokeWidth + 2 }}
               >
                 <title>{`${segment.subtheme}: ${Math.round(segment.normalizedPercentage)}%`}</title>
-              </circle>
+              </motion.circle>
             ))}
           </g>
         </svg>
@@ -505,7 +512,8 @@ function DonutChart({ rows, title, accentColor }) {
 
 // ── Subtheme horizontal bar list ────────────────────────────────────────────
 function SubthemesList({ rows, onSelectSubtheme, activeSubtheme, accentColor, gradient }) {
-  const hasRows = rows.length > 0
+  const sortedRows = [...rows].sort((a, b) => b.percentage - a.percentage)
+  const hasRows = sortedRows.length > 0
 
   return (
     <motion.div
@@ -523,7 +531,7 @@ function SubthemesList({ rows, onSelectSubtheme, activeSubtheme, accentColor, gr
 
       {hasRows ? (
         <div className="flex flex-col gap-2.5">
-          {rows.map((row, idx) => {
+          {sortedRows.map((row, idx) => {
             const isActive = activeSubtheme === row.subtheme
             return (
               <motion.button
@@ -572,7 +580,7 @@ function SubthemesList({ rows, onSelectSubtheme, activeSubtheme, accentColor, gr
                 >
                   <span>{row.mentions} comments</span>
                   <span className="flex items-center gap-0.5 uppercase tracking-wider font-semibold">
-                    Drill down <span className="material-symbols-outlined text-[10px]">chevron_right</span>
+                    Break down <span className="material-symbols-outlined text-[10px]">chevron_right</span>
                   </span>
                 </div>
               </motion.button>
@@ -623,6 +631,200 @@ function QuickStats({ activeData, accentColor }) {
         </motion.div>
       ))}
     </div>
+  )
+}
+
+// ── Comment scoring helpers ──────────────────────────────────────────────────
+const NEGATIVE_WORDS = new Set([
+  'bad', 'poor', 'terrible', 'worst', 'awful', 'disappointing', 'disappointed',
+  'frustrating', 'frustrated', 'difficult', 'issue', 'problem', 'fail', 'failed',
+  'lack', 'lacking', 'missing', 'never', 'insufficient', 'unhappy', 'dislike',
+  'boring', 'confusing', 'unclear', 'unsatisfied', 'inadequate', 'wrong', 'broken',
+  'worse', 'useless', 'ignored', 'neglected', 'unresponsive', 'unprepared',
+  'ineffective', 'disorganized', 'outdated', 'irrelevant', 'waste', 'too hard',
+  'too long', 'too short', 'too much', 'too little', 'nothing', 'nobody',
+])
+
+const CRITICAL_WORDS = new Set([
+  'should', 'could', 'improve', 'improvement', 'better', 'need', 'needs',
+  'must', 'recommend', 'suggest', 'suggestion', 'consider', 'change', 'fix',
+  'update', 'wish', 'hope', 'prefer', 'want', 'expect', 'require', 'necessary',
+  'important', 'please', 'provide', 'add', 'increase', 'enhance', 'revise',
+  'ideally', 'would like', 'more', 'less',
+])
+
+function scoreComment(text, wordSet) {
+  const tokens = String(text).toLowerCase().match(/[a-z]+/g) || []
+  return tokens.filter((t) => wordSet.has(t)).length
+}
+
+function classifyComments(quotes) {
+  const scored = quotes
+    .map((q) => {
+      const text = normaliseComment(q)
+      return {
+        text,
+        negScore: scoreComment(text, NEGATIVE_WORDS),
+        critScore: scoreComment(text, CRITICAL_WORDS),
+      }
+    })
+    .filter((c) => c.text.length > 20)
+
+  const critical = [...scored]
+    .sort((a, b) => b.critScore - a.critScore || a.negScore - b.negScore)
+    .slice(0, 3)
+
+  const criticalTexts = new Set(critical.map((c) => c.text))
+  const negative = [...scored]
+    .filter((c) => !criticalTexts.has(c.text))
+    .sort((a, b) => b.negScore - a.negScore)
+    .slice(0, 3)
+
+  return { critical, negative }
+}
+
+// ── Single expandable comment pill ──────────────────────────────────────────
+function CommentPill({ comment, index, type, accentColor }) {
+  const [expanded, setExpanded] = useState(false)
+  const THRESHOLD = 250
+  const isLong = comment.text.length > THRESHOLD
+  const displayed = expanded ? comment.text : (isLong ? comment.text.slice(0, THRESHOLD) + '…' : comment.text)
+  const isCritical = type === 'critical'
+  const color = isCritical ? accentColor : '#EF4444'
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, delay: index * 0.07, ease: [0.16, 1, 0.3, 1] }}
+      className="rounded-xl border p-4 flex flex-col gap-2"
+      style={{
+        backgroundColor: isCritical ? `${accentColor}07` : '#FFF5F5',
+        borderColor: isCritical ? `${accentColor}20` : '#FECACA',
+      }}
+    >
+      <div className="flex items-center gap-1.5">
+        <span
+          className="material-symbols-outlined text-sm"
+          style={{ color, fontVariationSettings: "'FILL' 1" }}
+        >
+          {isCritical ? 'edit_note' : 'sentiment_dissatisfied'}
+        </span>
+        <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color }}>
+          {isCritical ? `Critical ${index + 1}` : `Negative ${index + 1}`}
+        </span>
+      </div>
+      <blockquote className="text-sm text-on-surface-variant leading-relaxed italic">
+        "{displayed}"
+      </blockquote>
+      {isLong && (
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="self-end flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider bg-transparent border-none cursor-pointer p-0 hover:opacity-70 transition-opacity"
+          style={{ color }}
+        >
+          {expanded ? 'Show Less' : 'Show More'}
+          <span className="material-symbols-outlined text-xs">
+            {expanded ? 'keyboard_arrow_up' : 'keyboard_arrow_down'}
+          </span>
+        </button>
+      )}
+    </motion.div>
+  )
+}
+
+// ── Negative & Critical feedback panel (replaces InsightBento on main theme) ─
+function NegativeCriticalPanel({ quotes, accentColor, loading }) {
+  const { critical, negative } = useMemo(
+    () => classifyComments(quotes || []),
+    [quotes],
+  )
+
+  if (loading) {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        {[0, 1].map((i) => (
+          <div key={i} className="space-y-3">
+            <div className="h-7 w-44 rounded-xl skeleton-shimmer" />
+            {[0, 1, 2].map((j) => <div key={j} className="h-28 rounded-xl skeleton-shimmer" />)}
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  return (
+    <motion.section
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
+      className="rounded-3xl p-4 md:p-6 shadow-sm border bg-surface-container-lowest"
+      style={{ borderColor: `${accentColor}18` }}
+    >
+      <div className="flex items-center gap-2 mb-5">
+        <span
+          className="material-symbols-outlined"
+          style={{ color: accentColor, fontVariationSettings: "'FILL' 1" }}
+        >
+          reviews
+        </span>
+        <h2 className="text-base md:text-lg font-bold font-headline text-on-surface">
+          Top Student Feedback
+        </h2>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Left — Critical */}
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 pb-2 border-b border-outline-variant/10">
+            <span
+              className="material-symbols-outlined text-base"
+              style={{ color: accentColor, fontVariationSettings: "'FILL' 1" }}
+            >
+              edit_note
+            </span>
+            <h3 className="text-sm font-bold text-on-surface">Critical Comments</h3>
+            <span
+              className="ml-auto text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
+              style={{ color: accentColor, backgroundColor: `${accentColor}12` }}
+            >
+              Top {critical.length}
+            </span>
+          </div>
+          {critical.length > 0
+            ? critical.map((c, i) => (
+                <CommentPill key={i} comment={c} index={i} type="critical" accentColor={accentColor} />
+              ))
+            : <p className="text-sm text-on-surface-variant/60 italic">No critical comments found.</p>
+          }
+        </div>
+
+        {/* Right — Negative */}
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 pb-2 border-b border-outline-variant/10">
+            <span
+              className="material-symbols-outlined text-base"
+              style={{ color: '#EF4444', fontVariationSettings: "'FILL' 1" }}
+            >
+              sentiment_dissatisfied
+            </span>
+            <h3 className="text-sm font-bold text-on-surface">Negative Comments</h3>
+            <span
+              className="ml-auto text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
+              style={{ color: '#EF4444', backgroundColor: '#FEF2F2' }}
+            >
+              Top {negative.length}
+            </span>
+          </div>
+          {negative.length > 0
+            ? negative.map((c, i) => (
+                <CommentPill key={i} comment={c} index={i} type="negative" accentColor={accentColor} />
+              ))
+            : <p className="text-sm text-on-surface-variant/60 italic">No negative comments found.</p>
+          }
+        </div>
+      </div>
+    </motion.section>
   )
 }
 
@@ -804,7 +1006,7 @@ export default function ViewMorePage() {
     [activeData?.summary, activeData?.quotes],
   )
   const displayedComments = useMemo(
-    () => activeData?.quotes?.slice(0, 100) || [],
+    () => activeData?.quotes || [],
     [activeData?.quotes],
   )
 
@@ -987,14 +1189,22 @@ export default function ViewMorePage() {
         {/* ── Main Content Grid ── */}
         <section className="grid grid-cols-1 lg:grid-cols-12 gap-5 md:gap-6 mt-6">
           <div className="lg:col-span-8 space-y-5">
-            <InsightBento
-              insights={insightCards}
-              accentColor={colors.accent}
-              gradient={colors.gradient}
-              loading={loadingLive || loadingSubtheme}
-              showOfflineNotice={hasLlmError}
-              isSubtheme={activeData.isSubtheme}
-            />
+            {activeData.isSubtheme ? (
+              <InsightBento
+                insights={insightCards}
+                accentColor={colors.accent}
+                gradient={colors.gradient}
+                loading={loadingLive || loadingSubtheme}
+                showOfflineNotice={hasLlmError}
+                isSubtheme={activeData.isSubtheme}
+              />
+            ) : (
+              <NegativeCriticalPanel
+                quotes={activeData.quotes}
+                accentColor={colors.accent}
+                loading={loadingLive}
+              />
+            )}
 
             {!activeData.isSubtheme && (
               <SuggestionSection suggestions={activeData.student_suggestions} accentColor={colors.accent} />
@@ -1014,7 +1224,7 @@ export default function ViewMorePage() {
                       Retrieved Student Comments
                     </h2>
                     <p className="text-xs text-on-surface-variant/60 mt-0.5">
-                      Showing {displayedComments.length} of {activeData.quotes.length} comments from the anonymized survey database
+                      Showing all {displayedComments.length} comments from the anonymized survey database
                     </p>
                   </div>
                   <span
@@ -1105,26 +1315,39 @@ export default function ViewMorePage() {
                         </span>
                       ))}
                     </div>
-                    <button
-                      onClick={() => navigate(`/thema/${theme.id}`, { state: { theme, filters } })}
-                      className="w-full mt-4 flex items-center justify-center gap-2 rounded-xl border text-xs font-bold py-2.5 transition-colors cursor-pointer hover:opacity-80"
-                      style={{ borderColor: colors.accent, color: colors.accent }}
-                    >
-                      <span className="material-symbols-outlined text-sm">arrow_upward</span>
-                      Reset to Main Theme
-                    </button>
                   </motion.div>
                 </div>
               )}
 
-              <Link
-                to="/"
-                className="inline-flex items-center justify-center gap-2 w-full rounded-xl text-white text-sm font-bold px-4 py-3 transition-all shadow-sm no-underline hover:opacity-90"
-                style={{ background: colors.gradient }}
-              >
-                <span className="material-symbols-outlined text-base">dashboard</span>
-                Return to dashboard
-              </Link>
+              {activeData.isSubtheme ? (
+                <div className="flex gap-3">
+                  <Link
+                    to="/"
+                    className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl text-white text-xs font-bold px-3 py-3 transition-all shadow-sm no-underline hover:opacity-90"
+                    style={{ background: colors.gradient }}
+                  >
+                    <span className="material-symbols-outlined text-base">dashboard</span>
+                    Return to dashboard
+                  </Link>
+                  <button
+                    onClick={() => navigate(`/thema/${theme.id}`, { state: { theme, filters } })}
+                    className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl border text-xs font-bold px-3 py-3 transition-colors cursor-pointer hover:opacity-80 bg-transparent"
+                    style={{ borderColor: colors.accent, color: colors.accent }}
+                  >
+                    <span className="material-symbols-outlined text-base">arrow_upward</span>
+                    Reset to Main Theme
+                  </button>
+                </div>
+              ) : (
+                <Link
+                  to="/"
+                  className="inline-flex items-center justify-center gap-2 w-full rounded-xl text-white text-sm font-bold px-4 py-3 transition-all shadow-sm no-underline hover:opacity-90"
+                  style={{ background: colors.gradient }}
+                >
+                  <span className="material-symbols-outlined text-base">dashboard</span>
+                  Return to dashboard
+                </Link>
+              )}
             </div>
           </aside>
         </section>

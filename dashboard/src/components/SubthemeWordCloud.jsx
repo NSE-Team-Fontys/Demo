@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { getThemeColor } from '../constants/themeColors'
 
@@ -41,43 +42,48 @@ export default function SubthemeWordCloud({ themes }) {
       <div className="flex flex-wrap items-center justify-center gap-2.5 py-4 min-h-[120px]">
         {words.map((word, idx) => {
           const colors = getThemeColor(word.themeId)
-          // Scale font size between 11px and 22px based on mention count
           const range = maxCount - minCount || 1
           const normalized = (word.count - minCount) / range
           const fontSize = 11 + normalized * 11
           const opacity = 0.55 + normalized * 0.45
 
           return (
-            <motion.span
+            <Link
               key={`${word.themeId}-${word.text}`}
-              initial={{ opacity: 0, scale: 0.7, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              transition={{
-                duration: 0.5,
-                delay: idx * 0.04,
-                ease: [0.16, 1, 0.3, 1],
-              }}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg cursor-default select-none
-                         hover:scale-110 transition-transform duration-200"
-              style={{
-                fontSize: `${fontSize}px`,
-                color: colors.accent,
-                opacity,
-                backgroundColor: colors.bgTint,
-                border: `1px solid ${colors.border}`,
-                fontWeight: normalized > 0.5 ? 700 : 600,
-                fontFamily: "'Manrope', sans-serif",
-              }}
-              title={`${word.text} — ${word.count} mentions (${word.themeName})`}
+              to={`/thema/${word.themeId}/subtheme/${encodeURIComponent(word.text)}`}
+              className="no-underline"
+              onClick={() => window.scrollTo(0, 0)}
             >
-              {word.text}
-              <span
-                className="text-[9px] font-bold opacity-60 tabular-nums"
-                style={{ color: colors.accent }}
+              <motion.span
+                initial={{ opacity: 0, scale: 0.7, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                transition={{
+                  duration: 0.5,
+                  delay: idx * 0.04,
+                  ease: [0.16, 1, 0.3, 1],
+                }}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg cursor-pointer select-none
+                           hover:scale-110 transition-transform duration-200"
+                style={{
+                  fontSize: `${fontSize}px`,
+                  color: colors.accent,
+                  opacity,
+                  backgroundColor: colors.bgTint,
+                  border: `1px solid ${colors.border}`,
+                  fontWeight: normalized > 0.5 ? 700 : 600,
+                  fontFamily: "'Manrope', sans-serif",
+                }}
+                title={`${word.text} — ${word.count} mentions (${word.themeName})`}
               >
-                {word.count}
-              </span>
-            </motion.span>
+                {word.text}
+                <span
+                  className="text-[9px] font-bold opacity-60 tabular-nums"
+                  style={{ color: colors.accent }}
+                >
+                  {word.count}
+                </span>
+              </motion.span>
+            </Link>
           )
         })}
       </div>
