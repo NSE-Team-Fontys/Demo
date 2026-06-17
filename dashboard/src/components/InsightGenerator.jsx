@@ -47,7 +47,7 @@ export default function InsightGenerator({ onComplete }) {
   const [generating, setGenerating] = useState(false);
 
   // Configuration
-  const [selectedModel, setSelectedModel] = useState('unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL');
+  const [selectedModel, setSelectedModel] = useState('unsloth/gemma-4-E4B-it-qat-GGUF:UD-Q4_K_XL');
   const [customPrompt, setCustomPrompt] = useState(DEFAULT_PROMPT);
   const [showPromptEditor, setShowPromptEditor] = useState(false);
   const [clearCache, setClearCache] = useState(false);

@@ -233,6 +233,34 @@ def _strip_thinking_block(text: str) -> str:
     return re.sub(r"<think>[\s\S]*?</think>", "", text, flags=re.IGNORECASE).strip()
 
 
+def _remove_trailing_commas_before_closers(json_str: str) -> str:
+    result: list[str] = []
+    in_string = False
+    escape_next = False
+
+    for char in json_str:
+        if escape_next:
+            result.append(char)
+            escape_next = False
+            continue
+        if char == "\\" and in_string:
+            result.append(char)
+            escape_next = True
+            continue
+        if char == '"':
+            result.append(char)
+            in_string = not in_string
+            continue
+        if not in_string and char in "}]":
+            while result and result[-1].isspace():
+                result.pop()
+            if result and result[-1] == ",":
+                result.pop()
+        result.append(char)
+
+    return "".join(result)
+
+
 def _repair_truncated_json(json_str: str) -> dict:
     """Close open brackets/strings in a truncated JSON and attempt to parse it."""
     stack: list[str] = []
@@ -262,13 +290,18 @@ def _repair_truncated_json(json_str: str) -> dict:
     if in_string:
         repaired += '"'
     repaired += "".join(reversed(stack))
+    repaired = _remove_trailing_commas_before_closers(repaired)
     return json.loads(repaired)
 
 
 def parse_llm_json(result_text: str) -> dict:
     cleaned = _strip_thinking_block(result_text)
     match = re.search(r"\{[\s\S]*\}", cleaned)
-    json_str = match.group(0) if match else cleaned
+    if match:
+        json_str = match.group(0)
+    else:
+        json_start = cleaned.find("{")
+        json_str = cleaned[json_start:] if json_start >= 0 else cleaned
     try:
         return json.loads(json_str)
     except json.JSONDecodeError:

@@ -125,7 +125,7 @@ llama-server --version
 If the version prints correctly, start the server once manually to trigger the model download:
 
 ```bash
-llama-server -hf unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL -c 32000 -ngl 99
+llama-server -hf unsloth/gemma-4-E4B-it-qat-GGUF:UD-Q4_K_XL -c 32000 -ngl 99
 ```
 
 Wait until the server prints `listening`, then close it. After that the app can manage the server automatically.
@@ -176,7 +176,7 @@ app will:
 To run the server manually instead, start it before selecting the model and leave the checkbox unchecked:
 
 ```powershell
-llama-server -hf unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL -c 32000 -ngl auto
+llama-server -hf unsloth/gemma-4-E4B-it-qat-GGUF:UD-Q4_K_XL -c 32000 -ngl auto
 ```
 
 ### PyTorch GPU acceleration
@@ -257,7 +257,7 @@ LLM_CONTEXT_DOCUMENTS=100
 HIERARCHICAL_RAG_BATCH_DOCUMENTS=60
 HIERARCHICAL_RAG_MAX_DOCUMENTS=0
 DEFAULT_LLM_PROVIDER=llama.cpp
-DEFAULT_LLM_MODEL=unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL
+DEFAULT_LLM_MODEL=unsloth/gemma-4-E4B-it-qat-GGUF:UD-Q4_K_XL
 LLAMA_CPP_BASE_URL=http://127.0.0.1:8080
 LLAMA_CPP_API_KEY=no-key
 LLAMA_CPP_SERVER_BIN=C:\tools\llama.cpp\llama-server.exe
@@ -527,7 +527,7 @@ Behavior:
 
 - Uses local llama.cpp at `http://127.0.0.1:8080` by default.
 - Checks llama.cpp availability and the selected Gemma GGUF model before generation.
-- Supports these Unsloth dynamic Q4 model ids: `unsloth/gemma-4-E2B-it-qat-GGUF:UD-Q4_K_XL`, `unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL`, `unsloth/gemma-4-26B-A4B-it-GGUF:UD-Q4_K_M`, and `unsloth/gemma-4-31B-it-GGUF:UD-Q4_K_XL`.
+- Supports these Unsloth dynamic Q4 model ids: `unsloth/gemma-4-E2B-it-qat-GGUF:UD-Q4_K_XL`, `unsloth/gemma-4-E4B-it-qat-GGUF:UD-Q4_K_XL`, `unsloth/gemma-4-12B-it-qat-GGUF:UD-Q4_K_XL`, `unsloth/gemma-4-26B-A4B-it-qat-GGUF:UD-Q4_K_XL`, and `unsloth/gemma-4-31B-it-qat-GGUF:UD-Q4_K_XL`.
 - Uses semantic hierarchical RAG for theme insights instead of fixing answers to their original survey question.
 - First applies metadata filters, then reads indexing-time primary and ambiguous candidate assignments directly from Chroma metadata.
 - Counts each answer once under its primary theme while allowing genuinely multi-topic ambiguous evidence in multiple summaries.
@@ -646,7 +646,7 @@ Check llama.cpp:
 
 ```bash
 llama-server
-llama-server -hf unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL
+llama-server -hf unsloth/gemma-4-E4B-it-qat-GGUF:UD-Q4_K_XL
 ```
 
 For multiple selectable models, use llama.cpp router mode. Start `llama-server` without a model, cache the Unsloth dynamic Q4 model ids you want with `llama-server -hf <repo>:<quant>`, then restart the router.

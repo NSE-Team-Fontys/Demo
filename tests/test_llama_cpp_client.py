@@ -10,7 +10,11 @@ llama_cpp_models = import_module("src.pipeline.04_generation.llama_cpp_models")
 
 E2B_MODEL = "unsloth/gemma-4-E2B-it-qat-GGUF:UD-Q4_K_XL"
 LEGACY_E2B_MODEL = "unsloth/gemma-4-E2B-it-GGUF:UD-Q4_K_XL"
-E4B_MODEL = "unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL"
+E4B_MODEL = "unsloth/gemma-4-E4B-it-qat-GGUF:UD-Q4_K_XL"
+LEGACY_E4B_MODEL = "unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL"
+MODEL_12B = "unsloth/gemma-4-12B-it-qat-GGUF:UD-Q4_K_XL"
+MODEL_26B = "unsloth/gemma-4-26B-A4B-it-qat-GGUF:UD-Q4_K_XL"
+MODEL_31B = "unsloth/gemma-4-31B-it-qat-GGUF:UD-Q4_K_XL"
 
 
 class LlamaCppClientTests(unittest.TestCase):
@@ -33,21 +37,30 @@ class LlamaCppClientTests(unittest.TestCase):
             E2B_MODEL,
         )
 
-    def test_e2b_server_command_enables_mtp(self) -> None:
-        command = llama_cpp_models.resolve_llama_cpp_model(E2B_MODEL).server_command(
-            "llama-server"
+    def test_legacy_e4b_id_resolves_to_qat_model(self) -> None:
+        self.assertEqual(
+            llama_cpp_models.resolve_llama_cpp_model(LEGACY_E4B_MODEL).id,
+            E4B_MODEL,
         )
 
-        self.assertEqual(
-            command[-4:],
-            ["--spec-type", "draft-mtp", "--spec-draft-n-max", "2"],
-        )
-        self.assertNotIn(
-            "--spec-type",
-            llama_cpp_models.resolve_llama_cpp_model(E4B_MODEL).server_command(
-                "llama-server"
-            ),
-        )
+    def test_server_command_enables_mtp_for_qat_mtp_models(self) -> None:
+        expected_draft_n = {
+            E2B_MODEL: "3",
+            E4B_MODEL: "2",
+            MODEL_12B: "2",
+            MODEL_26B: "2",
+            MODEL_31B: "2",
+        }
+        for model_id, draft_n in expected_draft_n.items():
+            with self.subTest(model_id=model_id):
+                command = llama_cpp_models.resolve_llama_cpp_model(
+                    model_id
+                ).server_command("llama-server")
+
+                self.assertEqual(
+                    command[-4:],
+                    ["--spec-type", "draft-mtp", "--spec-draft-n-max", draft_n],
+                )
 
     def test_matching_single_server_model_is_reused(self) -> None:
         with (
@@ -110,6 +123,24 @@ class LlamaCppClientTests(unittest.TestCase):
             ),
         ):
             self.assertTrue(self.client._has_managed_server())
+
+    def test_configured_server_pids_falls_back_to_pgrep_without_proc(self) -> None:
+        def fake_check_output(command, **_kwargs):
+            if command[:2] == ["pgrep", "-f"]:
+                return "1234\n"
+            if command[:3] == ["ps", "-p", "1234"]:
+                return "/usr/local/bin/llama-server -hf test-model\n"
+            return ""
+
+        with (
+            mock.patch.object(llm_clients.Path, "is_dir", return_value=False),
+            mock.patch.object(
+                llm_clients.subprocess,
+                "check_output",
+                side_effect=fake_check_output,
+            ),
+        ):
+            self.assertEqual(llm_clients.LlamaCppClient._configured_server_pids(), [1234])
 
 
 if __name__ == "__main__":

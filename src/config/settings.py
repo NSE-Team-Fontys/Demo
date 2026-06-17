@@ -8,7 +8,7 @@ def _env(name: str, default: str) -> str:
 DEFAULT_LLM_PROVIDER = _env("DEFAULT_LLM_PROVIDER", "llama.cpp")
 DEFAULT_LLM_MODEL = _env(
     "DEFAULT_LLM_MODEL",
-    "unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL",
+    "unsloth/gemma-4-E4B-it-qat-GGUF:UD-Q4_K_XL",
 )
 LLAMA_CPP_BASE_URL = _env("LLAMA_CPP_BASE_URL", "http://127.0.0.1:8080")
 LLAMA_CPP_API_KEY = _env("LLAMA_CPP_API_KEY", "no-key")
