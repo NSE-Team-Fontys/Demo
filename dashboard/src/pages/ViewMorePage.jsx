@@ -366,6 +366,38 @@ function InsightBento({ insights, accentColor, gradient, loading, showOfflineNot
 }
 
 // ── Suggestion section ──────────────────────────────────────────────────────
+function SuggestionCard({ suggestion, accentColor, index = 0 }) {
+  const [expanded, setExpanded] = useState(false)
+  const text = normaliseComment(suggestion)
+  const isLong = text.length > 150
+
+  return (
+    <motion.blockquote
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, delay: Math.min(index * 0.05, 0.3), ease: [0.16, 1, 0.3, 1] }}
+      className="p-4 rounded-xl border-l-4 italic text-sm leading-relaxed flex flex-col"
+      style={{
+        borderColor: accentColor,
+        backgroundColor: `${accentColor}08`,
+        color: '#1e293b',
+      }}
+    >
+      <span className={expanded ? '' : 'line-clamp-5'}>{text}</span>
+      {isLong && (
+        <button
+          type="button"
+          onClick={() => setExpanded(!expanded)}
+          className="mt-2 self-end text-[11px] font-bold not-italic uppercase tracking-wider hover:opacity-80 transition-colors bg-transparent border-none p-0 cursor-pointer"
+          style={{ color: accentColor }}
+        >
+          {expanded ? 'Show less' : 'Show more'}
+        </button>
+      )}
+    </motion.blockquote>
+  )
+}
+
 function SuggestionSection({ suggestions, accentColor }) {
   return (
     <motion.div
@@ -392,17 +424,7 @@ function SuggestionSection({ suggestions, accentColor }) {
       {suggestions.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {suggestions.slice(0, 3).map((suggestion, i) => (
-            <blockquote
-              key={i}
-              className="p-4 rounded-xl border-l-4 italic text-sm leading-relaxed"
-              style={{
-                borderColor: accentColor,
-                backgroundColor: `${accentColor}08`,
-                color: '#1e293b',
-              }}
-            >
-              {normaliseComment(suggestion)}
-            </blockquote>
+            <SuggestionCard key={i} suggestion={suggestion} accentColor={accentColor} index={i} />
           ))}
         </div>
       ) : (
@@ -976,6 +998,7 @@ export default function ViewMorePage() {
       setSubthemeLiveData(null)
       return
     }
+
     let isMounted = true
     setLoadingSubtheme(true)
     setSubthemeLiveData(null)
@@ -1028,13 +1051,21 @@ export default function ViewMorePage() {
     const cached = effectiveData || theme
 
     if (decodedSubtheme && subthemeLiveData) {
+      // Only show the number of comments actually linked to this sub-theme
+      // (its mention count), not every comment the parent theme retrieved.
+      const mentionCount = theme.subtheme_mentions?.find((sm) => sm.subtheme === decodedSubtheme)?.mentions
+      const subthemeQuotes = subthemeLiveData.quotes || []
+      const linkedQuotes = typeof mentionCount === 'number' && mentionCount > 0 && mentionCount < subthemeQuotes.length
+        ? subthemeQuotes.slice(0, mentionCount)
+        : subthemeQuotes
+
       return {
         isSubtheme: true,
         name: decodedSubtheme,
         summary: subthemeLiveData.summary,
         subthemes: subthemeLiveData.subthemes || [],
         subtheme_mentions: subthemeLiveData.subtheme_mentions || [],
-        quotes: subthemeLiveData.quotes || [],
+        quotes: linkedQuotes,
         student_suggestions: subthemeLiveData.student_suggestions || [],
         positive_comments: subthemeLiveData.positive_comments || [],
         critical_comments: subthemeLiveData.critical_comments || [],
@@ -1247,15 +1278,6 @@ export default function ViewMorePage() {
                   {!activeData.isSubtheme && theme.subtag && (
                     <p className="text-sm text-white/70 mt-2">{theme.subtag}</p>
                   )}
-                  {activeData.isSubtheme && (
-                    <button
-                      onClick={() => navigate({ pathname: `/thema/${theme.id}`, search: filterSearch }, { state: { theme, filters } })}
-                      className="mt-3 inline-flex items-center gap-1 text-xs text-white/80 hover:text-white bg-white/10 hover:bg-white/20 px-2.5 py-1 rounded-lg transition-colors font-medium border-none cursor-pointer"
-                    >
-                      <span className="material-symbols-outlined text-[14px]">arrow_upward</span>
-                      Back to Parent Theme
-                    </button>
-                  )}
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -1350,7 +1372,9 @@ export default function ViewMorePage() {
                       Retrieved Student Comments
                     </h2>
                     <p className="text-xs text-on-surface-variant/60 mt-0.5">
-                      Showing all {displayedComments.length} comments from the anonymized survey database
+                      {activeData.isSubtheme
+                        ? `Showing ${displayedComments.length} comments linked to this sub-theme`
+                        : `Showing all ${displayedComments.length} comments from the anonymized survey database`}
                     </p>
                   </div>
                   <span
@@ -1431,30 +1455,6 @@ export default function ViewMorePage() {
                       ))}
                     </div>
                   </motion.div>
-
-                  {/* Sub-subtheme tags list */}
-                  <motion.div
-                    initial={{ opacity: 0, y: 16 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5, delay: 0.3 }}
-                    className="bg-surface-container-lowest rounded-2xl p-4 md:p-6 shadow-sm border border-outline-variant/10 space-y-3"
-                  >
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-on-surface-variant">
-                      Drilled Down Sub-themes
-                    </h4>
-                    <div className="flex flex-wrap gap-2">
-                      {activeData.subthemes.map((st, i) => (
-                        <span
-                          key={i}
-                          className="px-2.5 py-1 rounded-full text-xs font-semibold text-on-surface shadow-sm border border-outline-variant/5"
-                          style={{ backgroundColor: `${colors.accent}08` }}
-                        >
-                          {st}
-                        </span>
-                      ))}
-                    </div>
-
-                  </motion.div>
                 </div>
               )}
 
@@ -1466,7 +1466,7 @@ export default function ViewMorePage() {
                     style={{ background: colors.gradient }}
                   >
                     <span className="material-symbols-outlined text-base">dashboard</span>
-                    Return to dashboard
+                    Back to dashboard
                   </Link>
                   <button
                     onClick={() => navigate({ pathname: `/thema/${theme.id}`, search: filterSearch }, { state: { theme, filters } })}
@@ -1474,7 +1474,7 @@ export default function ViewMorePage() {
                     style={{ borderColor: colors.accent, color: colors.accent }}
                   >
                     <span className="material-symbols-outlined text-base">arrow_upward</span>
-                    Reset to Main Theme
+                    Back to Main Theme
                   </button>
                 </div>
               ) : (
@@ -1484,7 +1484,7 @@ export default function ViewMorePage() {
                   style={{ background: colors.gradient }}
                 >
                   <span className="material-symbols-outlined text-base">dashboard</span>
-                  Return to dashboard
+                  Back to dashboard
                 </Link>
               )}
             </div>

@@ -1,8 +1,10 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 
 export default function FilterDropdown({ icon, label, value, options, onChange }) {
   const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState('')
   const ref = useRef(null)
+  const searchInputRef = useRef(null)
 
   // Close on outside click
   useEffect(() => {
@@ -13,6 +15,20 @@ export default function FilterDropdown({ icon, label, value, options, onChange }
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
   }, [open])
+
+  // Reset and focus the search box whenever the dropdown opens
+  useEffect(() => {
+    if (open) {
+      setSearch('')
+      searchInputRef.current?.focus()
+    }
+  }, [open])
+
+  const filteredOptions = useMemo(() => {
+    const query = search.trim().toLowerCase()
+    if (!query) return options
+    return options.filter((opt) => String(opt).toLowerCase().includes(query))
+  }, [options, search])
 
   function select(opt) {
     onChange(opt)
@@ -49,23 +65,45 @@ export default function FilterDropdown({ icon, label, value, options, onChange }
 
       {open && (
         <div className="absolute left-0 right-0 top-full mt-1 bg-surface-container-lowest rounded-xl shadow-ambient border border-outline-variant/20 z-50 overflow-hidden">
+          {options.length > 6 && (
+            <div className="p-2 border-b border-outline-variant/15">
+              <div className="relative">
+                <span className="material-symbols-outlined text-sm text-outline absolute left-2.5 top-1/2 -translate-y-1/2">
+                  search
+                </span>
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  onClick={(e) => e.stopPropagation()}
+                  placeholder="Search..."
+                  className="w-full pl-8 pr-2 py-1.5 text-sm rounded-lg bg-surface-container-low text-on-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary/30"
+                />
+              </div>
+            </div>
+          )}
           <div className="overflow-y-auto max-h-[360px] overscroll-contain">
-          {options.map((opt) => (
-            <button
-              key={opt}
-              onClick={() => select(opt)}
-              className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center justify-between ${
-                opt === value
-                  ? 'bg-primary/8 text-primary font-semibold'
-                  : 'text-on-surface hover:bg-surface-container-low'
-              }`}
-            >
-              <span>{opt}</span>
-              {opt === value && (
-                <span className="material-symbols-outlined text-sm text-primary">check</span>
-              )}
-            </button>
-          ))}
+          {filteredOptions.length > 0 ? (
+            filteredOptions.map((opt) => (
+              <button
+                key={opt}
+                onClick={() => select(opt)}
+                className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center justify-between ${
+                  opt === value
+                    ? 'bg-primary/8 text-primary font-semibold'
+                    : 'text-on-surface hover:bg-surface-container-low'
+                }`}
+              >
+                <span>{opt}</span>
+                {opt === value && (
+                  <span className="material-symbols-outlined text-sm text-primary">check</span>
+                )}
+              </button>
+            ))
+          ) : (
+            <p className="px-4 py-3 text-sm text-on-surface-variant/60 italic">No matches found</p>
+          )}
           </div>
         </div>
       )}

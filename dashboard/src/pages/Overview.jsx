@@ -69,7 +69,7 @@ export default function Overview() {
 
   const apiFilters = useMemo(() => filtersToApiParams(filters), [filters])
   const apiFilterKey = useMemo(() => stableFilterKey(apiFilters), [apiFilters])
-  
+
   const themes = useMemo(() => {
     return Object.entries(dynamicThemesData)
       .filter(([themeName]) => themeName !== 'No Meaningful Response')
