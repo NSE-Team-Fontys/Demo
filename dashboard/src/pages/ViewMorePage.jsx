@@ -46,40 +46,6 @@ function cleanInsightPoint(value) {
   return /[.!?]$/.test(capitalized) ? capitalized : `${capitalized}.`
 }
 
-function summaryPoints(summary) {
-  const sentences = String(summary || '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .split(/(?<=[.!?])\s+/)
-    .filter((sentence) => sentence.length > 20)
-
-  const points = []
-  sentences.forEach((sentence) => {
-    const leadingContrast = sentence.match(/^(?:while|although)\s+(.{20,}?),\s+(.{20,})$/i)
-    const embeddedContrast = sentence.match(/\bwhile\s+(.{20,}?),\s+(.{20,})$/i)
-    const joinedContrast = sentence.match(/^(.{20,}?),\s+(?:but|yet|however)\s+(.{20,})$/i)
-    const parts = leadingContrast
-      ? [leadingContrast[1], leadingContrast[2]]
-      : embeddedContrast
-        ? [embeddedContrast[1], embeddedContrast[2]]
-        : joinedContrast
-          ? [joinedContrast[1], joinedContrast[2]]
-          : [sentence]
-
-    parts.forEach((part) => {
-      const point = cleanInsightPoint(part)
-      if (point && !points.includes(point)) points.push(point)
-    })
-  })
-
-  return points.slice(0, 3)
-}
-
-function buildInsightCards(summary, comments) {
-  const points = summaryPoints(summary)
-  return buildPointCards(points, comments)
-}
-
 function buildPointCards(points, comments) {
   const sourceComments = (comments || [])
     .map(normaliseComment)
@@ -197,174 +163,6 @@ function CommentCard({ comment, accentColor, index = 0 }) {
   )
 }
 
-// ── Neutral AI findings with expandable source comments ─────────────────────
-function InsightBento({ insights, accentColor, gradient, loading, showOfflineNotice, isSubtheme }) {
-  const [expandedIndex, setExpandedIndex] = useState(null)
-
-  return (
-    <motion.section
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
-      className="rounded-3xl p-4 md:p-6 shadow-sm border bg-surface-container-lowest"
-      style={{ borderColor: `${accentColor}18` }}
-    >
-      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2 mb-5">
-        <div>
-          <div className="flex items-center gap-2">
-            <span
-              className="material-symbols-outlined"
-              style={{ color: accentColor, fontVariationSettings: "'FILL' 1" }}
-            >
-              psychology
-            </span>
-            <h2 className="text-base md:text-lg font-bold font-headline text-on-surface">
-              {isSubtheme ? 'AI sub-theme findings' : 'AI key findings'}
-            </h2>
-          </div>
-          <p className="text-xs text-on-surface-variant/65 mt-1">
-            Expand a finding to inspect related verbatim student comments.
-          </p>
-        </div>
-        {!loading && insights.length > 0 && (
-          <span
-            className="text-[10px] uppercase tracking-wider font-bold px-2.5 py-1 rounded-full"
-            style={{ color: accentColor, backgroundColor: `${accentColor}0d` }}
-          >
-            {insights.length} findings
-          </span>
-        )}
-      </div>
-
-      {showOfflineNotice && (
-        <div className="p-3 bg-amber-50 text-amber-800 text-xs rounded-xl border border-amber-200 mb-4">
-          LLM offline - showing the cached unfiltered analysis.
-        </div>
-      )}
-
-      {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div className="h-64 rounded-2xl skeleton-shimmer md:col-span-2 xl:col-span-1" />
-          <div className="space-y-3">
-            <div className="h-[122px] rounded-2xl skeleton-shimmer" />
-            <div className="h-[122px] rounded-2xl skeleton-shimmer" />
-          </div>
-        </div>
-      ) : insights.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-3 items-stretch">
-          {insights.map((insight, index) => {
-            const expanded = expandedIndex === index
-            const featured = index === 0
-            return (
-              <motion.article
-                layout
-                key={insight.point}
-                className={`relative overflow-hidden rounded-2xl border p-5 flex flex-col ${
-                  featured
-                    ? 'md:col-span-2 xl:col-span-3 xl:row-span-2 min-h-[270px] text-white'
-                    : 'xl:col-span-3 min-h-[128px]'
-                }`}
-                style={featured ? {
-                  background: gradient,
-                  borderColor: 'transparent',
-                } : {
-                  backgroundColor: `${accentColor}07`,
-                  borderColor: `${accentColor}16`,
-                }}
-              >
-                {featured && (
-                  <>
-                    <div
-                      className="absolute inset-0 opacity-[0.08]"
-                      style={{
-                        backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)',
-                        backgroundSize: '18px 18px',
-                      }}
-                    />
-                    <div className="absolute -right-12 -top-12 w-36 h-36 rounded-full bg-white/10" />
-                  </>
-                )}
-
-                <div className="relative z-10 flex flex-col h-full">
-                  <div className="flex items-center justify-between gap-3 mb-4">
-                    <span
-                      className={`text-[10px] uppercase tracking-[0.18em] font-bold ${
-                        featured ? 'text-white/70' : 'text-on-surface-variant/60'
-                      }`}
-                    >
-                      Finding {String(index + 1).padStart(2, '0')}
-                    </span>
-                    <span
-                      className={`material-symbols-outlined text-lg ${
-                        featured ? 'text-white/70' : ''
-                      }`}
-                      style={featured ? undefined : { color: `${accentColor}90` }}
-                    >
-                      auto_awesome
-                    </span>
-                  </div>
-
-                  <p
-                    className={`font-headline font-bold leading-relaxed ${
-                      featured ? 'text-lg md:text-xl' : 'text-sm md:text-base text-on-surface'
-                    }`}
-                  >
-                    {insight.point}
-                  </p>
-
-                  <button
-                    type="button"
-                    aria-expanded={expanded}
-                    onClick={() => setExpandedIndex(expanded ? null : index)}
-                    disabled={insight.relatedComments.length === 0}
-                    className={`mt-auto pt-5 inline-flex items-center gap-1.5 text-xs font-bold border-none bg-transparent cursor-pointer disabled:cursor-default disabled:opacity-50 ${
-                      featured ? 'text-white' : ''
-                    }`}
-                    style={featured ? undefined : { color: accentColor }}
-                  >
-                    <span className="material-symbols-outlined text-base">forum</span>
-                    {insight.relatedComments.length > 0
-                      ? `${expanded ? 'Hide' : 'Read'} ${insight.relatedComments.length} source comments`
-                      : 'No source comments available'}
-                    <span className="material-symbols-outlined text-base">
-                      {expanded ? 'expand_less' : 'expand_more'}
-                    </span>
-                  </button>
-
-                  {expanded && insight.relatedComments.length > 0 && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 'auto' }}
-                      className="mt-4 space-y-2"
-                    >
-                      {insight.relatedComments.map((comment, commentIndex) => (
-                        <blockquote
-                          key={`${index}-${commentIndex}`}
-                          className={`rounded-xl p-3 text-xs leading-relaxed italic border ${
-                            featured
-                              ? 'bg-white/10 border-white/15 text-white/90'
-                              : 'bg-white/80 border-outline-variant/10 text-on-surface-variant'
-                          }`}
-                        >
-                          "{comment}"
-                        </blockquote>
-                      ))}
-                    </motion.div>
-                  )}
-                </div>
-              </motion.article>
-            )
-          })}
-        </div>
-      ) : (
-        <p className="text-sm text-on-surface-variant/60 italic">
-          No generated summary is available for this selection yet.
-        </p>
-      )}
-    </motion.section>
-  )
-}
-
 // ── Suggestion section ──────────────────────────────────────────────────────
 function SuggestionCard({ suggestion, accentColor, index = 0 }) {
   const [expanded, setExpanded] = useState(false)
@@ -436,48 +234,6 @@ function SuggestionSection({ suggestions, accentColor }) {
   )
 }
 
-// ── AI Point Section — renders LLM-generated positive/critical points ────────
-function AIPointSection({ points, icon, title, accentColor, sentimentColor }) {
-  if (!points || points.length === 0) return null
-  const borderColor = sentimentColor || accentColor
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, delay: 0.12, ease: [0.16, 1, 0.3, 1] }}
-      className="bg-surface-container-lowest rounded-2xl p-4 md:p-6 shadow-sm border border-outline-variant/10"
-    >
-      <div className="flex items-center justify-between gap-3 mb-4">
-        <div className="flex items-center gap-2">
-          <span
-            className="material-symbols-outlined text-xl"
-            style={{ color: borderColor, fontVariationSettings: "'FILL' 1" }}
-          >
-            {icon}
-          </span>
-          <h2 className="text-base md:text-lg font-bold font-headline text-on-surface">{title}</h2>
-        </div>
-        <span className="flex items-center gap-1 text-[10px] uppercase tracking-wider font-bold text-on-surface-variant/70">
-          <span className="material-symbols-outlined text-[12px]" style={{ fontVariationSettings: "'FILL' 1" }}>
-            auto_awesome
-          </span>
-          AI · from real comments
-        </span>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        {points.slice(0, 3).map((point, i) => (
-          <div
-            key={i}
-            className="p-4 rounded-xl border-l-4 text-sm leading-relaxed text-on-surface"
-            style={{ borderColor, backgroundColor: `${borderColor}08` }}
-          >
-            {normaliseComment(point)}
-          </div>
-        ))}
-      </div>
-    </motion.div>
-  )
-}
 
 function FeedbackSummaryBlock({ title, eyebrow, points, comments, icon, color, emptyText }) {
   const [expandedIndex, setExpandedIndex] = useState(null)
@@ -1110,10 +866,6 @@ export default function ViewMorePage() {
     }
   }, [theme, effectiveData, decodedSubtheme, subthemeLiveData])
 
-  const insightCards = useMemo(
-    () => buildInsightCards(activeData?.summary, activeData?.quotes),
-    [activeData?.summary, activeData?.quotes],
-  )
   const displayedComments = useMemo(
     () => activeData?.quotes || [],
     [activeData?.quotes],
@@ -1315,13 +1067,12 @@ export default function ViewMorePage() {
                   </p>
                 </div>
               ) : (
-                <InsightBento
-                  insights={insightCards}
+                <AIFeedbackBento
+                  positivePoints={activeData.positive_comments}
+                  negativePoints={activeData.critical_comments}
+                  comments={activeData.quotes}
                   accentColor={colors.accent}
-                  gradient={colors.gradient}
                   loading={loadingLive || loadingSubtheme}
-                  showOfflineNotice={hasLlmError}
-                  isSubtheme={activeData.isSubtheme}
                 />
               )
             ) : (
@@ -1336,26 +1087,6 @@ export default function ViewMorePage() {
 
             {!activeData.isSubtheme && (
               <SuggestionSection suggestions={activeData.student_suggestions} accentColor={colors.accent} />
-            )}
-
-            {activeData.isSubtheme && (
-              <>
-                <AIPointSection
-                  points={activeData.positive_comments}
-                  icon="thumb_up"
-                  title="Positive Highlights"
-                  accentColor={colors.accent}
-                  sentimentColor="#005119"
-                />
-
-                <AIPointSection
-                  points={activeData.critical_comments}
-                  icon="report"
-                  title="Critical Concerns"
-                  accentColor={colors.accent}
-                  sentimentColor="#ba1a1a"
-                />
-              </>
             )}
 
             {/* Scrollable Comments Grid */}
