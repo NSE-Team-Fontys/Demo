@@ -54,6 +54,44 @@ class PromptParsingTests(unittest.TestCase):
             "Feedback is positive,\tbut contact varies",
         )
 
+    def test_parse_llm_json_uses_last_object_when_model_echoes_schema(self) -> None:
+        schema = (
+            '{ "summary": "...", '
+            '"positive_comments": ["..."], '
+            '"critical_comments": ["..."], '
+            '"student_suggestions": ["..."], '
+            '"subthemes": ["...", "..."], '
+            '"subtheme_manifest": [] }'
+        )
+        actual = (
+            '{ "summary": "Real summary.", '
+            '"positive_comments": ["Helpful lecturers"], '
+            '"critical_comments": [], '
+            '"student_suggestions": [], '
+            '"subthemes": ["Contact"], '
+            '"subtheme_manifest": [] }'
+        )
+
+        parsed = prompts.parse_llm_json(f"{schema}\n{actual}")
+
+        self.assertEqual(parsed["summary"], "Real summary.")
+        self.assertEqual(parsed["positive_comments"], ["Helpful lecturers"])
+
+    def test_parse_llm_json_repairs_truncated_incomplete_key(self) -> None:
+        text = (
+            '{ "summary": "...", '
+            '"positive_comments": ["..."], '
+            '"critical_comments": ["..."], '
+            '"student_suggestions": ["..."], '
+            '"subthem'
+        )
+
+        parsed = prompts.parse_llm_json(text)
+
+        self.assertEqual(parsed["summary"], "...")
+        self.assertEqual(parsed["student_suggestions"], ["..."])
+        self.assertNotIn("subthemes", parsed)
+
 
 if __name__ == "__main__":
     unittest.main()

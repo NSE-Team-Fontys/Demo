@@ -125,7 +125,6 @@ def precompute_insights():
         generation.precompute_insights_stream(
             themes=themes,
             llm_model=data.get("llm_model") or settings.DEFAULT_LLM_MODEL,
-            custom_prompt=data.get("custom_prompt", ""),
             allow_model_download=bool(data.get("allow_model_download", False)),
             provider=data.get("provider", settings.DEFAULT_LLM_PROVIDER),
             filters=_filters_from_payload(data),

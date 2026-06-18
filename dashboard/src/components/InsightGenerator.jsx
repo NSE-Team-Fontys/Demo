@@ -1,25 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { AVAILABLE_LLM_MODELS, LLM_PROVIDER } from '../config/llmModels.js';
 
-const DEFAULT_PROMPT = `You are an expert data analyst. Read the following student survey responses about '{theme_name}'.
-Use the provided theme scope to keep the analysis focused on this selected theme. Do not drift into Support / Mentoring unless the selected theme is Support / Mentoring.
-Summarize the general consensus in 2 sentences.
-Select up to 3 exact positive student comments and up to 3 exact critical student comments from the responses. Use verbatim text only; do not invent comments.
-Select up to 3 exact student suggestions where students propose a solution, improvement, or concrete next step instead of only complaining. Use verbatim text only; return an empty array if no clear suggestions exist.
-Also extract 3 to 5 short sub-themes or topics mentioned.
-For every subtheme, also return subtheme_manifest entries with the same name, a one-sentence description, and evidence_ids copied exactly from the response IDs shown in brackets, such as E0001.
-Respond EXACTLY in this JSON format:
-{
-  "summary": "...",
-  "positive_comments": ["..."],
-  "critical_comments": ["..."],
-  "student_suggestions": ["..."],
-  "subthemes": ["...", "..."],
-  "subtheme_manifest": [
-    {"name": "...", "description": "...", "evidence_ids": ["E0001", "E0002"]}
-  ]
-}`;
-
 function CacheBadge({ cached, total }) {
   if (cached === 0 && !total) return null;
   const full = total !== undefined && cached >= total;
@@ -45,8 +26,6 @@ export default function InsightGenerator({ onComplete }) {
 
   // Configuration
   const [selectedModel, setSelectedModel] = useState('unsloth/gemma-4-E4B-it-qat-GGUF:UD-Q4_K_XL');
-  const [customPrompt, setCustomPrompt] = useState(DEFAULT_PROMPT);
-  const [showPromptEditor, setShowPromptEditor] = useState(false);
   const [clearCache, setClearCache] = useState(false);
   const [allowModelDownload, setAllowModelDownload] = useState(true);
   const [maxDocuments, setMaxDocuments] = useState(240);
@@ -231,9 +210,6 @@ export default function InsightGenerator({ onComplete }) {
         max_documents: maxDocuments,
         filter_dimensions: useFilterGrid ? filterDimensions : [],
       };
-      if (endpoint === '/api/precompute-insights') {
-        body.custom_prompt = customPrompt !== DEFAULT_PROMPT ? customPrompt : '';
-      }
       const res = await fetch(`http://localhost:5001${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -381,48 +357,6 @@ export default function InsightGenerator({ onComplete }) {
 
             {/* Options Panel */}
             <div className="space-y-4">
-              {/* Prompt Editor Toggle */}
-              <div className="p-6 bg-white border border-gray-100 shadow-sm rounded-2xl space-y-4">
-                <div className="flex items-center justify-between pb-2 border-b border-gray-50">
-                  <div className="flex items-center space-x-2">
-                    <span className="text-xl">📝</span>
-                    <h3 className="font-bold text-gray-800">Analysis Prompt</h3>
-                  </div>
-                  <button
-                    onClick={() => setShowPromptEditor(!showPromptEditor)}
-                    className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${showPromptEditor ? 'bg-violet-100 text-violet-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                  >
-                    {showPromptEditor ? 'Collapse' : 'Customize'}
-                  </button>
-                </div>
-
-                {!showPromptEditor ? (
-                  <div className="p-3 bg-gray-50 rounded-lg border border-gray-100">
-                    <p className="text-xs text-gray-500 font-mono line-clamp-3">{customPrompt.substring(0, 180)}...</p>
-                    <p className="text-[10px] text-gray-400 mt-2">Use <code className="bg-white px-1 py-0.5 rounded border text-violet-600">{'{theme_name}'}</code> as a placeholder for the current theme.</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <textarea
-                      value={customPrompt}
-                      onChange={(e) => setCustomPrompt(e.target.value)}
-                      rows={10}
-                      className="w-full p-3 text-xs font-mono bg-gray-900 text-green-400 rounded-xl border border-gray-700 focus:ring-2 focus:ring-violet-500 focus:border-transparent resize-none"
-                      placeholder="Enter your custom prompt..."
-                    />
-                    <div className="flex items-center justify-between">
-                      <p className="text-[10px] text-gray-400">Use <code className="bg-gray-100 px-1 py-0.5 rounded text-violet-600">{'{theme_name}'}</code> as a placeholder</p>
-                      <button
-                        onClick={() => setCustomPrompt(DEFAULT_PROMPT)}
-                        className="text-[10px] font-semibold text-gray-500 hover:text-violet-600 transition-colors"
-                      >
-                        Reset to Default
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-
               {/* Options */}
               <div className="p-6 bg-white border border-gray-100 shadow-sm rounded-2xl space-y-4">
                 <div className="flex items-center space-x-2 pb-2 border-b border-gray-50">
@@ -557,12 +491,6 @@ export default function InsightGenerator({ onComplete }) {
                 <>
                   <span className="text-gray-300">•</span>
                   <span className="text-amber-600 font-medium text-xs">Cache will be cleared</span>
-                </>
-              )}
-              {customPrompt !== DEFAULT_PROMPT && (
-                <>
-                  <span className="text-gray-300">•</span>
-                  <span className="text-violet-600 font-medium text-xs">Custom prompt</span>
                 </>
               )}
             </div>

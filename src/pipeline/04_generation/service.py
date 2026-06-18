@@ -347,7 +347,6 @@ def _generate_hierarchical_json(
     theme_name: str,
     evidence: list[dict],
     *,
-    custom_prompt: str = "",
     theme_query: str | None = None,
 ) -> dict:
     is_subtheme = bool(theme_query and theme_query != theme_name)
@@ -358,13 +357,11 @@ def _generate_hierarchical_json(
                 theme_name,
                 str(theme_query),
                 evidence,
-                custom_prompt=custom_prompt,
             )
         else:
             prompt = prompts.build_prompt(
                 theme_name,
                 evidence,
-                custom_prompt=custom_prompt,
             )
         return prompts.parse_llm_json(client.generate_json(llm_model, prompt, timeout=600))
 
@@ -377,7 +374,6 @@ def _generate_hierarchical_json(
                 batch,
                 batch_number=i,
                 total_batches=len(batches),
-                custom_prompt=custom_prompt,
             )
         else:
             prompt = prompts.build_batch_summary_prompt(
@@ -385,7 +381,6 @@ def _generate_hierarchical_json(
                 batch,
                 batch_number=i,
                 total_batches=len(batches),
-                custom_prompt=custom_prompt,
             )
         parsed = prompts.parse_llm_json(
             client.generate_json(llm_model, prompt, timeout=600)
@@ -421,7 +416,6 @@ def _generate_theme_payload(
     provider: str,
     llm_model: str,
     llm_generation_settings: dict | None,
-    custom_prompt: str = "",
     theme_query: str | None = None,
     evidence_ids: list[str] | None = None,
     max_documents: int | None = None,
@@ -452,7 +446,6 @@ def _generate_theme_payload(
         llm_model,
         theme_name,
         relevant_evidence,
-        custom_prompt=custom_prompt,
         theme_query=theme_query,
     )
     return _theme_payload_from_parsed(
@@ -657,7 +650,6 @@ def precompute_insights_stream(
     *,
     themes: list[dict],
     llm_model: str = DEFAULT_LLM_MODEL,
-    custom_prompt: str = "",
     allow_model_download: bool = False,
     provider: str = DEFAULT_LLM_PROVIDER,
     filters: dict | None = None,
@@ -796,7 +788,6 @@ def precompute_insights_stream(
                     provider=provider,
                     llm_model=llm_model,
                     llm_generation_settings=llm_generation_settings,
-                    custom_prompt=custom_prompt,
                     max_documents=max_documents,
                 )
                 cache[_cache_key(theme_name, filters)] = response_data
@@ -860,7 +851,6 @@ def precompute_insights_stream(
                             provider=provider,
                             llm_model=llm_model,
                             llm_generation_settings=llm_generation_settings,
-                            custom_prompt=custom_prompt,
                             max_documents=max_documents,
                             theme_query=subtheme,
                             evidence_ids=manifest.get("evidence_ids") or [],
@@ -935,7 +925,6 @@ def precompute_insights_stream(
                             provider=provider,
                             llm_model=llm_model,
                             llm_generation_settings=llm_generation_settings,
-                            custom_prompt=custom_prompt,
                             max_documents=max_documents,
                         )
                         cache[_cache_key(theme_name, combo)] = response_data
@@ -994,7 +983,6 @@ def precompute_insights_stream(
                                     provider=provider,
                                     llm_model=llm_model,
                                     llm_generation_settings=llm_generation_settings,
-                                    custom_prompt=custom_prompt,
                                     max_documents=max_documents,
                                     theme_query=subtheme,
                                     evidence_ids=manifest.get("evidence_ids") or [],
