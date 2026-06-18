@@ -1121,6 +1121,14 @@ def precompute_subthemes_stream(
                 )
                 subtheme_cache[sub_key] = sub_data
                 save_subtheme_cache(subtheme_cache)
+                quote_count = len(sub_data.get("quotes") or [])
+                main_key = _cache_key(theme_name, combo)
+                if main_key in main_cache:
+                    for row in main_cache[main_key].get("subtheme_mentions") or []:
+                        if row.get("subtheme") == subtheme:
+                            row["quote_count"] = quote_count
+                            break
+                    save_cache(main_cache)
             except Exception as exc:
                 yield json.dumps({
                     "status": "progress",

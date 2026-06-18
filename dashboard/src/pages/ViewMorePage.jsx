@@ -98,6 +98,7 @@ function buildSubthemeRows(subthemes, apiRows, sourceComments) {
         percentage: Number.isFinite(percentage) ? percentage : 0,
         mentions: Number.isFinite(mentions) ? mentions : 0,
         docPercentage: Number.isFinite(Number(row.doc_percentage)) ? Number(row.doc_percentage) : null,
+        quote_count: row.quote_count != null ? Number(row.quote_count) : null,
       }
     })
   }
@@ -592,7 +593,7 @@ function SubthemesList({ rows, onSelectSubtheme, activeSubtheme, accentColor, gr
                     isActive ? 'text-white/80' : 'text-on-surface-variant/85 font-medium'
                   }`}
                 >
-                  <span>{row.mentions} comments</span>
+                  <span>{row.quote_count ?? row.mentions} comments</span>
                   <span className="flex items-center gap-0.5 uppercase tracking-wider font-semibold">
                     Break down <span className="material-symbols-outlined text-[10px]">chevron_right</span>
                   </span>
