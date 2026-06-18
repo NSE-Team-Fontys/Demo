@@ -261,6 +261,39 @@ def _remove_trailing_commas_before_closers(json_str: str) -> str:
     return "".join(result)
 
 
+def _escape_control_chars_in_strings(json_str: str) -> str:
+    result: list[str] = []
+    in_string = False
+    escape_next = False
+
+    for char in json_str:
+        if escape_next:
+            result.append(char)
+            escape_next = False
+            continue
+        if char == "\\" and in_string:
+            result.append(char)
+            escape_next = True
+            continue
+        if char == '"':
+            result.append(char)
+            in_string = not in_string
+            continue
+        if in_string and ord(char) < 0x20:
+            if char == "\n":
+                result.append("\\n")
+            elif char == "\r":
+                result.append("\\r")
+            elif char == "\t":
+                result.append("\\t")
+            else:
+                result.append(f"\\u{ord(char):04x}")
+            continue
+        result.append(char)
+
+    return "".join(result)
+
+
 def _repair_truncated_json(json_str: str) -> dict:
     """Close open brackets/strings in a truncated JSON and attempt to parse it."""
     stack: list[str] = []
@@ -290,6 +323,7 @@ def _repair_truncated_json(json_str: str) -> dict:
     if in_string:
         repaired += '"'
     repaired += "".join(reversed(stack))
+    repaired = _escape_control_chars_in_strings(repaired)
     repaired = _remove_trailing_commas_before_closers(repaired)
     return json.loads(repaired)
 

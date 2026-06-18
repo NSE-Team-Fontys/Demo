@@ -1,5 +1,6 @@
 import pandas as pd
 import chromadb
+import gc
 import os
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 import json
@@ -39,6 +40,26 @@ from src.utils.file_parsers import detect_sep, is_questionnaire_column
 reranker_models = import_module("src.pipeline.03_retrieval.reranker_models")
 
 VECTOR_SCHEMA_VERSION = 3
+
+
+def _release_unused_torch_memory() -> None:
+    gc.collect()
+    try:
+        import torch
+    except ImportError:
+        return
+
+    try:
+        if torch.backends.mps.is_available():
+            torch.mps.empty_cache()
+    except Exception:
+        pass
+
+    try:
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except Exception:
+        pass
 
 
 def _load_vector_checkpoint(
@@ -347,6 +368,8 @@ def build_vector_db(csv_path="data/anonymized_output.csv", db_path="./survey_vec
                 documents=batch_docs,
                 metadatas=batch_metadata,
             )
+            del batch, batch_docs, batch_embeddings, assignments, batch_metadata
+            _release_unused_torch_memory()
 
         _validate_classified_collection(
             collection,
@@ -575,13 +598,16 @@ def build_vector_db_stream(
             processed_count = end
             checkpoint_meta["processed_count"] = processed_count
             _save_vector_checkpoint(checkpoint_meta)
+            current_doc = str(batch_docs[-1])[:100] + "..." if batch_docs else ""
+            del batch, batch_docs, batch_ids, batch_embeddings, assignments, batch_meta
+            _release_unused_torch_memory()
 
             progress = 40 + int(55 * (processed_count / total_docs))
             yield json.dumps({
                 "status": "progress",
                 "message": f"Embedded, classified, and indexed {processed_count}/{total_docs} documents...",
                 "progress": progress,
-                "current_doc": str(batch_docs[-1])[:100] + "..." if batch_docs else "",
+                "current_doc": current_doc,
                 "checkpoint_saved": True,
             }) + "\n"
 

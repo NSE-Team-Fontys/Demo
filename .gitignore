@@ -81,3 +81,5 @@ llama.cpp/
 gemma_subtheme_cache.json
 
 graphify-out/*
+
+backups/*

@@ -30,6 +30,30 @@ class PromptParsingTests(unittest.TestCase):
         self.assertEqual(parsed["summary"], "ok")
         self.assertEqual(parsed["subthemes"], ["one"])
 
+    def test_parse_llm_json_repairs_truncated_string_with_raw_newline(self) -> None:
+        text = (
+            '{ "summary": "Feedback on engagement and contact is generally positive,\n'
+            'with lecturers described as approachable and motivated'
+        )
+
+        parsed = prompts.parse_llm_json(text)
+
+        self.assertEqual(
+            parsed["summary"],
+            "Feedback on engagement and contact is generally positive,\n"
+            "with lecturers described as approachable and motivated",
+        )
+
+    def test_parse_llm_json_repairs_truncated_string_with_raw_tab(self) -> None:
+        text = '{ "summary": "Feedback is positive,\tbut contact varies'
+
+        parsed = prompts.parse_llm_json(text)
+
+        self.assertEqual(
+            parsed["summary"],
+            "Feedback is positive,\tbut contact varies",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

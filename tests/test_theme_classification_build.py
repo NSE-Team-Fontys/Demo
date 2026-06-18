@@ -22,9 +22,11 @@ class ScoreReranker:
     def __init__(self, scores) -> None:
         self.scores = np.asarray(scores, dtype=np.float32)
         self.calls = []
+        self.kwargs = []
 
-    def predict(self, pairs):
+    def predict(self, pairs, **kwargs):
         self.calls.append(list(pairs))
+        self.kwargs.append(kwargs)
         return self.scores
 
 
@@ -81,6 +83,10 @@ class ThemeClassificationTests(unittest.TestCase):
         self.assertEqual(result["theme_primary_score_kind"], "raw_cross_encoder_score")
         self.assertEqual(len(reranker.calls), 1)
         self.assertEqual(len(reranker.calls[0]), 2)
+        self.assertEqual(
+            reranker.kwargs[0]["batch_size"],
+            theme_classifier.RERANKER_BATCH_SIZE,
+        )
 
     def test_margin_rule_marks_close_reranker_scores_ambiguous(self) -> None:
         themes = ["Teachers", "Support / Mentoring"]

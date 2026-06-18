@@ -135,7 +135,7 @@ GEMMA_LLAMA_CPP_MODELS = (
             "--spec-type",
             "draft-mtp",
             "--spec-draft-n-max",
-            "3",
+            "2",
         ),
         generation=LlamaCppGenerationSettings(
             context_size=127000,

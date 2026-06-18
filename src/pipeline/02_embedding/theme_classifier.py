@@ -6,6 +6,7 @@ import numpy as np
 
 from src.config.response_quality import is_low_information_response
 from src.config.settings import (
+    RERANKER_BATCH_SIZE,
     THEME_AMBIGUITY_SCORE_MARGIN,
     THEME_CLASSIFICATION_CANDIDATES,
 )
@@ -190,7 +191,11 @@ def classify_theme_batch(
 
     if reranker_model is not None:
         raw_scores = np.asarray(
-            reranker_model.predict(reranker_pairs), dtype=np.float32
+            reranker_model.predict(
+                reranker_pairs,
+                batch_size=RERANKER_BATCH_SIZE,
+            ),
+            dtype=np.float32,
         ).reshape(-1)
         expected_scores = len(substantive_indices) * config.candidate_count
         if raw_scores.size != expected_scores:
