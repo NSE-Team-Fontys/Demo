@@ -10,28 +10,40 @@ from src.config.settings import (
 
 retrieval = import_module("src.pipeline.03_retrieval.service")
 
+_cache_data: dict | None = None
+_subtheme_cache_data: dict | None = None
 
-def load_cache():
+
+def load_cache() -> dict:
+    global _cache_data
+    if _cache_data is not None:
+        return _cache_data
     if CACHE_FILE.exists():
         try:
             with open(CACHE_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
+                _cache_data = json.load(f)
+                return _cache_data
         except Exception:
             pass
-    return {}
+    _cache_data = {}
+    return _cache_data
 
 
 def save_cache(cache_data):
+    global _cache_data
     tmp_file = CACHE_FILE.with_suffix(f"{CACHE_FILE.suffix}.tmp")
     with open(tmp_file, "w", encoding="utf-8") as f:
-        json.dump(cache_data, f, indent=2)
+        json.dump(cache_data, f, separators=(",", ":"))
     tmp_file.replace(CACHE_FILE)
+    _cache_data = cache_data
 
 
 def clear_insight_cache() -> dict:
+    global _cache_data
     retrieval.clear_runtime_caches()
     if CACHE_FILE.exists():
         CACHE_FILE.unlink()
+    _cache_data = {}
     return {"status": "success", "message": "Cache cleared"}
 
 
@@ -104,24 +116,33 @@ def cache_has_full_dashboard_payload(
     return all(field in cached_theme for field in required_fields)
 
 
-def load_subtheme_cache():
+def load_subtheme_cache() -> dict:
+    global _subtheme_cache_data
+    if _subtheme_cache_data is not None:
+        return _subtheme_cache_data
     if SUBTHEME_CACHE_FILE.exists():
         try:
             with open(SUBTHEME_CACHE_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
+                _subtheme_cache_data = json.load(f)
+                return _subtheme_cache_data
         except Exception:
             pass
-    return {}
+    _subtheme_cache_data = {}
+    return _subtheme_cache_data
 
 
 def save_subtheme_cache(cache_data):
+    global _subtheme_cache_data
     tmp_file = SUBTHEME_CACHE_FILE.with_suffix(f"{SUBTHEME_CACHE_FILE.suffix}.tmp")
     with open(tmp_file, "w", encoding="utf-8") as f:
-        json.dump(cache_data, f, indent=2)
+        json.dump(cache_data, f, separators=(",", ":"))
     tmp_file.replace(SUBTHEME_CACHE_FILE)
+    _subtheme_cache_data = cache_data
 
 
 def clear_subtheme_cache() -> dict:
+    global _subtheme_cache_data
     if SUBTHEME_CACHE_FILE.exists():
         SUBTHEME_CACHE_FILE.unlink()
+    _subtheme_cache_data = {}
     return {"status": "success", "message": "Subtheme cache cleared"}
