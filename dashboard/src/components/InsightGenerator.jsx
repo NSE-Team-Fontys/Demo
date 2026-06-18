@@ -3,7 +3,7 @@ import { AVAILABLE_LLM_MODELS, LLM_PROVIDER } from '../config/llmModels.js';
 
 const DEFAULT_PROMPT = `You are an expert data analyst. Read the following student survey responses about '{theme_name}'.
 Use the provided theme scope to keep the analysis focused on this selected theme. Do not drift into Support / Mentoring unless the selected theme is Support / Mentoring.
-Summarize the general consensus in 2 sentences. Extract 3 key sentiments (Positive, Neutral, or Critical) and provide a 1-sentence point for each.
+Summarize the general consensus in 2 sentences.
 Select up to 3 exact positive student comments and up to 3 exact critical student comments from the responses. Use verbatim text only; do not invent comments.
 Select up to 3 exact student suggestions where students propose a solution, improvement, or concrete next step instead of only complaining. Use verbatim text only; return an empty array if no clear suggestions exist.
 Also extract 3 to 5 short sub-themes or topics mentioned.
@@ -11,9 +11,6 @@ For every subtheme, also return subtheme_manifest entries with the same name, a 
 Respond EXACTLY in this JSON format:
 {
   "summary": "...",
-  "sentiments": [
-    {"sentiment": "Positive", "point": "..."}
-  ],
   "positive_comments": ["..."],
   "critical_comments": ["..."],
   "student_suggestions": ["..."],
@@ -711,7 +708,7 @@ export default function InsightGenerator({ onComplete }) {
             </div>
             <div>
               <h4 className="text-lg font-bold text-emerald-900">All Insights Generated Successfully</h4>
-              <p className="text-emerald-700 mt-1">Theme summaries, sentiments, comments, suggestions, and sub-themes are cached and ready. The Overview dashboard and view-more pages will load instantly.</p>
+              <p className="text-emerald-700 mt-1">Theme summaries, comments, suggestions, and sub-themes are cached and ready. The Overview dashboard and view-more pages will load instantly.</p>
               <p className="text-xs text-emerald-600 mt-2">Model used: <span className="font-semibold">{activeModel?.name}</span></p>
             </div>
           </div>

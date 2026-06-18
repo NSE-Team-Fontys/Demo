@@ -511,7 +511,7 @@
 <span class="dim">│</span>  Saved to <span class="amber">gemma_cache.json</span> on disk                                     <span class="dim">│</span>
 <span class="dim">│</span>                                                                        <span class="dim">│</span>
 <span class="dim">│</span>  Response: { subthemes: [...], subtheme_mentions: [...],                <span class="dim">│</span>
-<span class="dim">│</span>             summary, quotes, sentiments, student_suggestions }          <span class="dim">│</span>
+<span class="dim">│</span>             summary, quotes, student_suggestions }                      <span class="dim">│</span>
 <span class="dim">└──────────────────────────────────────────────────────────────────────────┘</span></div>
     </section>
 
@@ -638,13 +638,12 @@
         You are an expert data analyst. Read the following student survey responses about '<em>{theme_name}</em>'.<br />
         Theme scope: <em>{THEME_LLM_DEFINITIONS[theme_name]}</em><br /><br />
         Only analyze comments as evidence for this theme. Do not drift into Support / Mentoring unless the selected theme is Support / Mentoring.<br />
-        Write generated fields in English: summary, sentiment points, positive_comments, critical_comments, and subthemes. Keep only student_suggestions as exact verbatim student comments in their original language.<br /><br />
-        Summarize the general consensus in 2 sentences. Extract 3 key sentiments...<br />
+        Write generated fields in English: summary, positive_comments, critical_comments, and subthemes. Keep only student_suggestions as exact verbatim student comments in their original language.<br /><br />
+        Summarize the general consensus in 2 sentences.<br />
         <em>Also extract 3 to 5 short sub-themes or topics mentioned.</em><br /><br />
         Respond EXACTLY in this JSON format:
-        <div class="json-template">{
+<div class="json-template">{
   "summary": "...",
-  "sentiments": [ {"sentiment": "Positive", "point": "..."} ],
   "positive_comments": ["..."],
   "critical_comments": ["..."],
   "student_suggestions": ["..."],
@@ -668,9 +667,8 @@
         You are analyzing <em>batch {i} of {N}</em> for the survey theme '<em>{theme_name}</em>'.<br /><br />
         This is an <em>intermediate map step</em>, not the final theme summary. Summarize only this batch without making whole-theme prevalence claims.<br /><br />
         Respond EXACTLY in this JSON format:<br />
-        <div class="json-template">{
+<div class="json-template">{
   "summary": "...",
-  "sentiments": [...],
   "positive_comments": ["..."],
   "critical_comments": ["..."],
   "student_suggestions": ["..."],
@@ -1125,10 +1123,6 @@ reduce_prompt = prompts.<span class="fn">build_reduce_prompt</span>(
 
   <span class="comment">// LLM-generated content</span>
   <span class="string">"summary"</span>: <span class="string">"Students generally appreciate..."</span>,
-  <span class="string">"sentiments"</span>: [
-    { <span class="string">"sentiment"</span>: <span class="string">"Positive"</span>, <span class="string">"point"</span>: <span class="string">"..."</span> },
-    { <span class="string">"sentiment"</span>: <span class="string">"Critical"</span>, <span class="string">"point"</span>: <span class="string">"..."</span> }
-  ],
   <span class="string">"positive_comments"</span>: [<span class="string">"..."</span>, <span class="string">"..."</span>],
   <span class="string">"critical_comments"</span>: [<span class="string">"..."</span>, <span class="string">"..."</span>],
   <span class="string">"student_suggestions"</span>: [<span class="string">"verbatim comment..."</span>],

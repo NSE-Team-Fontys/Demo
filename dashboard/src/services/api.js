@@ -33,15 +33,9 @@ export function filtersToParams(filters = {}) {
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
-/** Returns theme frequency + sentiment stats, or null on failure. */
+/** Returns theme frequency stats, or null on failure. */
 export async function fetchThemes(filters = {}) {
   try { return await apiFetch('/themes/', filtersToParams(filters)) }
-  catch { return null }
-}
-
-/** Returns per-group sentiment overview, or null on failure. */
-export async function fetchSentiment(filters = {}) {
-  try { return await apiFetch('/sentiment/', filtersToParams(filters)) }
   catch { return null }
 }
 

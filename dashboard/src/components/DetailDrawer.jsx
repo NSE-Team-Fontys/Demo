@@ -81,25 +81,6 @@ export default function DetailDrawer({ theme, onClose }) {
               <p className="text-sm text-blue-800 leading-relaxed bg-white/50 p-3 rounded-lg border border-blue-100/50">
                 {liveData.summary}
               </p>
-              {liveData.sentiments && liveData.sentiments.length > 0 && (
-                <div className="space-y-2 pt-2">
-                  <h5 className="text-[10px] font-bold uppercase tracking-wider text-blue-700/70">Top Sentiments Detected</h5>
-                  <div className="space-y-2">
-                    {liveData.sentiments.map((s, idx) => (
-                      <div key={idx} className="flex gap-2 items-start bg-white/60 p-2 rounded border border-blue-50/50">
-                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase mt-0.5
-                          ${s.sentiment === 'Positive' ? 'bg-green-100 text-green-700' :
-                            s.sentiment === 'Critical' ? 'bg-red-100 text-red-700' :
-                              'bg-yellow-100 text-yellow-700'}
-                        `}>
-                          {s.sentiment}
-                        </span>
-                        <span className="text-xs text-blue-900 leading-snug">{s.point}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
           ) : (
             <p className="text-xs text-blue-600/70 italic">Vector database query failed or offline.</p>

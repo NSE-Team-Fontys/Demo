@@ -67,7 +67,6 @@ class FakeLlmClient:
         return json.dumps(
             {
                 "summary": "Theme summary.",
-                "sentiments": [],
                 "positive_comments": [],
                 "critical_comments": [],
                 "student_suggestions": [],
@@ -455,7 +454,6 @@ class PersistedThemeRetrievalTests(unittest.TestCase):
             "ambiguous_evidence_count": 2,
             **self.config.cache_metadata(),
             "summary": "Theme summary.",
-            "sentiments": [],
             "positive_comments": [],
             "critical_comments": [],
             "student_suggestions": [],
@@ -536,7 +534,6 @@ class PersistedThemeRetrievalTests(unittest.TestCase):
             "ambiguous_evidence_count": 2,
             **self.config.cache_metadata(),
             "summary": "Theme summary.",
-            "sentiments": [],
             "positive_comments": [],
             "critical_comments": [],
             "student_suggestions": [],
