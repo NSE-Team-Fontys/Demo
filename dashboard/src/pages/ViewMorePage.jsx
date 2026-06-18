@@ -1,11 +1,18 @@
-import { useMemo, useState, useEffect } from 'react'
-import { Link, NavLink, useLocation, useParams, useNavigate, useSearchParams } from 'react-router-dom'
-import { useThemeSummary } from '../hooks/useThemeSummary'
-import FilterDropdown from '../components/FilterDropdown'
-import { LOCATION_OPTIONS } from '../constants/locations'
-import { getThemeColor } from '../constants/themeColors'
-import { buildRealTheme, THEME_NAME_BY_ID } from '../constants/realThemes'
-import { motion } from 'framer-motion'
+import { useMemo, useState, useEffect } from "react";
+import {
+  Link,
+  NavLink,
+  useLocation,
+  useParams,
+  useNavigate,
+  useSearchParams,
+} from "react-router-dom";
+import { useThemeSummary } from "../hooks/useThemeSummary";
+import FilterDropdown from "../components/FilterDropdown";
+import { LOCATION_OPTIONS } from "../constants/locations";
+import { getThemeColor } from "../constants/themeColors";
+import { buildRealTheme, THEME_NAME_BY_ID } from "../constants/realThemes";
+import { motion } from "framer-motion";
 import {
   filtersFromSearchParams,
   filtersToApiParams,
@@ -14,133 +21,222 @@ import {
   normalizeFilters,
   searchFromFilters,
   stableFilterKey,
-} from '../utils/filters'
+} from "../utils/filters";
 
 function normaliseComment(comment) {
-  return String(comment || '').replace(/^"+|"+$/g, '')
+  return String(comment || "").replace(/^"+|"+$/g, "");
 }
 
 const INSIGHT_STOPWORDS = new Set([
-  'about', 'after', 'again', 'also', 'although', 'because', 'been', 'being', 'between',
-  'could', 'from', 'have', 'however', 'into', 'more', 'most', 'other', 'over', 'students',
-  'that', 'their', 'there', 'these', 'they', 'this', 'those', 'through', 'under', 'very',
-  'while', 'with', 'would', 'waar', 'worden', 'heeft', 'hebben', 'voor', 'door', 'maar',
-  'niet', 'zijn', 'deze', 'over', 'meer',
-])
+  "about",
+  "after",
+  "again",
+  "also",
+  "although",
+  "because",
+  "been",
+  "being",
+  "between",
+  "could",
+  "from",
+  "have",
+  "however",
+  "into",
+  "more",
+  "most",
+  "other",
+  "over",
+  "students",
+  "that",
+  "their",
+  "there",
+  "these",
+  "they",
+  "this",
+  "those",
+  "through",
+  "under",
+  "very",
+  "while",
+  "with",
+  "would",
+  "waar",
+  "worden",
+  "heeft",
+  "hebben",
+  "voor",
+  "door",
+  "maar",
+  "niet",
+  "zijn",
+  "deze",
+  "over",
+  "meer",
+]);
 
 function insightTokens(value) {
-  return String(value || '')
-    .toLowerCase()
-    .match(/[a-zA-ZÀ-ÿ0-9]+/g)
-    ?.filter((token) => token.length > 3 && !INSIGHT_STOPWORDS.has(token)) ?? []
+  return (
+    String(value || "")
+      .toLowerCase()
+      .match(/[a-zA-ZÀ-ÿ0-9]+/g)
+      ?.filter((token) => token.length > 3 && !INSIGHT_STOPWORDS.has(token)) ??
+    []
+  );
 }
 
 function cleanInsightPoint(value) {
-  const cleaned = String(value || '')
+  const cleaned = String(value || "")
     .trim()
-    .replace(/^(while|although|however|but|yet)\s+/i, '')
-    .replace(/\s+/g, ' ')
+    .replace(/^(while|although|however|but|yet)\s+/i, "")
+    .replace(/\s+/g, " ");
 
-  if (!cleaned) return ''
-  const capitalized = cleaned.charAt(0).toUpperCase() + cleaned.slice(1)
-  return /[.!?]$/.test(capitalized) ? capitalized : `${capitalized}.`
+  if (!cleaned) return "";
+  const capitalized = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+  return /[.!?]$/.test(capitalized) ? capitalized : `${capitalized}.`;
 }
 
 function buildPointCards(points, comments) {
   const sourceComments = (comments || [])
     .map(normaliseComment)
-    .filter((comment) => comment.length > 1)
-  const usedCommentIndexes = new Set()
+    .filter((comment) => comment.length > 1);
+  const usedCommentIndexes = new Set();
 
-  return (points || []).map((point, pointIndex) => {
-    const cleanPoint = cleanInsightPoint(point)
-    const pointRoots = new Set(insightTokens(point).map((token) => token.slice(0, 6)))
-    const ranked = sourceComments
-      .map((comment, commentIndex) => {
-        const commentRoots = new Set(insightTokens(comment).map((token) => token.slice(0, 6)))
-        const overlap = [...pointRoots].filter((root) => commentRoots.has(root)).length
-        const fallbackDistance = (commentIndex - pointIndex * 3 + sourceComments.length) % sourceComments.length
-        return { comment, commentIndex, overlap, fallbackDistance }
-      })
-      .sort((a, b) => b.overlap - a.overlap || a.fallbackDistance - b.fallbackDistance)
+  return (points || [])
+    .map((point, pointIndex) => {
+      const cleanPoint = cleanInsightPoint(point);
+      const pointRoots = new Set(
+        insightTokens(point).map((token) => token.slice(0, 6)),
+      );
+      const ranked = sourceComments
+        .map((comment, commentIndex) => {
+          const commentRoots = new Set(
+            insightTokens(comment).map((token) => token.slice(0, 6)),
+          );
+          const overlap = [...pointRoots].filter((root) =>
+            commentRoots.has(root),
+          ).length;
+          const fallbackDistance =
+            (commentIndex - pointIndex * 3 + sourceComments.length) %
+            sourceComments.length;
+          return { comment, commentIndex, overlap, fallbackDistance };
+        })
+        .sort(
+          (a, b) =>
+            b.overlap - a.overlap || a.fallbackDistance - b.fallbackDistance,
+        );
 
-    const relatedComments = []
-    ranked.forEach((candidate) => {
-      if (
-        relatedComments.length >= 3 ||
-        (candidate.overlap === 0 && relatedComments.length > 0) ||
-        usedCommentIndexes.has(candidate.commentIndex)
-      ) return
-      usedCommentIndexes.add(candidate.commentIndex)
-      relatedComments.push(candidate.comment)
+      const relatedComments = [];
+      ranked.forEach((candidate) => {
+        if (
+          relatedComments.length >= 3 ||
+          (candidate.overlap === 0 && relatedComments.length > 0) ||
+          usedCommentIndexes.has(candidate.commentIndex)
+        )
+          return;
+        usedCommentIndexes.add(candidate.commentIndex);
+        relatedComments.push(candidate.comment);
+      });
+
+      return { point: cleanPoint, relatedComments };
     })
-
-    return { point: cleanPoint, relatedComments }
-  }).filter((item) => item.point)
+    .filter((item) => item.point);
 }
 
 function subthemeTokens(subtheme) {
-  const stopwords = new Set(['and', 'the', 'for', 'with', 'from', 'that', 'this', 'over', 'into'])
-  return String(subtheme || '')
-    .toLowerCase()
-    .match(/[a-z0-9]+/g)
-    ?.filter((token) => token.length > 3 && !stopwords.has(token)) ?? []
+  const stopwords = new Set([
+    "and",
+    "the",
+    "for",
+    "with",
+    "from",
+    "that",
+    "this",
+    "over",
+    "into",
+  ]);
+  return (
+    String(subtheme || "")
+      .toLowerCase()
+      .match(/[a-z0-9]+/g)
+      ?.filter((token) => token.length > 3 && !stopwords.has(token)) ?? []
+  );
 }
 
 function buildSubthemeRows(subthemes, apiRows, sourceComments) {
   if (apiRows?.length > 0) {
     return apiRows.map((row) => {
-      const percentage = Number(row.percentage)
-      const mentions = Number(row.mentions)
+      const percentage = Number(row.percentage);
+      const mentions = Number(row.mentions);
 
       return {
         subtheme: row.subtheme,
         percentage: Number.isFinite(percentage) ? percentage : 0,
         mentions: Number.isFinite(mentions) ? mentions : 0,
-        docPercentage: Number.isFinite(Number(row.doc_percentage)) ? Number(row.doc_percentage) : null,
+        docPercentage: Number.isFinite(Number(row.doc_percentage))
+          ? Number(row.doc_percentage)
+          : null,
         quote_count: row.quote_count != null ? Number(row.quote_count) : null,
-      }
-    })
+      };
+    });
   }
 
-  const comments = sourceComments.map((comment) => String(comment).toLowerCase()).filter(Boolean)
+  const comments = sourceComments
+    .map((comment) => String(comment).toLowerCase())
+    .filter(Boolean);
   const rows = subthemes.map((subtheme) => {
-    const tokens = subthemeTokens(subtheme)
+    const tokens = subthemeTokens(subtheme);
     const mentions = comments.filter((comment) =>
-      tokens.some((token) => comment.includes(token) || comment.includes(token.slice(0, 6))),
-    ).length
+      tokens.some(
+        (token) =>
+          comment.includes(token) || comment.includes(token.slice(0, 6)),
+      ),
+    ).length;
 
     return {
       subtheme,
       mentions,
-      docPercentage: comments.length > 0 ? Math.round((mentions / comments.length) * 100) : 0,
+      docPercentage:
+        comments.length > 0
+          ? Math.round((mentions / comments.length) * 100)
+          : 0,
       percentage: 0,
-    }
-  })
-  const totalMentions = rows.reduce((sum, row) => sum + row.mentions, 0)
+    };
+  });
+  const totalMentions = rows.reduce((sum, row) => sum + row.mentions, 0);
   return rows.map((row) => ({
     ...row,
-    percentage: totalMentions > 0 ? Math.round((row.mentions / totalMentions) * 100) : 0,
-  }))
+    percentage:
+      totalMentions > 0 ? Math.round((row.mentions / totalMentions) * 100) : 0,
+  }));
 }
 
 // ── Comment card with expand/collapse ────────────────────────────────────────
 function CommentCard({ comment, accentColor, index = 0 }) {
-  const [expanded, setExpanded] = useState(false)
-  const text = normaliseComment(comment)
-  const isLong = text.length > 180
-  const displayText = expanded ? text : (isLong ? text.slice(0, 170) + '...' : text)
+  const [expanded, setExpanded] = useState(false);
+  const text = normaliseComment(comment);
+  const isLong = text.length > 180;
+  const displayText = expanded
+    ? text
+    : isLong
+      ? text.slice(0, 170) + "..."
+      : text;
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, delay: Math.min(index * 0.03, 0.5), ease: [0.16, 1, 0.3, 1] }}
+      transition={{
+        duration: 0.4,
+        delay: Math.min(index * 0.03, 0.5),
+        ease: [0.16, 1, 0.3, 1],
+      }}
       onClick={() => isLong && setExpanded(!expanded)}
       className={`bg-surface-container-lowest rounded-xl p-4 flex flex-col justify-between shadow-sm transition-all duration-200 border ${
-        isLong ? 'cursor-pointer select-none hover:shadow-md' : ''
+        isLong ? "cursor-pointer select-none hover:shadow-md" : ""
       }`}
-      style={{ borderColor: expanded ? `${accentColor}30` : 'rgba(114,119,129,0.1)' }}
+      style={{
+        borderColor: expanded ? `${accentColor}30` : "rgba(114,119,129,0.1)",
+      }}
     >
       <blockquote className="text-sm text-on-surface-variant leading-relaxed italic">
         "{displayText}"
@@ -148,41 +244,45 @@ function CommentCard({ comment, accentColor, index = 0 }) {
       {isLong && (
         <button
           onClick={(e) => {
-            e.stopPropagation()
-            setExpanded(!expanded)
+            e.stopPropagation();
+            setExpanded(!expanded);
           }}
           className="mt-3 flex items-center gap-1 text-[11px] font-bold hover:opacity-80 transition-colors self-end uppercase tracking-wider"
           style={{ color: accentColor }}
         >
-          {expanded ? 'Show Less' : 'Show More'}
+          {expanded ? "Show Less" : "Show More"}
           <span className="material-symbols-outlined text-xs">
-            {expanded ? 'keyboard_arrow_up' : 'keyboard_arrow_down'}
+            {expanded ? "keyboard_arrow_up" : "keyboard_arrow_down"}
           </span>
         </button>
       )}
     </motion.div>
-  )
+  );
 }
 
 // ── Suggestion section ──────────────────────────────────────────────────────
 function SuggestionCard({ suggestion, accentColor, index = 0 }) {
-  const [expanded, setExpanded] = useState(false)
-  const text = normaliseComment(suggestion)
-  const isLong = text.length > 150
+  const [expanded, setExpanded] = useState(false);
+  const text = normaliseComment(suggestion);
+  const isLong = text.length > 150;
 
   return (
     <motion.blockquote
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, delay: Math.min(index * 0.05, 0.3), ease: [0.16, 1, 0.3, 1] }}
+      transition={{
+        duration: 0.4,
+        delay: Math.min(index * 0.05, 0.3),
+        ease: [0.16, 1, 0.3, 1],
+      }}
       className="p-4 rounded-xl border-l-4 italic text-sm leading-relaxed flex flex-col"
       style={{
         borderColor: accentColor,
         backgroundColor: `${accentColor}08`,
-        color: '#1e293b',
+        color: "#1e293b",
       }}
     >
-      <span className={expanded ? '' : 'line-clamp-5'}>{text}</span>
+      <span className={expanded ? "" : "line-clamp-5"}>{text}</span>
       {isLong && (
         <button
           type="button"
@@ -190,11 +290,11 @@ function SuggestionCard({ suggestion, accentColor, index = 0 }) {
           className="mt-2 self-end text-[11px] font-bold not-italic uppercase tracking-wider hover:opacity-80 transition-colors bg-transparent border-none p-0 cursor-pointer"
           style={{ color: accentColor }}
         >
-          {expanded ? 'Show less' : 'Show more'}
+          {expanded ? "Show less" : "Show more"}
         </button>
       )}
     </motion.blockquote>
-  )
+  );
 }
 
 function SuggestionSection({ suggestions, accentColor }) {
@@ -214,10 +314,13 @@ function SuggestionSection({ suggestions, accentColor }) {
             >
               lightbulb
             </span>
-            <h2 className="text-base md:text-lg font-bold font-headline text-on-surface">Student Suggestions</h2>
+            <h2 className="text-base md:text-lg font-bold font-headline text-on-surface">
+              Student Suggestions
+            </h2>
           </div>
           <p className="text-xs text-on-surface-variant/65 mt-1">
-            These are real student answers that contain concrete suggestions for improvement.
+            These are real student answers that contain concrete suggestions for
+            improvement.
           </p>
         </div>
         <span className="text-[10px] uppercase tracking-wider font-bold text-on-surface-variant">
@@ -228,25 +331,38 @@ function SuggestionSection({ suggestions, accentColor }) {
       {suggestions.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {suggestions.slice(0, 3).map((suggestion, i) => (
-            <SuggestionCard key={i} suggestion={suggestion} accentColor={accentColor} index={i} />
+            <SuggestionCard
+              key={i}
+              suggestion={suggestion}
+              accentColor={accentColor}
+              index={i}
+            />
           ))}
         </div>
       ) : (
         <p className="text-sm text-on-surface-variant bg-surface p-4 rounded-xl">
-          No clear solution-oriented student suggestions were returned for this theme yet.
+          No clear solution-oriented student suggestions were returned for this
+          theme yet.
         </p>
       )}
     </motion.div>
-  )
+  );
 }
 
-
-function FeedbackSummaryBlock({ title, eyebrow, points, comments, icon, color, emptyText }) {
-  const [expandedIndex, setExpandedIndex] = useState(null)
+function FeedbackSummaryBlock({
+  title,
+  eyebrow,
+  points,
+  comments,
+  icon,
+  color,
+  emptyText,
+}) {
+  const [expandedIndex, setExpandedIndex] = useState(null);
   const cards = useMemo(
     () => buildPointCards((points || []).slice(0, 3), comments),
     [points, comments],
-  )
+  );
 
   return (
     <div
@@ -262,7 +378,10 @@ function FeedbackSummaryBlock({ title, eyebrow, points, comments, icon, color, e
             {icon}
           </span>
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color }}>
+            <p
+              className="text-[10px] font-bold uppercase tracking-wider"
+              style={{ color }}
+            >
               {eyebrow}
             </p>
             <h3 className="text-base md:text-lg font-bold font-headline text-on-surface">
@@ -281,7 +400,7 @@ function FeedbackSummaryBlock({ title, eyebrow, points, comments, icon, color, e
       {cards.length > 0 ? (
         <div className="space-y-3">
           {cards.map((card, index) => {
-            const expanded = expandedIndex === index
+            const expanded = expandedIndex === index;
             return (
               <motion.article
                 layout
@@ -289,7 +408,11 @@ function FeedbackSummaryBlock({ title, eyebrow, points, comments, icon, color, e
                 className="rounded-xl bg-surface-container-lowest border border-outline-variant/10 p-4"
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.35, delay: index * 0.06, ease: [0.16, 1, 0.3, 1] }}
+                transition={{
+                  duration: 0.35,
+                  delay: index * 0.06,
+                  ease: [0.16, 1, 0.3, 1],
+                }}
               >
                 <div className="flex items-center gap-2 mb-2">
                   <span
@@ -310,19 +433,21 @@ function FeedbackSummaryBlock({ title, eyebrow, points, comments, icon, color, e
                   className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold border-none bg-transparent cursor-pointer disabled:cursor-default disabled:opacity-50 p-0"
                   style={{ color }}
                 >
-                  <span className="material-symbols-outlined text-base">forum</span>
-                  {card.relatedComments.length > 0
-                    ? `${expanded ? 'Hide' : 'Read'} ${card.relatedComments.length} real comments`
-                    : 'No matching comments found'}
                   <span className="material-symbols-outlined text-base">
-                    {expanded ? 'expand_less' : 'expand_more'}
+                    forum
+                  </span>
+                  {card.relatedComments.length > 0
+                    ? `${expanded ? "Hide" : "Read"} ${card.relatedComments.length} real comments`
+                    : "No matching comments found"}
+                  <span className="material-symbols-outlined text-base">
+                    {expanded ? "expand_less" : "expand_more"}
                   </span>
                 </button>
 
                 {expanded && card.relatedComments.length > 0 && (
                   <motion.div
                     initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
+                    animate={{ opacity: 1, height: "auto" }}
                     className="mt-3 space-y-2"
                   >
                     {card.relatedComments.map((comment, commentIndex) => (
@@ -337,7 +462,7 @@ function FeedbackSummaryBlock({ title, eyebrow, points, comments, icon, color, e
                   </motion.div>
                 )}
               </motion.article>
-            )
+            );
           })}
         </div>
       ) : (
@@ -346,10 +471,16 @@ function FeedbackSummaryBlock({ title, eyebrow, points, comments, icon, color, e
         </p>
       )}
     </div>
-  )
+  );
 }
 
-function AIFeedbackBento({ positivePoints, negativePoints, comments, accentColor, loading }) {
+function AIFeedbackBento({
+  positivePoints,
+  negativePoints,
+  comments,
+  accentColor,
+  loading,
+}) {
   if (loading) {
     return (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -357,7 +488,7 @@ function AIFeedbackBento({ positivePoints, negativePoints, comments, accentColor
           <div key={index} className="h-[320px] rounded-2xl skeleton-shimmer" />
         ))}
       </div>
-    )
+    );
   }
 
   return (
@@ -382,7 +513,8 @@ function AIFeedbackBento({ positivePoints, negativePoints, comments, accentColor
             </h2>
           </div>
           <p className="text-xs text-on-surface-variant/65 mt-1">
-            Summaries are generated from real survey comments. Expand each summary to read the source comments.
+            Summaries are generated from real survey comments. Expand each
+            summary to read the source comments.
           </p>
         </div>
       </div>
@@ -408,16 +540,16 @@ function AIFeedbackBento({ positivePoints, negativePoints, comments, accentColor
         />
       </div>
     </motion.section>
-  )
+  );
 }
 
 // ── Donut chart — uses shades of one accent color ───────────────────────────
-function DonutChart({ rows, title, accentColor }) {
-  if (!rows || rows.length === 0) return null
+function DonutChart({ rows, title, accentColor, total }) {
+  if (!rows || rows.length === 0) return null;
 
-  const radius = 50
-  const strokeWidth = 14
-  const circ = 2 * Math.PI * radius
+  const radius = 50;
+  const strokeWidth = 14;
+  const circ = 2 * Math.PI * radius;
   const shades = [
     accentColor,
     `${accentColor}cc`,
@@ -425,35 +557,39 @@ function DonutChart({ rows, title, accentColor }) {
     `${accentColor}66`,
     `${accentColor}44`,
     `${accentColor}30`,
-  ]
+  ];
   const safeRows = rows.map((row) => ({
     ...row,
     percentage: Math.max(0, Number(row.percentage) || 0),
     mentions: Math.max(0, Number(row.mentions) || 0),
-  }))
-  const percentageTotal = safeRows.reduce((sum, row) => sum + row.percentage, 0)
-  const mentionTotal = safeRows.reduce((sum, row) => sum + row.mentions, 0)
-  const usePercentages = percentageTotal > 0
-  const valueTotal = usePercentages ? percentageTotal : mentionTotal
+  }));
+  const percentageTotal = safeRows.reduce(
+    (sum, row) => sum + row.percentage,
+    0,
+  );
+  const mentionTotal = safeRows.reduce((sum, row) => sum + row.mentions, 0);
+  const usePercentages = percentageTotal > 0;
+  const valueTotal = usePercentages ? percentageTotal : mentionTotal;
   // Sort highest → lowest so darkest shade always maps to the largest slice
   const sortedSafeRows = [...safeRows].sort((a, b) =>
-    usePercentages ? b.percentage - a.percentage : b.mentions - a.mentions
-  )
-  let currentOffset = 0
+    usePercentages ? b.percentage - a.percentage : b.mentions - a.mentions,
+  );
+  let currentOffset = 0;
   const segments = sortedSafeRows.map((row, index) => {
-    const value = usePercentages ? row.percentage : row.mentions
-    const normalizedPercentage = valueTotal > 0 ? (value / valueTotal) * 100 : 0
-    const segmentLength = (normalizedPercentage / 100) * circ
+    const value = usePercentages ? row.percentage : row.mentions;
+    const normalizedPercentage =
+      valueTotal > 0 ? (value / valueTotal) * 100 : 0;
+    const segmentLength = (normalizedPercentage / 100) * circ;
     const segment = {
       ...row,
       color: shades[index % shades.length],
       normalizedPercentage,
       strokeLength: Math.max(0, segmentLength - 4),
       strokeOffset: currentOffset,
-    }
-    currentOffset += segmentLength
-    return segment
-  })
+    };
+    currentOffset += segmentLength;
+    return segment;
+  });
 
   return (
     <motion.div
@@ -463,10 +599,16 @@ function DonutChart({ rows, title, accentColor }) {
       className="bg-surface-container-lowest rounded-2xl p-6 border border-outline-variant/10 shadow-sm flex flex-col items-center gap-4"
     >
       <h3 className="text-xs font-bold uppercase tracking-wider text-on-surface-variant w-full text-left">
-        {title || 'Breakdown'}
+        {title || "Breakdown"}
       </h3>
       <div className="relative w-[140px] h-[140px] flex items-center justify-center">
-        <svg width="140" height="140" viewBox="0 0 140 140" role="img" aria-label={title || 'Breakdown'}>
+        <svg
+          width="140"
+          height="140"
+          viewBox="0 0 140 140"
+          role="img"
+          aria-label={title || "Breakdown"}
+        >
           <circle
             cx="70"
             cy="70"
@@ -489,8 +631,14 @@ function DonutChart({ rows, title, accentColor }) {
                 strokeLinecap="butt"
                 className="cursor-pointer"
                 initial={{ strokeDasharray: `0 ${circ}` }}
-                animate={{ strokeDasharray: `${segment.strokeLength} ${circ - segment.strokeLength}` }}
-                transition={{ duration: 0.7, delay: 0.1 + index * 0.12, ease: [0.16, 1, 0.3, 1] }}
+                animate={{
+                  strokeDasharray: `${segment.strokeLength} ${circ - segment.strokeLength}`,
+                }}
+                transition={{
+                  duration: 0.7,
+                  delay: 0.1 + index * 0.12,
+                  ease: [0.16, 1, 0.3, 1],
+                }}
                 whileHover={{ strokeWidth: strokeWidth + 2 }}
               >
                 <title>{`${segment.subtheme}: ${Math.round(segment.normalizedPercentage)}%`}</title>
@@ -499,21 +647,36 @@ function DonutChart({ rows, title, accentColor }) {
           </g>
         </svg>
         <div className="absolute flex flex-col items-center justify-center">
-          <span className="text-[9px] uppercase font-bold text-on-surface-variant/50">Total</span>
-          <span className="text-lg font-extrabold font-headline" style={{ color: accentColor }}>
-            {mentionTotal}
+          <span className="text-[9px] uppercase font-bold text-on-surface-variant/50">
+            Total
           </span>
-          <span className="text-[9px] text-on-surface-variant/70">mentions</span>
+          <span
+            className="text-lg font-extrabold font-headline"
+            style={{ color: accentColor }}
+          >
+            {total ?? mentionTotal}
+          </span>
+          <span className="text-[9px] text-on-surface-variant/70">
+            comments
+          </span>
         </div>
       </div>
 
       {/* Legend */}
       <div className="w-full space-y-2 mt-2 max-h-[160px] overflow-y-auto pr-1 custom-scrollbar">
         {segments.map((segment, index) => (
-          <div key={`${segment.subtheme}-${index}`} className="flex items-center justify-between gap-3 text-xs">
+          <div
+            key={`${segment.subtheme}-${index}`}
+            className="flex items-center justify-between gap-3 text-xs"
+          >
             <div className="flex items-center gap-2 truncate">
-              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: segment.color }} />
-              <span className="text-on-surface-variant truncate font-medium">{segment.subtheme}</span>
+              <span
+                className="w-2.5 h-2.5 rounded-full shrink-0"
+                style={{ backgroundColor: segment.color }}
+              />
+              <span className="text-on-surface-variant truncate font-medium">
+                {segment.subtheme}
+              </span>
             </div>
             <span className="font-bold shrink-0" style={{ color: accentColor }}>
               {Math.round(segment.normalizedPercentage)}%
@@ -522,13 +685,19 @@ function DonutChart({ rows, title, accentColor }) {
         ))}
       </div>
     </motion.div>
-  )
+  );
 }
 
 // ── Subtheme horizontal bar list ────────────────────────────────────────────
-function SubthemesList({ rows, onSelectSubtheme, activeSubtheme, accentColor, gradient }) {
-  const sortedRows = [...rows].sort((a, b) => b.percentage - a.percentage)
-  const hasRows = sortedRows.length > 0
+function SubthemesList({
+  rows,
+  onSelectSubtheme,
+  activeSubtheme,
+  accentColor,
+  gradient,
+}) {
+  const sortedRows = [...rows].sort((a, b) => b.percentage - a.percentage);
+  const hasRows = sortedRows.length > 0;
 
   return (
     <motion.div
@@ -541,13 +710,15 @@ function SubthemesList({ rows, onSelectSubtheme, activeSubtheme, accentColor, gr
         <h2 className="text-xs font-bold uppercase tracking-wider text-on-surface-variant">
           Key Sub-themes Detected
         </h2>
-        <span className="material-symbols-outlined text-outline text-xl">layers</span>
+        <span className="material-symbols-outlined text-outline text-xl">
+          layers
+        </span>
       </div>
 
       {hasRows ? (
         <div className="flex flex-col gap-2.5">
           {sortedRows.map((row, idx) => {
-            const isActive = activeSubtheme === row.subtheme
+            const isActive = activeSubtheme === row.subtheme;
             return (
               <motion.button
                 key={row.subtheme}
@@ -555,71 +726,97 @@ function SubthemesList({ rows, onSelectSubtheme, activeSubtheme, accentColor, gr
                 onClick={() => onSelectSubtheme(row.subtheme)}
                 className={`w-full text-left p-3.5 rounded-xl border transition-all duration-200 flex flex-col gap-2 group cursor-pointer ${
                   isActive
-                    ? 'text-white shadow-md'
-                    : 'bg-surface-container-low hover:bg-surface-container-high border-outline-variant/10 text-on-surface hover:scale-[1.01]'
+                    ? "text-white shadow-md"
+                    : "bg-surface-container-low hover:bg-surface-container-high border-outline-variant/10 text-on-surface hover:scale-[1.01]"
                 }`}
-                style={isActive ? {
-                  background: gradient,
-                  borderColor: accentColor,
-                } : undefined}
+                style={
+                  isActive
+                    ? {
+                        background: gradient,
+                        borderColor: accentColor,
+                      }
+                    : undefined
+                }
               >
                 <div className="flex justify-between items-center w-full gap-2">
                   <span
                     className={`text-sm font-bold truncate ${
-                      isActive ? 'text-white' : 'text-on-surface'
+                      isActive ? "text-white" : "text-on-surface"
                     }`}
                   >
                     {row.subtheme}
                   </span>
                   <span
                     className={`text-xs font-bold shrink-0 ${
-                      isActive ? 'text-white/90' : 'text-on-surface-variant'
+                      isActive ? "text-white/90" : "text-on-surface-variant"
                     }`}
                   >
                     {row.percentage}%
                   </span>
                 </div>
-                <div className="h-1.5 w-full rounded-full overflow-hidden" style={{ backgroundColor: isActive ? 'rgba(255,255,255,0.2)' : '#e7e8e9' }}>
+                <div
+                  className="h-1.5 w-full rounded-full overflow-hidden"
+                  style={{
+                    backgroundColor: isActive
+                      ? "rgba(255,255,255,0.2)"
+                      : "#e7e8e9",
+                  }}
+                >
                   <motion.div
                     className="h-full rounded-full"
                     initial={{ width: 0 }}
-                    animate={{ width: `${row.percentage > 0 ? Math.max(2, Math.min(100, row.percentage)) : 0}%` }}
-                    transition={{ duration: 0.6, delay: idx * 0.06 + 0.2, ease: [0.16, 1, 0.3, 1] }}
-                    style={{ background: isActive ? '#ffffff' : gradient }}
+                    animate={{
+                      width: `${row.percentage > 0 ? Math.max(2, Math.min(100, row.percentage)) : 0}%`,
+                    }}
+                    transition={{
+                      duration: 0.6,
+                      delay: idx * 0.06 + 0.2,
+                      ease: [0.16, 1, 0.3, 1],
+                    }}
+                    style={{ background: isActive ? "#ffffff" : gradient }}
                   />
                 </div>
                 <div
                   className={`flex justify-between items-center w-full text-[10px] ${
-                    isActive ? 'text-white/80' : 'text-on-surface-variant/85 font-medium'
+                    isActive
+                      ? "text-white/80"
+                      : "text-on-surface-variant/85 font-medium"
                   }`}
                 >
                   <span>{row.quote_count ?? row.mentions} comments</span>
                   <span className="flex items-center gap-0.5 uppercase tracking-wider font-semibold">
-                    Break down <span className="material-symbols-outlined text-[10px]">chevron_right</span>
+                    Break down{" "}
+                    <span className="material-symbols-outlined text-[10px]">
+                      chevron_right
+                    </span>
                   </span>
                 </div>
               </motion.button>
-            )
+            );
           })}
         </div>
       ) : (
-        <p className="text-sm text-on-surface-variant">No subthemes returned yet.</p>
+        <p className="text-sm text-on-surface-variant">
+          No subthemes returned yet.
+        </p>
       )}
     </motion.div>
-  )
+  );
 }
 
 // ── Quick stats row ─────────────────────────────────────────────────────────
 function QuickStats({ activeData, accentColor }) {
-  const totalComments = activeData.displayCommentCount ?? activeData.quotes?.length ?? 0
-  const subthemeCount = activeData.subtheme_mentions?.length || activeData.subthemes?.length || 0
-  const suggestionCount = activeData.student_suggestions?.length || 0
+  const totalComments =
+    activeData.displayCommentCount ?? activeData.quotes?.length ?? 0;
+  const subthemeCount =
+    activeData.subtheme_mentions?.length || activeData.subthemes?.length || 0;
+  const suggestionCount = activeData.student_suggestions?.length || 0;
 
   const stats = [
-    { icon: 'forum', value: totalComments, label: 'Comments' },
-    { icon: 'layers', value: subthemeCount, label: 'Sub-themes' },
-    { icon: 'lightbulb', value: suggestionCount, label: 'Suggestions' },
-  ]
+    { icon: "forum", value: totalComments, label: "Comments" },
+    { icon: "layers", value: subthemeCount, label: "Sub-themes" },
+    { icon: "lightbulb", value: suggestionCount, label: "Suggestions" },
+  ];
 
   return (
     <div className="grid grid-cols-3 gap-3">
@@ -628,7 +825,11 @@ function QuickStats({ activeData, accentColor }) {
           key={stat.label}
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.3 + idx * 0.08, ease: [0.16, 1, 0.3, 1] }}
+          transition={{
+            duration: 0.4,
+            delay: 0.3 + idx * 0.08,
+            ease: [0.16, 1, 0.3, 1],
+          }}
           className="bg-surface-container-lowest rounded-xl p-4 border border-outline-variant/10 shadow-sm flex flex-col items-center gap-1"
         >
           <span
@@ -646,128 +847,136 @@ function QuickStats({ activeData, accentColor }) {
         </motion.div>
       ))}
     </div>
-  )
+  );
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
 // MAIN PAGE
 // ══════════════════════════════════════════════════════════════════════════════
 export default function ViewMorePage() {
-  const { id, subthemeName } = useParams()
-  const location = useLocation()
-  const navigate = useNavigate()
-  const [searchParams, setSearchParams] = useSearchParams()
+  const { id, subthemeName } = useParams();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const decodedSubtheme = useMemo(() => {
-    return subthemeName ? decodeURIComponent(subthemeName) : null
-  }, [subthemeName])
+    return subthemeName ? decodeURIComponent(subthemeName) : null;
+  }, [subthemeName]);
 
   const filters = useMemo(() => {
-    const urlFilters = filtersFromSearchParams(searchParams)
+    const urlFilters = filtersFromSearchParams(searchParams);
     if (!filtersHaveActiveValues(urlFilters) && location.state?.filters) {
-      return normalizeFilters(location.state.filters)
+      return normalizeFilters(location.state.filters);
     }
-    return urlFilters
-  }, [searchParams, location.state])
+    return urlFilters;
+  }, [searchParams, location.state]);
 
   const [filterOptions, setFilterOptions] = useState({
     academic_years: [],
     programmes: [],
     study_modes: [],
     languages: [],
-  })
+  });
 
   useEffect(() => {
-    fetch('http://localhost:5001/api/filter-options')
+    fetch("http://localhost:5001/api/filter-options")
       .then((r) => r.json())
       .then((data) => {
-        if (data.status === 'success') setFilterOptions(data.options)
+        if (data.status === "success") setFilterOptions(data.options);
       })
-      .catch(() => {})
-  }, [])
+      .catch(() => {});
+  }, []);
 
-  const [filteredPercentage, setFilteredPercentage] = useState(null)
+  const [filteredPercentage, setFilteredPercentage] = useState(null);
 
   function setFilter(key, value) {
-    const nextFilters = normalizeFilters({ ...filters, [key]: value })
-    setSearchParams(filtersToSearchParams(nextFilters))
+    const nextFilters = normalizeFilters({ ...filters, [key]: value });
+    setSearchParams(filtersToSearchParams(nextFilters));
   }
 
   function clearFilters() {
-    setSearchParams(new URLSearchParams())
+    setSearchParams(new URLSearchParams());
   }
 
-  const hasActiveFilters = filtersHaveActiveValues(filters)
+  const hasActiveFilters = filtersHaveActiveValues(filters);
 
-  const routeTheme = location.state?.theme?.id === id ? location.state.theme : null
-  const [fetchedTheme, setFetchedTheme] = useState(null)
-  const [loadingTheme, setLoadingTheme] = useState(!routeTheme)
+  const routeTheme =
+    location.state?.theme?.id === id ? location.state.theme : null;
+  const [fetchedTheme, setFetchedTheme] = useState(null);
+  const [loadingTheme, setLoadingTheme] = useState(!routeTheme);
 
   useEffect(() => {
     if (routeTheme) {
-      setFetchedTheme(null)
-      setLoadingTheme(false)
-      return
+      setFetchedTheme(null);
+      setLoadingTheme(false);
+      return;
     }
 
-    const themeName = THEME_NAME_BY_ID[id]
+    const themeName = THEME_NAME_BY_ID[id];
     if (!themeName) {
-      setFetchedTheme(null)
-      setLoadingTheme(false)
-      return
+      setFetchedTheme(null);
+      setLoadingTheme(false);
+      return;
     }
 
-    let isMounted = true
-    const apiFilters = filtersToApiParams(filters)
-    const apiFilterKey = stableFilterKey(apiFilters)
-    const params = new URLSearchParams(apiFilters)
+    let isMounted = true;
+    const apiFilters = filtersToApiParams(filters);
+    const apiFilterKey = stableFilterKey(apiFilters);
+    const params = new URLSearchParams(apiFilters);
 
-    setLoadingTheme(true)
+    setLoadingTheme(true);
     fetch(`http://localhost:5001/api/themes-overview?${params}`)
       .then((r) => r.json())
       .then((data) => {
-        if (!isMounted) return
-        const themes = data?.themes ?? data ?? {}
-        const insight = themes[themeName]
+        if (!isMounted) return;
+        const themes = data?.themes ?? data ?? {};
+        const insight = themes[themeName];
         if (!insight) {
-          setFetchedTheme(null)
-          return
+          setFetchedTheme(null);
+          return;
         }
-        const insightFilterKey = stableFilterKey(insight?.filters_applied ?? {})
-        const includeInsightDetails = apiFilterKey === '{}' || insightFilterKey === apiFilterKey
-        setFetchedTheme(buildRealTheme(themeName, insight, { includeInsightDetails }))
+        const insightFilterKey = stableFilterKey(
+          insight?.filters_applied ?? {},
+        );
+        const includeInsightDetails =
+          apiFilterKey === "{}" || insightFilterKey === apiFilterKey;
+        setFetchedTheme(
+          buildRealTheme(themeName, insight, { includeInsightDetails }),
+        );
       })
       .catch(() => {
-        if (isMounted) setFetchedTheme(null)
+        if (isMounted) setFetchedTheme(null);
       })
       .finally(() => {
-        if (isMounted) setLoadingTheme(false)
-      })
+        if (isMounted) setLoadingTheme(false);
+      });
 
-    return () => { isMounted = false }
-  }, [id, routeTheme, filters])
+    return () => {
+      isMounted = false;
+    };
+  }, [id, routeTheme, filters]);
 
-  const theme = routeTheme || fetchedTheme
-  const colors = theme ? getThemeColor(theme.id) : getThemeColor('content_org')
-  const filterSearch = searchFromFilters(filters)
-  const { liveData, loadingLive } = useThemeSummary(theme, filters)
+  const theme = routeTheme || fetchedTheme;
+  const colors = theme ? getThemeColor(theme.id) : getThemeColor("content_org");
+  const filterSearch = searchFromFilters(filters);
+  const { liveData, loadingLive } = useThemeSummary(theme, filters);
 
-  const [subthemeLiveData, setSubthemeLiveData] = useState(null)
-  const [loadingSubtheme, setLoadingSubtheme] = useState(false)
+  const [subthemeLiveData, setSubthemeLiveData] = useState(null);
+  const [loadingSubtheme, setLoadingSubtheme] = useState(false);
 
   useEffect(() => {
     if (!decodedSubtheme || !theme) {
-      setSubthemeLiveData(null)
-      return
+      setSubthemeLiveData(null);
+      return;
     }
 
-    let isMounted = true
-    setLoadingSubtheme(true)
-    setSubthemeLiveData(null)
-    const apiFilters = filtersToApiParams(filters)
-    fetch('http://localhost:5001/api/theme-summary', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    let isMounted = true;
+    setLoadingSubtheme(true);
+    setSubthemeLiveData(null);
+    const apiFilters = filtersToApiParams(filters);
+    fetch("http://localhost:5001/api/theme-summary", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         theme: theme.name,
         query: decodedSubtheme,
@@ -777,49 +986,61 @@ export default function ViewMorePage() {
     })
       .then((r) => r.json())
       .then((data) => {
-        if (!isMounted) return
-        if (data.status === 'success') {
-          setSubthemeLiveData(data)
-        } else if (data.status === 'not_cached') {
-          setSubthemeLiveData({ not_cached: true, message: data.message })
+        if (!isMounted) return;
+        if (data.status === "success") {
+          setSubthemeLiveData(data);
+        } else if (data.status === "not_cached") {
+          setSubthemeLiveData({ not_cached: true, message: data.message });
         }
       })
       .catch(() => {})
-      .finally(() => { if (isMounted) setLoadingSubtheme(false) })
-    return () => { isMounted = false }
-  }, [decodedSubtheme, theme?.id, theme?.name, JSON.stringify(filters)])
+      .finally(() => {
+        if (isMounted) setLoadingSubtheme(false);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [decodedSubtheme, theme?.id, theme?.name, JSON.stringify(filters)]);
 
   useEffect(() => {
-    if (!theme) return
-    const params = new URLSearchParams(filtersToApiParams(filters))
+    if (!theme) return;
+    const params = new URLSearchParams(filtersToApiParams(filters));
     fetch(`http://localhost:5001/api/themes-overview?${params}`)
       .then((r) => r.json())
       .then((data) => {
-        const themes = data?.themes ?? data ?? {}
-        const d = themes[theme.name]
-        setFilteredPercentage(d && typeof d.frequency === 'number' ? d.frequency : null)
+        const themes = data?.themes ?? data ?? {};
+        const d = themes[theme.name];
+        setFilteredPercentage(
+          d && typeof d.frequency === "number" ? d.frequency : null,
+        );
       })
-      .catch(() => setFilteredPercentage(null))
-  }, [filters, theme?.name])
+      .catch(() => setFilteredPercentage(null));
+  }, [filters, theme?.name]);
 
   // If live generation fails/offline, use the real payload already loaded for this theme.
-  const hasLlmError = !liveData || liveData.error || liveData.status === 'error'
-  const effectiveData = hasLlmError ? (theme?.cachedInsight || theme) : liveData
+  const hasLlmError =
+    !liveData || liveData.error || liveData.status === "error";
+  const effectiveData = hasLlmError ? theme?.cachedInsight || theme : liveData;
 
   // Drilldown data logic: checks if subthemeName is present in params
   const activeData = useMemo(() => {
-    if (!theme) return null
+    if (!theme) return null;
 
-    const cached = effectiveData || theme
+    const cached = effectiveData || theme;
 
     if (decodedSubtheme && subthemeLiveData) {
       // Only show the number of comments actually linked to this sub-theme
       // (its mention count), not every comment the parent theme retrieved.
-      const mentionCount = theme.subtheme_mentions?.find((sm) => sm.subtheme === decodedSubtheme)?.mentions
-      const subthemeQuotes = subthemeLiveData.quotes || []
-      const linkedQuotes = typeof mentionCount === 'number' && mentionCount > 0 && mentionCount < subthemeQuotes.length
-        ? subthemeQuotes.slice(0, mentionCount)
-        : subthemeQuotes
+      const mentionCount = theme.subtheme_mentions?.find(
+        (sm) => sm.subtheme === decodedSubtheme,
+      )?.mentions;
+      const subthemeQuotes = subthemeLiveData.quotes || [];
+      const linkedQuotes =
+        typeof mentionCount === "number" &&
+        mentionCount > 0 &&
+        mentionCount < subthemeQuotes.length
+          ? subthemeQuotes.slice(0, mentionCount)
+          : subthemeQuotes;
 
       return {
         isSubtheme: true,
@@ -831,7 +1052,7 @@ export default function ViewMorePage() {
         student_suggestions: subthemeLiveData.student_suggestions || [],
         positive_comments: subthemeLiveData.positive_comments || [],
         critical_comments: subthemeLiveData.critical_comments || [],
-      }
+      };
     }
 
     if (decodedSubtheme && (!subthemeLiveData || subthemeLiveData.not_cached)) {
@@ -846,18 +1067,20 @@ export default function ViewMorePage() {
         student_suggestions: [],
         positive_comments: [],
         critical_comments: [],
-      }
+      };
     }
 
-    const comments = cached.quotes?.length > 0 ? cached.quotes : theme.quotes ?? []
-    const subthemes = cached.subthemes?.length > 0 ? cached.subthemes : theme.subthemes ?? []
-    const studentSuggestions = cached.student_suggestions?.length > 0 ? cached.student_suggestions : []
+    const comments =
+      cached.quotes?.length > 0 ? cached.quotes : (theme.quotes ?? []);
+    const subthemes =
+      cached.subthemes?.length > 0 ? cached.subthemes : (theme.subthemes ?? []);
+    const studentSuggestions =
+      cached.student_suggestions?.length > 0 ? cached.student_suggestions : [];
 
-    const chartRows = buildSubthemeRows(
-      subthemes,
-      cached.subtheme_mentions,
-      [...comments, ...studentSuggestions],
-    )
+    const chartRows = buildSubthemeRows(subthemes, cached.subtheme_mentions, [
+      ...comments,
+      ...studentSuggestions,
+    ]);
 
     return {
       isSubtheme: false,
@@ -866,35 +1089,43 @@ export default function ViewMorePage() {
       subthemes: subthemes,
       subtheme_mentions: chartRows,
       quotes: comments,
-      displayCommentCount: theme.responseCount ?? theme.percentage ?? comments.length,
+      displayCommentCount:
+        theme.responseCount ?? theme.percentage ?? comments.length,
       student_suggestions: studentSuggestions,
-      positive_comments: cached.positive_comments?.length > 0 ? cached.positive_comments : [],
-      critical_comments: cached.critical_comments?.length > 0 ? cached.critical_comments : [],
-    }
-  }, [theme, effectiveData, decodedSubtheme, subthemeLiveData])
+      positive_comments:
+        cached.positive_comments?.length > 0 ? cached.positive_comments : [],
+      critical_comments:
+        cached.critical_comments?.length > 0 ? cached.critical_comments : [],
+    };
+  }, [theme, effectiveData, decodedSubtheme, subthemeLiveData]);
 
   const displayedComments = useMemo(
     () => activeData?.quotes || [],
     [activeData?.quotes],
-  )
+  );
 
   if (loadingTheme) {
     return (
       <main className="max-w-[1280px] mx-auto px-4 py-6 md:px-8 md:py-10">
         <p className="text-on-surface-variant">Loading real theme data...</p>
       </main>
-    )
+    );
   }
 
   if (!theme) {
     return (
       <main className="max-w-[1280px] mx-auto px-4 py-6 md:px-8 md:py-10">
-        <p className="text-on-surface-variant">Theme not available from real data.</p>
-        <NavLink to="/" className="text-sm text-primary font-semibold mt-4 inline-block">
+        <p className="text-on-surface-variant">
+          Theme not available from real data.
+        </p>
+        <NavLink
+          to="/"
+          className="text-sm text-primary font-semibold mt-4 inline-block"
+        >
           Back to overview
         </NavLink>
       </main>
-    )
+    );
   }
 
   return (
@@ -908,26 +1139,39 @@ export default function ViewMorePage() {
           className="flex flex-wrap items-center gap-1 text-sm font-semibold text-on-surface-variant/70 mb-6"
         >
           <Link
-            to={{ pathname: '/', search: filterSearch }}
+            to={{ pathname: "/", search: filterSearch }}
             className="hover:text-on-surface transition-colors flex items-center gap-1 no-underline text-on-surface-variant/70"
           >
             <span className="material-symbols-outlined text-base">home</span>
             Overview
           </Link>
-          <span className="material-symbols-outlined text-xs text-outline select-none">chevron_right</span>
+          <span className="material-symbols-outlined text-xs text-outline select-none">
+            chevron_right
+          </span>
           {decodedSubtheme ? (
             <>
               <button
-                onClick={() => navigate({ pathname: `/thema/${theme.id}`, search: filterSearch }, { state: { theme, filters } })}
+                onClick={() =>
+                  navigate(
+                    { pathname: `/thema/${theme.id}`, search: filterSearch },
+                    { state: { theme, filters } },
+                  )
+                }
                 className="hover:text-on-surface transition-colors focus:outline-none bg-transparent border-none p-0 cursor-pointer font-semibold text-on-surface-variant/70"
               >
                 {theme.name}
               </button>
-              <span className="material-symbols-outlined text-xs text-outline select-none">chevron_right</span>
-              <span className="font-bold" style={{ color: colors.accent }}>{decodedSubtheme}</span>
+              <span className="material-symbols-outlined text-xs text-outline select-none">
+                chevron_right
+              </span>
+              <span className="font-bold" style={{ color: colors.accent }}>
+                {decodedSubtheme}
+              </span>
             </>
           ) : (
-            <span className="font-bold" style={{ color: colors.accent }}>{theme.name}</span>
+            <span className="font-bold" style={{ color: colors.accent }}>
+              {theme.name}
+            </span>
           )}
         </motion.div>
 
@@ -944,8 +1188,8 @@ export default function ViewMorePage() {
                 icon="calendar_today"
                 label="Academic Year"
                 value={filters.jaar}
-                options={['All', ...filterOptions.academic_years]}
-                onChange={(v) => setFilter('jaar', v)}
+                options={["All", ...filterOptions.academic_years]}
+                onChange={(v) => setFilter("jaar", v)}
               />
             </div>
             <div className="flex-1 min-w-[130px]">
@@ -954,7 +1198,7 @@ export default function ViewMorePage() {
                 label="Location"
                 value={filters.locatie}
                 options={LOCATION_OPTIONS}
-                onChange={(v) => setFilter('locatie', v)}
+                onChange={(v) => setFilter("locatie", v)}
               />
             </div>
             <div className="flex-1 min-w-[130px]">
@@ -962,8 +1206,8 @@ export default function ViewMorePage() {
                 icon="school"
                 label="Programme"
                 value={filters.opleiding}
-                options={['All', ...filterOptions.programmes]}
-                onChange={(v) => setFilter('opleiding', v)}
+                options={["All", ...filterOptions.programmes]}
+                onChange={(v) => setFilter("opleiding", v)}
               />
             </div>
             <div className="flex-1 min-w-[130px]">
@@ -971,8 +1215,8 @@ export default function ViewMorePage() {
                 icon="history_edu"
                 label="Study Mode"
                 value={filters.studievorm}
-                options={['All', ...filterOptions.study_modes]}
-                onChange={(v) => setFilter('studievorm', v)}
+                options={["All", ...filterOptions.study_modes]}
+                onChange={(v) => setFilter("studievorm", v)}
               />
             </div>
             <div className="flex-1 min-w-[130px]">
@@ -980,8 +1224,8 @@ export default function ViewMorePage() {
                 icon="translate"
                 label="Language"
                 value={filters.taal}
-                options={['All', ...filterOptions.languages]}
-                onChange={(v) => setFilter('taal', v)}
+                options={["All", ...filterOptions.languages]}
+                onChange={(v) => setFilter("taal", v)}
               />
             </div>
           </div>
@@ -990,7 +1234,9 @@ export default function ViewMorePage() {
               onClick={clearFilters}
               className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-on-surface-variant hover:text-primary transition-colors border-none bg-transparent cursor-pointer"
             >
-              <span className="material-symbols-outlined text-sm">filter_alt_off</span>
+              <span className="material-symbols-outlined text-sm">
+                filter_alt_off
+              </span>
               Clear all filters
             </button>
           )}
@@ -1008,14 +1254,18 @@ export default function ViewMorePage() {
           <div
             className="absolute inset-0 opacity-[0.06]"
             style={{
-              backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)',
-              backgroundSize: '20px 20px',
+              backgroundImage:
+                "radial-gradient(circle at 1px 1px, white 1px, transparent 0)",
+              backgroundSize: "20px 20px",
             }}
           />
           {/* Decorative glow */}
           <div
             className="absolute -top-16 -right-16 w-48 h-48 rounded-full opacity-20"
-            style={{ background: 'radial-gradient(circle, rgba(255,255,255,0.4) 0%, transparent 70%)' }}
+            style={{
+              background:
+                "radial-gradient(circle, rgba(255,255,255,0.4) 0%, transparent 70%)",
+            }}
           />
 
           <div className="relative z-10 p-5 md:p-8">
@@ -1029,7 +1279,9 @@ export default function ViewMorePage() {
                 </span>
                 <div>
                   <p className="text-xs font-bold uppercase tracking-wider text-white/60 mb-1">
-                    {activeData.isSubtheme ? `Sub-theme of ${theme.name}` : 'Theme detail'}
+                    {activeData.isSubtheme
+                      ? `Sub-theme of ${theme.name}`
+                      : "Theme detail"}
                   </p>
                   <h1 className="text-2xl md:text-4xl font-bold font-headline leading-tight">
                     {activeData.name}
@@ -1038,7 +1290,9 @@ export default function ViewMorePage() {
                     <p className="text-sm text-white/70 mt-2">{theme.subtag}</p>
                   )}
                   {!activeData.isSubtheme && theme.description && (
-                    <p className="text-sm text-white/70 mt-1">{theme.description}</p>
+                    <p className="text-sm text-white/70 mt-1">
+                      {theme.description}
+                    </p>
                   )}
                 </div>
               </div>
@@ -1071,9 +1325,12 @@ export default function ViewMorePage() {
                   >
                     hourglass_empty
                   </span>
-                  <p className="text-sm font-bold text-amber-900">Subtheme insights not generated yet</p>
+                  <p className="text-sm font-bold text-amber-900">
+                    Subtheme insights not generated yet
+                  </p>
                   <p className="text-xs text-amber-700 mt-1">
-                    Go to the Pipeline tab and run <strong>Precompute Subthemes</strong> first.
+                    Go to the Pipeline tab and run{" "}
+                    <strong>Precompute Subthemes</strong> first.
                   </p>
                 </div>
               ) : (
@@ -1095,14 +1352,21 @@ export default function ViewMorePage() {
               />
             )}
 
-            <SuggestionSection suggestions={activeData.student_suggestions} accentColor={colors.accent} />
+            <SuggestionSection
+              suggestions={activeData.student_suggestions}
+              accentColor={colors.accent}
+            />
 
             {/* Scrollable Comments Grid */}
             {displayedComments.length > 0 && (
               <motion.div
                 initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                transition={{
+                  duration: 0.5,
+                  delay: 0.3,
+                  ease: [0.16, 1, 0.3, 1],
+                }}
                 className="bg-surface-container-lowest rounded-2xl p-4 md:p-6 shadow-sm border border-outline-variant/10"
               >
                 <div className="flex items-center justify-between gap-3 mb-4">
@@ -1113,7 +1377,7 @@ export default function ViewMorePage() {
                     <p className="text-xs text-on-surface-variant/60 mt-0.5">
                       {activeData.isSubtheme
                         ? `Showing ${displayedComments.length} comments linked to this sub-theme`
-                        : `Showing all ${activeData.displayCommentCount ?? displayedComments.length} comments from the anonymized survey database`}
+                        : `Showing ${displayedComments.length} comments from the anonymized survey database`}
                     </p>
                   </div>
                   <span
@@ -1125,12 +1389,18 @@ export default function ViewMorePage() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
                   {displayedComments.map((comment, i) => (
-                    <CommentCard key={i} comment={comment} accentColor={colors.accent} index={i} />
+                    <CommentCard
+                      key={i}
+                      comment={comment}
+                      accentColor={colors.accent}
+                      index={i}
+                    />
                   ))}
                 </div>
                 <p className="text-[10px] text-on-surface-variant/50 italic mt-4">
-                  * Verbatim quotes retrieved from vector database offline. Scroll vertically to view more.
-                  Expand cards to view long comments.
+                  * Verbatim quotes retrieved from vector database offline.
+                  Scroll vertically to view more. Expand cards to view long
+                  comments.
                 </p>
               </motion.div>
             )}
@@ -1142,21 +1412,28 @@ export default function ViewMorePage() {
               {/* SVG Donut Chart */}
               <DonutChart
                 rows={activeData.subtheme_mentions}
-                title={activeData.isSubtheme ? 'Sub-subtheme breakdown' : 'Sub-theme mentions breakdown'}
+                title={
+                  activeData.isSubtheme
+                    ? "Sub-subtheme breakdown"
+                    : "Sub-theme mentions breakdown"
+                }
                 accentColor={colors.accent}
+                total={displayedComments.length}
               />
 
               {/* List of subthemes as buttons */}
               {!activeData.isSubtheme ? (
                 <SubthemesList
                   rows={activeData.subtheme_mentions}
-                  onSelectSubtheme={(subName) => navigate(
-                    {
-                      pathname: `/thema/${theme.id}/subtheme/${encodeURIComponent(subName)}`,
-                      search: filterSearch,
-                    },
-                    { state: { theme, filters } },
-                  )}
+                  onSelectSubtheme={(subName) =>
+                    navigate(
+                      {
+                        pathname: `/thema/${theme.id}/subtheme/${encodeURIComponent(subName)}`,
+                        search: filterSearch,
+                      },
+                      { state: { theme, filters } },
+                    )
+                  }
                   activeSubtheme={decodedSubtheme}
                   accentColor={colors.accent}
                   gradient={colors.gradient}
@@ -1174,24 +1451,33 @@ export default function ViewMorePage() {
                       Other Sub-themes
                     </h3>
                     <div className="flex flex-col gap-2.5">
-                      {theme.subtheme_mentions?.filter(sm => sm.subtheme !== decodedSubtheme).map((sm) => (
-                        <button
-                          key={sm.subtheme}
-                          onClick={() => navigate(
-                            {
-                              pathname: `/thema/${theme.id}/subtheme/${encodeURIComponent(sm.subtheme)}`,
-                              search: filterSearch,
-                            },
-                            { state: { theme, filters } },
-                          )}
-                          className="w-full text-left p-3.5 rounded-xl border border-outline-variant/10 bg-surface-container-low hover:bg-surface-container-high text-sm font-bold text-on-surface transition-all duration-200 hover:scale-[1.01] cursor-pointer"
-                        >
-                          <div className="flex justify-between items-center w-full gap-2">
-                            <span className="truncate">{sm.subtheme}</span>
-                            <span className="text-xs font-bold shrink-0" style={{ color: colors.accent }}>{sm.percentage}%</span>
-                          </div>
-                        </button>
-                      ))}
+                      {theme.subtheme_mentions
+                        ?.filter((sm) => sm.subtheme !== decodedSubtheme)
+                        .map((sm) => (
+                          <button
+                            key={sm.subtheme}
+                            onClick={() =>
+                              navigate(
+                                {
+                                  pathname: `/thema/${theme.id}/subtheme/${encodeURIComponent(sm.subtheme)}`,
+                                  search: filterSearch,
+                                },
+                                { state: { theme, filters } },
+                              )
+                            }
+                            className="w-full text-left p-3.5 rounded-xl border border-outline-variant/10 bg-surface-container-low hover:bg-surface-container-high text-sm font-bold text-on-surface transition-all duration-200 hover:scale-[1.01] cursor-pointer"
+                          >
+                            <div className="flex justify-between items-center w-full gap-2">
+                              <span className="truncate">{sm.subtheme}</span>
+                              <span
+                                className="text-xs font-bold shrink-0"
+                                style={{ color: colors.accent }}
+                              >
+                                {sm.percentage}%
+                              </span>
+                            </div>
+                          </button>
+                        ))}
                     </div>
                   </motion.div>
                 </div>
@@ -1200,29 +1486,43 @@ export default function ViewMorePage() {
               {activeData.isSubtheme ? (
                 <div className="flex gap-3">
                   <Link
-                    to={{ pathname: '/', search: filterSearch }}
+                    to={{ pathname: "/", search: filterSearch }}
                     className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl text-white text-xs font-bold px-3 py-3 transition-all shadow-sm no-underline hover:opacity-90"
                     style={{ background: colors.gradient }}
                   >
-                    <span className="material-symbols-outlined text-base">dashboard</span>
+                    <span className="material-symbols-outlined text-base">
+                      dashboard
+                    </span>
                     Back to dashboard
                   </Link>
                   <button
-                    onClick={() => navigate({ pathname: `/thema/${theme.id}`, search: filterSearch }, { state: { theme, filters } })}
+                    onClick={() =>
+                      navigate(
+                        {
+                          pathname: `/thema/${theme.id}`,
+                          search: filterSearch,
+                        },
+                        { state: { theme, filters } },
+                      )
+                    }
                     className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl border text-xs font-bold px-3 py-3 transition-colors cursor-pointer hover:opacity-80 bg-transparent"
                     style={{ borderColor: colors.accent, color: colors.accent }}
                   >
-                    <span className="material-symbols-outlined text-base">arrow_upward</span>
+                    <span className="material-symbols-outlined text-base">
+                      arrow_upward
+                    </span>
                     Back to Main Theme
                   </button>
                 </div>
               ) : (
                 <Link
-                  to={{ pathname: '/', search: filterSearch }}
+                  to={{ pathname: "/", search: filterSearch }}
                   className="inline-flex items-center justify-center gap-2 w-full rounded-xl text-white text-sm font-bold px-4 py-3 transition-all shadow-sm no-underline hover:opacity-90"
                   style={{ background: colors.gradient }}
                 >
-                  <span className="material-symbols-outlined text-base">dashboard</span>
+                  <span className="material-symbols-outlined text-base">
+                    dashboard
+                  </span>
                   Back to dashboard
                 </Link>
               )}
@@ -1231,5 +1531,5 @@ export default function ViewMorePage() {
         </section>
       </div>
     </main>
-  )
+  );
 }
