@@ -14,7 +14,9 @@
       "PowerShell(pip install *)",
       "PowerShell(python -c \"import cupy; print\\('cupy:', cupy.__version__\\); print\\('cuda available:', cupy.cuda.is_available\\(\\)\\); import spacy; print\\('prefer_gpu:', spacy.prefer_gpu\\(\\)\\)\" 2>&1)",
       "PowerShell(pip uninstall *)",
-      "Bash(playwright-cli goto *)"
+      "Bash(playwright-cli goto *)",
+      "Bash(dir src\\\\pipeline\\\\04_generation\\\\*.json)",
+      "Bash(findstr /v \"^$\")"
     ]
   }
 }

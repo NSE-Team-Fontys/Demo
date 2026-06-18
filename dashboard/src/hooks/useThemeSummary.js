@@ -26,7 +26,9 @@ export function useThemeSummary(theme, filters = {}) {
 
     const fetchLiveSummary = async () => {
       setLoadingLive(true)
-      setLiveData(null)
+      if (theme.cachedInsight?.summary) {
+        setLiveData(theme.cachedInsight)
+      }
       try {
         const apiFilters = filtersToApiParams(filters)
         const res = await fetch('http://localhost:5001/api/theme-summary', {

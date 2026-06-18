@@ -12,6 +12,7 @@ retrieval = import_module("src.pipeline.03_retrieval.service")
 
 _cache_data: dict | None = None
 _subtheme_cache_data: dict | None = None
+_overview_response_cache: dict[str, bytes] = {}
 
 
 def load_cache() -> dict:
@@ -30,21 +31,31 @@ def load_cache() -> dict:
 
 
 def save_cache(cache_data):
-    global _cache_data
+    global _cache_data, _overview_response_cache
     tmp_file = CACHE_FILE.with_suffix(f"{CACHE_FILE.suffix}.tmp")
     with open(tmp_file, "w", encoding="utf-8") as f:
         json.dump(cache_data, f, separators=(",", ":"))
     tmp_file.replace(CACHE_FILE)
     _cache_data = cache_data
+    _overview_response_cache = {}
 
 
 def clear_insight_cache() -> dict:
-    global _cache_data
+    global _cache_data, _overview_response_cache
     retrieval.clear_runtime_caches()
     if CACHE_FILE.exists():
         CACHE_FILE.unlink()
     _cache_data = {}
+    _overview_response_cache = {}
     return {"status": "success", "message": "Cache cleared"}
+
+
+def get_overview_response(filter_key: str) -> bytes | None:
+    return _overview_response_cache.get(filter_key)
+
+
+def set_overview_response(filter_key: str, data: bytes) -> None:
+    _overview_response_cache[filter_key] = data
 
 
 def cache_matches_generation_settings(

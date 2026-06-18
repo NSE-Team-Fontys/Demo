@@ -1,5 +1,6 @@
 from importlib import import_module
 from itertools import product
+import json
 
 from flask import Blueprint, Response, jsonify, request
 
@@ -230,7 +231,14 @@ def get_themes_overview():
         if value and value not in {"All", "all"}:
             filters[key] = value
     try:
-        return jsonify(generation.themes_overview_payload(filters))
+        filter_key = json.dumps(filters, sort_keys=True)
+        cached_bytes = generation.cache_store.get_overview_response(filter_key)
+        if cached_bytes is not None:
+            return Response(cached_bytes, mimetype="application/json")
+        payload = generation.themes_overview_payload(filters)
+        serialized = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+        generation.cache_store.set_overview_response(filter_key, serialized)
+        return Response(serialized, mimetype="application/json")
     except Exception as exc:
         return jsonify({"status": "error", "error": str(exc)}), 409
 

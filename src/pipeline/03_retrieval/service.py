@@ -32,6 +32,7 @@ _theme_overview_cache = {}
 _theme_embedding_models = {}
 _collection = None
 _classification_metadata: dict | None = None
+_filter_options_cache: dict | None = None
 
 
 def metadata_value(meta: dict, canonical_key: str):
@@ -151,10 +152,11 @@ def _get_evidence_rows(
 
 
 def clear_runtime_caches():
-    global _collection, _classification_metadata
+    global _collection, _classification_metadata, _filter_options_cache
     _theme_overview_cache.clear()
     _collection = None
     _classification_metadata = None
+    _filter_options_cache = None
 
 
 def theme_overview_cache_key(filters: dict) -> tuple:
@@ -285,12 +287,13 @@ def get_collection():
 
 
 def filter_options_payload() -> dict:
-    client = chromadb.PersistentClient(path=str(VECTOR_DB_PATH))
+    global _filter_options_cache
+    if _filter_options_cache is not None:
+        return _filter_options_cache
     try:
-        collection = client.get_collection(COLLECTION_NAME)
+        collection = get_collection()
     except Exception:
         return {"status": "empty", "options": {}}
-    validate_theme_classification(collection)
 
     all_docs = collection.get(limit=collection.count())
     buckets = {
@@ -320,10 +323,11 @@ def filter_options_payload() -> dict:
             if value:
                 buckets[bucket].add(str(value))
 
-    return {
+    _filter_options_cache = {
         "status": "success",
         "options": {key: sorted(values) for key, values in buckets.items()},
     }
+    return _filter_options_cache
 
 
 def query_vectors_payload(query_text: str, top_k: int, filters: dict) -> dict:
