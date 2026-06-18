@@ -30,6 +30,8 @@ THEME_EMBEDDING_MODEL = DEFAULT_EMBEDDING_MODEL
 
 _theme_overview_cache = {}
 _theme_embedding_models = {}
+_collection = None
+_classification_metadata: dict | None = None
 
 
 def metadata_value(meta: dict, canonical_key: str):
@@ -149,7 +151,10 @@ def _get_evidence_rows(
 
 
 def clear_runtime_caches():
+    global _collection, _classification_metadata
     _theme_overview_cache.clear()
+    _collection = None
+    _classification_metadata = None
 
 
 def theme_overview_cache_key(filters: dict) -> tuple:
@@ -206,9 +211,15 @@ def validate_theme_classification(collection):
 
 
 def classification_cache_metadata(collection=None) -> dict:
+    global _classification_metadata
+    if collection is None and _classification_metadata is not None:
+        return _classification_metadata
     selected_collection = collection or get_collection()
     config = validate_theme_classification(selected_collection)
-    return config.cache_metadata()
+    result = config.cache_metadata()
+    if collection is None:
+        _classification_metadata = result
+    return result
 
 
 def rerank_documents(
@@ -263,11 +274,14 @@ def rerank_documents(
 
 
 def get_collection():
-    collection = chromadb.PersistentClient(path=str(VECTOR_DB_PATH)).get_collection(
+    global _collection
+    if _collection is not None:
+        return _collection
+    _collection = chromadb.PersistentClient(path=str(VECTOR_DB_PATH)).get_collection(
         COLLECTION_NAME
     )
-    validate_theme_classification(collection)
-    return collection
+    validate_theme_classification(_collection)
+    return _collection
 
 
 def filter_options_payload() -> dict:
