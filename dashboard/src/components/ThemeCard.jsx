@@ -141,29 +141,10 @@ export default function ThemeCard({ theme, size, filters, index = 0 }) {
             {theme.subtag && (
               <p className="text-xs text-on-surface-variant/80 mt-1">{theme.subtag}</p>
             )}
-            
-            {/* Key sub-themes pill badges in Overview */}
-            {theme.subthemes && theme.subthemes.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mt-3">
-                {theme.subthemes.slice(0, 3).map((st) => (
-                  <span
-                    key={st}
-                    className="text-[9px] font-semibold px-2 py-0.5 rounded-full border"
-                    style={{
-                      backgroundColor: `${colors.accentLight}80`,
-                      color: colors.accent,
-                      borderColor: colors.border,
-                    }}
-                  >
-                    {st}
-                  </span>
-                ))}
-                {theme.subthemes.length > 3 && (
-                  <span className="text-[9px] font-bold self-center pl-0.5" style={{ color: colors.accent, opacity: 0.6 }}>
-                    +{theme.subthemes.length - 3} more
-                  </span>
-                )}
-              </div>
+            {theme.description && (
+              <p className="text-xs leading-relaxed text-on-surface-variant mt-3 line-clamp-2">
+                {theme.description}
+              </p>
             )}
           </div>
         </motion.div>
@@ -233,10 +214,9 @@ export default function ThemeCard({ theme, size, filters, index = 0 }) {
             <p className="text-[10px] text-on-surface-variant/70 mt-0.5">{theme.subtag}</p>
           )}
 
-          {/* Key sub-themes list inline in Overview */}
-          {theme.subthemes && theme.subthemes.length > 0 && (
-            <p className="text-[10px] mt-2 line-clamp-1 truncate font-medium" style={{ color: `${colors.accent}99` }}>
-              {theme.subthemes.slice(0, 2).join(', ')}
+          {theme.description && (
+            <p className="text-[10px] leading-snug text-on-surface-variant mt-2 line-clamp-2">
+              {theme.description}
             </p>
           )}
         </div>

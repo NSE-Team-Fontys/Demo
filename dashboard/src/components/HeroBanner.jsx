@@ -25,7 +25,7 @@ function AnimatedNumber({ value, label, icon, delay = 0 }) {
   )
 }
 
-export default function HeroBanner({ themes, isLive, loading }) {
+export default function HeroBanner({ themes }) {
   const totalComments = useMemo(() => {
     return themes.reduce((sum, t) => sum + (t.responseCount ?? t.percentage ?? 0), 0)
   }, [themes])
@@ -107,30 +107,6 @@ export default function HeroBanner({ themes, isLive, loading }) {
               with AI-powered analysis and real-time vector search.
             </motion.p>
 
-            {/* Status badge */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.6 }}
-              className="mt-3 flex items-center gap-2"
-            >
-              {loading ? (
-                <span className="flex items-center gap-1.5 text-xs text-white/50 font-medium">
-                  <span className="w-2 h-2 rounded-full bg-white/50 animate-pulse" />
-                  Connecting…
-                </span>
-              ) : isLive ? (
-                <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-300">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                  Live data connected
-                </span>
-              ) : (
-                <span className="flex items-center gap-1.5 text-xs font-medium text-white/50">
-                  <span className="w-2 h-2 rounded-full bg-white/30" />
-                  Real data unavailable
-                </span>
-              )}
-            </motion.div>
           </div>
 
           {/* Right: Stats */}

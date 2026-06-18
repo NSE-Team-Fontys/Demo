@@ -121,7 +121,7 @@ export default function Overview() {
     <main className="max-w-[1280px] mx-auto px-4 py-6 md:px-8 md:py-8 flex flex-col gap-6">
 
       {/* ── Hero Stats Banner ── */}
-      <HeroBanner themes={displayThemes} isLive={hasThemePayload} loading={loadingThemes} />
+      <HeroBanner themes={displayThemes} />
 
       {/* ── Filters bar ── */}
       <motion.div

@@ -37,7 +37,6 @@ export default function SubthemeWordCloud({ themes, empty = false, missingFilter
             Most discussed topics across all themes — sized by mention count
           </p>
         </div>
-        <span className="material-symbols-outlined text-xl text-outline">cloud</span>
       </div>
 
       {empty ? (
