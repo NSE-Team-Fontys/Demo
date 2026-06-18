@@ -806,8 +806,7 @@ function SubthemesList({
 
 // ── Quick stats row ─────────────────────────────────────────────────────────
 function QuickStats({ activeData, accentColor }) {
-  const totalComments =
-    activeData.displayCommentCount ?? activeData.quotes?.length ?? 0;
+  const totalComments = activeData.quotes?.length ?? 0;
   const subthemeCount =
     activeData.subtheme_mentions?.length || activeData.subthemes?.length || 0;
   const suggestionCount = activeData.student_suggestions?.length || 0;
@@ -1381,10 +1380,10 @@ export default function ViewMorePage() {
                     </p>
                   </div>
                   <span
-                    className="material-symbols-outlined text-xl"
-                    style={{ color: `${colors.accent}60` }}
+                    className="text-sm font-bold font-headline"
+                    style={{ color: `${colors.accent}` }}
                   >
-                    format_quote
+                    {displayedComments.length}
                   </span>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
