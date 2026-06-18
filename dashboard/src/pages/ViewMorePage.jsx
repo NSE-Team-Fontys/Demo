@@ -610,7 +610,7 @@ function SubthemesList({ rows, onSelectSubtheme, activeSubtheme, accentColor, gr
 
 // ── Quick stats row ─────────────────────────────────────────────────────────
 function QuickStats({ activeData, accentColor }) {
-  const totalComments = activeData.quotes?.length || 0
+  const totalComments = activeData.displayCommentCount ?? activeData.quotes?.length ?? 0
   const subthemeCount = activeData.subtheme_mentions?.length || activeData.subthemes?.length || 0
   const suggestionCount = activeData.student_suggestions?.length || 0
 
@@ -865,6 +865,7 @@ export default function ViewMorePage() {
       subthemes: subthemes,
       subtheme_mentions: chartRows,
       quotes: comments,
+      displayCommentCount: theme.responseCount ?? theme.percentage ?? comments.length,
       student_suggestions: studentSuggestions,
       positive_comments: cached.positive_comments?.length > 0 ? cached.positive_comments : [],
       critical_comments: cached.critical_comments?.length > 0 ? cached.critical_comments : [],
@@ -1111,7 +1112,7 @@ export default function ViewMorePage() {
                     <p className="text-xs text-on-surface-variant/60 mt-0.5">
                       {activeData.isSubtheme
                         ? `Showing ${displayedComments.length} comments linked to this sub-theme`
-                        : `Showing all ${displayedComments.length} comments from the anonymized survey database`}
+                        : `Showing all ${activeData.displayCommentCount ?? displayedComments.length} comments from the anonymized survey database`}
                     </p>
                   </div>
                   <span
