@@ -204,15 +204,20 @@ function SuggestionSection({ suggestions, accentColor }) {
       transition={{ duration: 0.5, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
       className="bg-surface-container-lowest rounded-2xl p-4 md:p-6 shadow-sm border border-outline-variant/10"
     >
-      <div className="flex items-center justify-between gap-3 mb-4">
-        <div className="flex items-center gap-2">
-          <span
-            className="material-symbols-outlined text-xl"
-            style={{ color: accentColor, fontVariationSettings: "'FILL' 1" }}
-          >
-            lightbulb
-          </span>
-          <h2 className="text-base md:text-lg font-bold font-headline text-on-surface">Student Suggestions</h2>
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <span
+              className="material-symbols-outlined text-xl"
+              style={{ color: accentColor, fontVariationSettings: "'FILL' 1" }}
+            >
+              lightbulb
+            </span>
+            <h2 className="text-base md:text-lg font-bold font-headline text-on-surface">Student Suggestions</h2>
+          </div>
+          <p className="text-xs text-on-surface-variant/65 mt-1">
+            These are real student answers that contain concrete suggestions for improvement.
+          </p>
         </div>
         <span className="text-[10px] uppercase tracking-wider font-bold text-on-surface-variant">
           Solution-oriented
@@ -1030,6 +1035,9 @@ export default function ViewMorePage() {
                   {!activeData.isSubtheme && theme.subtag && (
                     <p className="text-sm text-white/70 mt-2">{theme.subtag}</p>
                   )}
+                  {!activeData.isSubtheme && theme.description && (
+                    <p className="text-sm text-white/70 mt-1">{theme.description}</p>
+                  )}
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -1085,9 +1093,7 @@ export default function ViewMorePage() {
               />
             )}
 
-            {!activeData.isSubtheme && (
-              <SuggestionSection suggestions={activeData.student_suggestions} accentColor={colors.accent} />
-            )}
+            <SuggestionSection suggestions={activeData.student_suggestions} accentColor={colors.accent} />
 
             {/* Scrollable Comments Grid */}
             {displayedComments.length > 0 && (

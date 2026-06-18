@@ -104,7 +104,7 @@ export default function HeroBanner({ themes }) {
               className="text-sm text-white/60 mt-2 max-w-md"
             >
               Explore student open answers organized into {themes.length} themes,
-              with AI-powered analysis and real-time vector search.
+              with AI-powered analysis.
             </motion.p>
 
           </div>
