@@ -167,17 +167,18 @@ def precompute_subthemes():
 
 @insight_bp.route("/api/precompute-preview", methods=["POST"])
 def precompute_preview():
-    """Return cross-product size for the given filter dimensions."""
+    """Return cross-product size and valid combo count for the given filter dimensions."""
     data = request.get_json(silent=True) or {}
     raw_dims = data.get("filter_dimensions") or []
     dimension_keys = [str(d) for d in raw_dims if isinstance(d, str)]
     grid = _build_filter_grid(dimension_keys)
+    valid_grid = retrieval.filter_valid_combos(grid) if grid else []
     options_payload = retrieval.filter_options_payload()
     options = options_payload.get("options") or {}
     sizes = {}
     for dim_key, (bucket_key, _canonical) in FILTER_DIMENSION_SOURCES.items():
         sizes[dim_key] = len(options.get(bucket_key) or [])
-    return jsonify({"combos": len(grid), "dimension_sizes": sizes})
+    return jsonify({"combos": len(grid), "valid_combos": len(valid_grid), "dimension_sizes": sizes})
 
 
 @insight_bp.route("/api/llm-models", methods=["GET"])

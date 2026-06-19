@@ -38,6 +38,7 @@ export default function InsightGenerator({ onComplete }) {
     study_mode: 0,
     language: 0,
   });
+  const [validCombos, setValidCombos] = useState(null);
 
   // Seconds-per-insight rough estimate used for the time preview.
   // Empirical: measured 50–101s per call on RTX 4050 Laptop GPU, avg ~75s; using 90s to be conservative.
@@ -106,11 +107,28 @@ export default function InsightGenerator({ onComplete }) {
     );
   };
 
+  // Fetch valid combo count from backend whenever dimensions change.
+  useEffect(() => {
+    if (filterDimensions.length === 0) {
+      setValidCombos(null);
+      return;
+    }
+    fetch('http://localhost:5001/api/precompute-preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filter_dimensions: filterDimensions }),
+    })
+      .then(r => r.json())
+      .then(data => { if (typeof data.valid_combos === 'number') setValidCombos(data.valid_combos); })
+      .catch(() => {});
+  }, [filterDimensions]);
+
   const extraCombos = filterDimensions.reduce(
     (acc, key) => acc * Math.max(dimensionSizes[key] || 0, 1),
     filterDimensions.length > 0 ? 1 : 0
   );
-  const extraThemeInsights = extraCombos * THEME_COUNT;
+  const displayCombos = validCombos ?? extraCombos;
+  const extraThemeInsights = displayCombos * THEME_COUNT;
   const estimatedMinutes = Math.round((extraThemeInsights * SECONDS_PER_INSIGHT) / 60);
 
   const selectAndStartModel = async (model) => {
@@ -166,110 +184,110 @@ export default function InsightGenerator({ onComplete }) {
     setGenerating(true);
     setLogs([`Starting ${label} with ${activeModel?.name || selectedModel}...`]);
     setProgress(0);
-    let completed = false;
 
-    const handleStreamEvent = (data) => {
-      if (data.status === 'progress') {
-        setProgress(data.progress);
-        const prefix = data.theme ? `[${data.theme}] ` : '';
-        setLogs(prev => [...prev, `${prefix}${data.message}`]);
-      } else if (data.status === 'success') {
-        completed = true;
-        setProgress(100);
-        setLogs(prev => [...prev, "✅ " + data.message]);
-        setGenerating(false);
-        setTimeout(onComplete, 1500);
-      } else if (data.status === 'error') {
-        completed = true;
-        setLogs(prev => [...prev, "❌ Error: " + (data.message || data.error || 'Insight generation failed')]);
-        setGenerating(false);
+    const MAX_RETRIES = 30;
+    const RETRY_DELAY_MS = 5000;
+
+    if (clearCache) {
+      const clearEndpoint = endpoint === '/api/precompute-subthemes'
+        ? '/api/clear-subtheme-cache'
+        : '/api/clear-cache';
+      const cacheLabel = endpoint === '/api/precompute-subthemes' ? 'subtheme' : 'main theme';
+      setLogs(prev => [...prev, `⚙️ Clearing ${cacheLabel} cache...`]);
+      try {
+        await fetch(`http://localhost:5001${clearEndpoint}`, { method: 'POST' });
+        setLogs(prev => [...prev, `✅ ${cacheLabel} cache cleared.`]);
+      } catch (e) {
+        setLogs(prev => [...prev, `⚠️ Could not clear cache: ${e.message}`]);
       }
+    }
+
+    const { THEMES } = await import('../data/themes.js');
+    const body = {
+      themes: THEMES,
+      llm_model: selectedModel,
+      provider: LLM_PROVIDER,
+      allow_model_download: allowModelDownload,
+      max_documents: maxDocuments,
+      filter_dimensions: useFilterGrid ? filterDimensions : [],
     };
 
-    try {
-      if (clearCache) {
-        const clearEndpoint = endpoint === '/api/precompute-subthemes'
-          ? '/api/clear-subtheme-cache'
-          : '/api/clear-cache';
-        const cacheLabel = endpoint === '/api/precompute-subthemes' ? 'subtheme' : 'main theme';
-        setLogs([`⚙️ Clearing ${cacheLabel} cache...`]);
-        try {
-          await fetch(`http://localhost:5001${clearEndpoint}`, { method: 'POST' });
-          setLogs(prev => [...prev, `✅ ${cacheLabel} cache cleared.`]);
-        } catch (e) {
-          setLogs(prev => [...prev, `⚠️ Could not clear cache: ${e.message}`]);
-        }
-      }
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      let completed = false;
 
-      const { THEMES } = await import('../data/themes.js');
-      const body = {
-        themes: THEMES,
-        llm_model: selectedModel,
-        provider: LLM_PROVIDER,
-        allow_model_download: allowModelDownload,
-        max_documents: maxDocuments,
-        filter_dimensions: useFilterGrid ? filterDimensions : [],
+      const handleStreamEvent = (data) => {
+        if (data.status === 'progress') {
+          setProgress(data.progress);
+          const prefix = data.theme ? `[${data.theme}] ` : '';
+          setLogs(prev => [...prev, `${prefix}${data.message}`]);
+        } else if (data.status === 'success') {
+          completed = true;
+          setProgress(100);
+          setLogs(prev => [...prev, "✅ " + data.message]);
+          setGenerating(false);
+          setTimeout(onComplete, 1500);
+        } else if (data.status === 'error') {
+          completed = true;
+          setLogs(prev => [...prev, "❌ Error: " + (data.message || data.error || 'Insight generation failed')]);
+          setGenerating(false);
+        }
       };
-      const res = await fetch(`http://localhost:5001${endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
 
-      if (!res.ok) {
-        let message = `Request failed with HTTP ${res.status}`;
-        try {
-          const data = await res.json();
-          message = data.message || data.error || message;
-        } catch (e) {
-          const text = await res.text();
-          if (text) message = text;
-        }
-        throw new Error(message);
-      }
+      try {
+        const res = await fetch(`http://localhost:5001${endpoint}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
 
-      if (!res.body) {
-        throw new Error('The backend did not return a progress stream.');
-      }
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) {
-          buffer += decoder.decode();
-          break;
-        }
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-        for (let line of lines) {
+        if (!res.ok) {
+          let message = `Request failed with HTTP ${res.status}`;
           try {
-            handleStreamEvent(JSON.parse(line));
+            const data = await res.json();
+            message = data.message || data.error || message;
           } catch (e) {
-            setLogs(prev => [...prev, `⚠️ Could not parse backend progress: ${line}`]);
+            const text = await res.text();
+            if (text) message = text;
+          }
+          throw new Error(message);
+        }
+
+        if (!res.body) throw new Error('The backend did not return a progress stream.');
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) { buffer += decoder.decode(); break; }
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+          for (let line of lines) {
+            try { handleStreamEvent(JSON.parse(line)); }
+            catch (e) { setLogs(prev => [...prev, `⚠️ Could not parse: ${line}`]); }
           }
         }
-      }
 
-      const trailingLine = buffer.trim();
-      if (trailingLine) {
-        try {
-          handleStreamEvent(JSON.parse(trailingLine));
-        } catch (e) {
-          setLogs(prev => [...prev, `⚠️ Could not parse backend progress: ${trailingLine}`]);
+        const trailingLine = buffer.trim();
+        if (trailingLine) {
+          try { handleStreamEvent(JSON.parse(trailingLine)); }
+          catch (e) { setLogs(prev => [...prev, `⚠️ Could not parse: ${trailingLine}`]); }
         }
+      } catch (e) {
+        setLogs(prev => [...prev, `⚠️ Connection error: ${e.message}`]);
       }
 
-      if (!completed) {
-        setLogs(prev => [...prev, "❌ Error: The backend stream ended before insight generation completed."]);
+      if (completed) break;
+
+      if (attempt < MAX_RETRIES) {
+        setLogs(prev => [...prev, `🔄 Stream stopped, resuming in ${RETRY_DELAY_MS / 1000}s... (${attempt + 1}/${MAX_RETRIES})`]);
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+      } else {
+        setLogs(prev => [...prev, '❌ Max retries reached. Some themes may be missing.']);
         setGenerating(false);
       }
-    } catch (e) {
-      setLogs(prev => [...prev, "❌ Connection Error: " + e.message]);
-      setGenerating(false);
     }
   };
 
@@ -438,7 +456,7 @@ export default function InsightGenerator({ onComplete }) {
                           : 'border-emerald-200 bg-emerald-50 text-emerald-700'
                     }`}>
                       <div>
-                        <span className="font-bold">{extraCombos}</span> combos × {THEME_COUNT} themes ={' '}
+                        <span className="font-bold">{displayCombos}</span> combos × {THEME_COUNT} themes ={' '}
                         <span className="font-bold">{extraThemeInsights}</span> theme insights
                       </div>
                       <div className="text-gray-500">
@@ -483,7 +501,7 @@ export default function InsightGenerator({ onComplete }) {
                 <>
                   <span className="text-gray-300">•</span>
                   <span className="text-violet-600 font-medium text-xs">
-                    +{extraCombos} filter combos
+                    +{displayCombos} filter combos
                   </span>
                 </>
               )}
@@ -535,7 +553,7 @@ export default function InsightGenerator({ onComplete }) {
                 </div>
                 <div className="flex items-center justify-between mt-0.5">
                   <span className="text-xs font-normal text-white/80">
-                    {filterDimensions.length > 0 ? `${extraCombos} combos × 7 themes` : 'Select dimensions first'}
+                    {filterDimensions.length > 0 ? `${displayCombos} combos × 7 themes` : 'Select dimensions first'}
                   </span>
                   <CacheBadge cached={cacheStatus.main_filtered} total={filterDimensions.length > 0 ? extraThemeInsights : undefined} />
                 </div>

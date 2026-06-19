@@ -39,6 +39,9 @@ def vector_checkpoint_status():
 @vector_bp.route("/api/filter-options", methods=["GET"])
 def get_filter_options():
     try:
+        filters = _filters_from_args(all_value="all")
+        if filters:
+            return jsonify(retrieval.filter_options_for_selection(filters)), 200
         return jsonify(retrieval.filter_options_payload()), 200
     except Exception as exc:
         print(f"[FILTER OPTIONS ERROR] {str(exc)}")

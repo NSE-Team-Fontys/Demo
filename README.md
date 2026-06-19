@@ -611,6 +611,12 @@ gemma_cache.json
 __pycache__/
 ```
 
+## Technical docs
+
+Design notes for non-obvious implementation choices live in [`docs/`](docs/):
+
+- [Filter combination validation](docs/filter-combo-validation.md) — how empty filter combos are detected upfront before LLM calls, using one bulk ChromaDB fetch and Python-side set intersection.
+
 ## Contributor Notes
 
 - Keep application logic out of `app.py`.

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 
-export default function FilterDropdown({ icon, label, value, options, onChange }) {
+export default function FilterDropdown({ icon, label, value, options, availableOptions, onChange }) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
   const ref = useRef(null)
@@ -29,6 +29,12 @@ export default function FilterDropdown({ icon, label, value, options, onChange }
     if (!query) return options
     return options.filter((opt) => String(opt).toLowerCase().includes(query))
   }, [options, search])
+
+  function isAvailable(opt) {
+    if (!availableOptions) return true
+    if (opt === 'All' || opt === value) return true
+    return availableOptions.includes(opt)
+  }
 
   function select(opt) {
     onChange(opt)
@@ -85,22 +91,32 @@ export default function FilterDropdown({ icon, label, value, options, onChange }
           )}
           <div className="overflow-y-auto max-h-[360px] overscroll-contain">
           {filteredOptions.length > 0 ? (
-            filteredOptions.map((opt) => (
-              <button
-                key={opt}
-                onClick={() => select(opt)}
-                className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center justify-between ${
-                  opt === value
-                    ? 'bg-primary/8 text-primary font-semibold'
-                    : 'text-on-surface hover:bg-surface-container-low'
-                }`}
-              >
-                <span>{opt}</span>
-                {opt === value && (
-                  <span className="material-symbols-outlined text-sm text-primary">check</span>
-                )}
-              </button>
-            ))
+            filteredOptions.map((opt) => {
+              const available = isAvailable(opt)
+              return (
+                <button
+                  key={opt}
+                  onClick={() => select(opt)}
+                  className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center justify-between ${
+                    opt === value
+                      ? 'bg-primary/8 text-primary font-semibold'
+                      : available
+                      ? 'text-on-surface hover:bg-surface-container-low'
+                      : 'text-on-surface-variant/35 cursor-default'
+                  }`}
+                >
+                  <span>{opt}</span>
+                  <span className="flex items-center gap-1">
+                    {!available && (
+                      <span className="material-symbols-outlined text-xs opacity-40">block</span>
+                    )}
+                    {opt === value && (
+                      <span className="material-symbols-outlined text-sm text-primary">check</span>
+                    )}
+                  </span>
+                </button>
+              )
+            })
           ) : (
             <p className="px-4 py-3 text-sm text-on-surface-variant/60 italic">No matches found</p>
           )}

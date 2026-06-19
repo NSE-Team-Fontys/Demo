@@ -33,6 +33,7 @@ _theme_embedding_models = {}
 _collection = None
 _classification_metadata: dict | None = None
 _filter_options_cache: dict | None = None
+_filter_options_filtered_cache: dict[str, dict] = {}
 _vector_stats_cache: dict | None = None
 
 
@@ -153,8 +154,9 @@ def _get_evidence_rows(
 
 
 def clear_runtime_caches():
-    global _collection, _classification_metadata, _filter_options_cache, _vector_stats_cache
+    global _collection, _classification_metadata, _filter_options_cache, _filter_options_filtered_cache, _vector_stats_cache
     _theme_overview_cache.clear()
+    _filter_options_filtered_cache.clear()
     _collection = None
     _classification_metadata = None
     _filter_options_cache = None
@@ -330,6 +332,44 @@ def filter_options_payload() -> dict:
         "options": {key: sorted(values) for key, values in buckets.items()},
     }
     return _filter_options_cache
+
+
+def filter_options_for_selection(filters: dict) -> dict:
+    """Return only the filter options that exist in documents matching the given filters."""
+    global _filter_options_filtered_cache
+    if not filters:
+        return filter_options_payload()
+    cache_key = str(sorted(filters.items()))
+    if cache_key in _filter_options_filtered_cache:
+        return _filter_options_filtered_cache[cache_key]
+    try:
+        collection = get_collection()
+    except Exception:
+        return {"status": "empty", "options": {}}
+    where_clause = build_where_filter(filters)
+    result = collection.get(where=where_clause, include=["metadatas"])
+    buckets: dict[str, set] = {
+        "institutions": set(), "academic_years": set(), "locations": set(),
+        "programmes": set(), "study_modes": set(), "cohorts": set(),
+        "sectors": set(), "languages": set(),
+    }
+    bucket_keys = {
+        "institutions": "institution", "academic_years": "academic_year",
+        "locations": "location", "programmes": "programme",
+        "study_modes": "study_mode", "cohorts": "cohort",
+        "sectors": "sector", "languages": "language",
+    }
+    for meta in result.get("metadatas") or []:
+        for bucket, canonical_key in bucket_keys.items():
+            value = metadata_value(meta, canonical_key)
+            if value:
+                buckets[bucket].add(str(value))
+    payload = {
+        "status": "success",
+        "options": {key: sorted(values) for key, values in buckets.items()},
+    }
+    _filter_options_filtered_cache[cache_key] = payload
+    return payload
 
 
 def query_vectors_payload(query_text: str, top_k: int, filters: dict) -> dict:
@@ -673,3 +713,45 @@ def count_filtered_documents(filters: dict | None = None) -> int:
         return collection.count()
     filtered_docs = collection.get(where=where_clause)
     return len(filtered_docs["ids"]) if filtered_docs and filtered_docs["ids"] else 0
+
+
+def filter_valid_combos(combos: list[dict]) -> list[dict]:
+    """Return only combos that have ≥1 matching document.
+
+    Uses one bulk metadata fetch + Python-side index, so N combos cost one
+    ChromaDB round-trip instead of N.
+    """
+    if not combos:
+        return []
+    try:
+        collection = get_collection()
+    except Exception:
+        return combos
+
+    all_meta = collection.get(include=["metadatas"]).get("metadatas") or []
+    if not all_meta:
+        return []
+
+    # Build per-dimension inverted index: {canonical_key: {value: {doc_indices}}}
+    combo_keys = {key for combo in combos for key in combo}
+    dimension_index: dict[str, dict[str, set]] = {}
+    for idx, meta in enumerate(all_meta):
+        for canonical_key in combo_keys:
+            value = metadata_value(meta, canonical_key)
+            if value:
+                dimension_index.setdefault(canonical_key, {}).setdefault(str(value), set()).add(idx)
+
+    all_indices = set(range(len(all_meta)))
+    valid: list[dict] = []
+    for combo in combos:
+        if not combo:
+            valid.append(combo)
+            continue
+        intersection = all_indices.copy()
+        for key, value in combo.items():
+            intersection &= dimension_index.get(key, {}).get(str(value), set())
+            if not intersection:
+                break
+        if intersection:
+            valid.append(combo)
+    return valid

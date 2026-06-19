@@ -890,6 +890,20 @@ export default function ViewMorePage() {
       .catch(() => {});
   }, []);
 
+  const [availableFilterOptions, setAvailableFilterOptions] = useState(null);
+  useEffect(() => {
+    const apiFilters = filtersToApiParams(filters);
+    if (Object.keys(apiFilters).length === 0) {
+      setAvailableFilterOptions(null);
+      return;
+    }
+    const params = new URLSearchParams(apiFilters);
+    fetch(`http://localhost:5001/api/filter-options?${params}`)
+      .then((r) => r.json())
+      .then((data) => { if (data.status === "success") setAvailableFilterOptions(data.options); })
+      .catch(() => {});
+  }, [filters]);
+
   function setFilter(key, value) {
     const nextFilters = normalizeFilters({ ...filters, [key]: value });
     setSearchParams(filtersToSearchParams(nextFilters));
@@ -1131,6 +1145,7 @@ export default function ViewMorePage() {
                 label="Academic Year"
                 value={filters.jaar}
                 options={["All", ...filterOptions.academic_years]}
+                availableOptions={availableFilterOptions ? ["All", ...availableFilterOptions.academic_years] : null}
                 onChange={(v) => setFilter("jaar", v)}
               />
             </div>
@@ -1140,6 +1155,7 @@ export default function ViewMorePage() {
                 label="Location"
                 value={filters.locatie}
                 options={LOCATION_OPTIONS}
+                availableOptions={availableFilterOptions ? ["All", ...availableFilterOptions.locations] : null}
                 onChange={(v) => setFilter("locatie", v)}
               />
             </div>
@@ -1149,6 +1165,7 @@ export default function ViewMorePage() {
                 label="Programme"
                 value={filters.opleiding}
                 options={["All", ...filterOptions.programmes]}
+                availableOptions={availableFilterOptions ? ["All", ...availableFilterOptions.programmes] : null}
                 onChange={(v) => setFilter("opleiding", v)}
               />
             </div>
@@ -1158,6 +1175,7 @@ export default function ViewMorePage() {
                 label="Study Mode"
                 value={filters.studievorm}
                 options={["All", ...filterOptions.study_modes]}
+                availableOptions={availableFilterOptions ? ["All", ...availableFilterOptions.study_modes] : null}
                 onChange={(v) => setFilter("studievorm", v)}
               />
             </div>
@@ -1167,6 +1185,7 @@ export default function ViewMorePage() {
                 label="Language"
                 value={filters.taal}
                 options={["All", ...filterOptions.languages]}
+                availableOptions={availableFilterOptions ? ["All", ...availableFilterOptions.languages] : null}
                 onChange={(v) => setFilter("taal", v)}
               />
             </div>

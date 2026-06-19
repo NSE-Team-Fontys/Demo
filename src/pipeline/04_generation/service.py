@@ -715,6 +715,10 @@ def precompute_insights_stream(
             return
 
         collection = retrieval.get_collection()
+
+        # Filter grid upfront with one bulk metadata fetch — avoids per-combo ChromaDB calls later.
+        valid_grid = retrieval.filter_valid_combos(normalized_grid) if normalized_grid else []
+
         yield json.dumps(
             {
                 "status": "progress",
@@ -726,8 +730,8 @@ def precompute_insights_stream(
         client = get_llm_client(provider)
         client.ensure_model_available(llm_model, allow_download=allow_model_download)
 
-        # Total steps across baseline + every grid combo, so progress never resets.
-        total_passes = 1 + len(normalized_grid)
+        # Total steps across baseline + every valid grid combo, so progress never resets.
+        total_passes = 1 + len(valid_grid)
         total_steps = len(themes) * total_passes
 
         def _pct(step: float) -> int:
@@ -794,12 +798,13 @@ def precompute_insights_stream(
             except Exception as exc:
                 yield json.dumps(
                     {
-                        "status": "error",
+                        "status": "progress",
                         "theme": theme_name,
-                        "message": f"Failed to generate summary: {str(exc)}",
+                        "message": f"Skipped {theme_name}: {str(exc)}",
+                        "progress": _pct(i + 1),
                     }
                 ) + "\n"
-                return
+                continue
             save_cache(cache)
 
         if precache_subthemes:
@@ -869,9 +874,16 @@ def precompute_insights_stream(
                         continue
 
         # Optional pre-cache pass: cross-product of filter combinations.
-        if normalized_grid:
-            total_combos = len(normalized_grid)
-            for combo_idx, combo in enumerate(normalized_grid):
+        if valid_grid:
+            skipped = len(normalized_grid) - len(valid_grid)
+            if skipped:
+                yield json.dumps({
+                    "status": "progress",
+                    "message": f"Skipped {skipped} empty filter combinations (no matching documents)",
+                    "progress": _pct(len(themes)),
+                }) + "\n"
+            total_combos = len(valid_grid)
+            for combo_idx, combo in enumerate(valid_grid):
                 combo_label = ", ".join(f"{k}={v}" for k, v in combo.items()) or "baseline"
                 for j, theme in enumerate(themes):
                     theme_name = theme.get("name")
