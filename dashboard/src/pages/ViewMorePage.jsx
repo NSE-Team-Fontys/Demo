@@ -543,7 +543,7 @@ function AIFeedbackBento({
 }
 
 // ── Donut chart — uses shades of one accent color ───────────────────────────
-function DonutChart({ rows, title, accentColor, total }) {
+function DonutChart({ rows, title, accentColor }) {
   if (!rows || rows.length === 0) return null;
 
   const radius = 50;
@@ -561,12 +561,17 @@ function DonutChart({ rows, title, accentColor, total }) {
     ...row,
     percentage: Math.max(0, Number(row.percentage) || 0),
     mentions: Math.max(0, Number(row.mentions) || 0),
+    quote_count: row.quote_count != null ? Math.max(0, Number(row.quote_count) || 0) : null,
   }));
   const percentageTotal = safeRows.reduce(
     (sum, row) => sum + row.percentage,
     0,
   );
   const mentionTotal = safeRows.reduce((sum, row) => sum + row.mentions, 0);
+  const quoteTotal = safeRows.reduce(
+    (sum, row) => sum + (row.quote_count ?? row.mentions),
+    0,
+  );
   const usePercentages = percentageTotal > 0;
   const valueTotal = usePercentages ? percentageTotal : mentionTotal;
   // Sort highest → lowest so darkest shade always maps to the largest slice
@@ -653,7 +658,7 @@ function DonutChart({ rows, title, accentColor, total }) {
             className="text-lg font-extrabold font-headline"
             style={{ color: accentColor }}
           >
-            {total ?? mentionTotal}
+            {quoteTotal}
           </span>
           <span className="text-[9px] text-on-surface-variant/70">
             comments
@@ -1355,7 +1360,6 @@ export default function ViewMorePage() {
                     : "Sub-theme mentions breakdown"
                 }
                 accentColor={colors.accent}
-                total={displayedComments.length}
               />
 
               {/* List of subthemes as buttons */}
