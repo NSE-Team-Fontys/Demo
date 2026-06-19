@@ -11,7 +11,7 @@ import { useThemeSummary } from "../hooks/useThemeSummary";
 import FilterDropdown from "../components/FilterDropdown";
 import { LOCATION_OPTIONS } from "../constants/locations";
 import { getThemeColor } from "../constants/themeColors";
-import { buildRealTheme, THEME_NAME_BY_ID } from "../constants/realThemes";
+import { buildRealTheme, REAL_THEME_META, THEME_NAME_BY_ID } from "../constants/realThemes";
 import { motion } from "framer-motion";
 import {
   filtersFromSearchParams,
@@ -20,7 +20,6 @@ import {
   hasActiveFilters as filtersHaveActiveValues,
   normalizeFilters,
   searchFromFilters,
-  stableFilterKey,
 } from "../utils/filters";
 
 function normaliseComment(comment) {
@@ -886,8 +885,6 @@ export default function ViewMorePage() {
       .catch(() => {});
   }, []);
 
-  const [filteredPercentage, setFilteredPercentage] = useState(null);
-
   function setFilter(key, value) {
     const nextFilters = normalizeFilters({ ...filters, [key]: value });
     setSearchParams(filtersToSearchParams(nextFilters));
@@ -901,59 +898,15 @@ export default function ViewMorePage() {
 
   const routeTheme =
     location.state?.theme?.id === id ? location.state.theme : null;
-  const [fetchedTheme, setFetchedTheme] = useState(null);
-  const [loadingTheme, setLoadingTheme] = useState(!routeTheme);
 
-  useEffect(() => {
-    if (routeTheme) {
-      setFetchedTheme(null);
-      setLoadingTheme(false);
-      return;
-    }
-
+  const fetchedTheme = useMemo(() => {
+    if (routeTheme) return null;
     const themeName = THEME_NAME_BY_ID[id];
-    if (!themeName) {
-      setFetchedTheme(null);
-      setLoadingTheme(false);
-      return;
-    }
+    if (!themeName) return null;
+    return buildRealTheme(themeName, {}, { includeInsightDetails: false });
+  }, [id, routeTheme]);
 
-    let isMounted = true;
-    const apiFilters = filtersToApiParams(filters);
-    const apiFilterKey = stableFilterKey(apiFilters);
-    const params = new URLSearchParams(apiFilters);
-
-    setLoadingTheme(true);
-    fetch(`http://localhost:5001/api/themes-overview?${params}`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (!isMounted) return;
-        const themes = data?.themes ?? data ?? {};
-        const insight = themes[themeName];
-        if (!insight) {
-          setFetchedTheme(null);
-          return;
-        }
-        const insightFilterKey = stableFilterKey(
-          insight?.filters_applied ?? {},
-        );
-        const includeInsightDetails =
-          apiFilterKey === "{}" || insightFilterKey === apiFilterKey;
-        setFetchedTheme(
-          buildRealTheme(themeName, insight, { includeInsightDetails }),
-        );
-      })
-      .catch(() => {
-        if (isMounted) setFetchedTheme(null);
-      })
-      .finally(() => {
-        if (isMounted) setLoadingTheme(false);
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [id, routeTheme, filters]);
+  const loadingTheme = false;
 
   const theme = routeTheme || fetchedTheme;
   const colors = theme ? getThemeColor(theme.id) : getThemeColor("content_org");
@@ -1000,21 +953,6 @@ export default function ViewMorePage() {
       isMounted = false;
     };
   }, [decodedSubtheme, theme?.id, theme?.name, JSON.stringify(filters)]);
-
-  useEffect(() => {
-    if (!theme) return;
-    const params = new URLSearchParams(filtersToApiParams(filters));
-    fetch(`http://localhost:5001/api/themes-overview?${params}`)
-      .then((r) => r.json())
-      .then((data) => {
-        const themes = data?.themes ?? data ?? {};
-        const d = themes[theme.name];
-        setFilteredPercentage(
-          d && typeof d.frequency === "number" ? d.frequency : null,
-        );
-      })
-      .catch(() => setFilteredPercentage(null));
-  }, [filters, theme?.name]);
 
   // If live generation fails/offline, use the real payload already loaded for this theme.
   const hasLlmError =
