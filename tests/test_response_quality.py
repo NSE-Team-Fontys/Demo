@@ -27,6 +27,7 @@ class ResponseQualityTests(unittest.TestCase):
             "weet ik niet",
             "prima",
             "No comment",
+            "No comments about this.",
             "Next",
             "Nope",
             "Good job!",

@@ -11,7 +11,7 @@ import unicodedata
 RESPONSE_QUALITY_METADATA_KEY = "response_quality"
 LOW_INFORMATION_VALUE = "low_information"
 SUBSTANTIVE_VALUE = "substantive"
-RESPONSE_QUALITY_VERSION = 2
+RESPONSE_QUALITY_VERSION = 3
 
 
 LOW_INFORMATION_RESPONSES = {
@@ -113,6 +113,7 @@ LOW_INFORMATION_RESPONSES = {
     "no answer",
     "no comment",
     "no comments",
+    "no comments about this",
     "no further comments",
     "no idea",
     "no opinion",

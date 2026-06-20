@@ -30,6 +30,22 @@ class ScoreReranker:
         return self.scores
 
 
+class ThemeScoreReranker:
+    def __init__(self, scores_by_theme) -> None:
+        self.scores_by_theme = scores_by_theme
+        self.calls = []
+        self.kwargs = []
+
+    def predict(self, pairs, **kwargs):
+        self.calls.append(list(pairs))
+        self.kwargs.append(kwargs)
+        scores = []
+        for query, _document in pairs:
+            theme = str(query).split(".", 1)[0]
+            scores.append(self.scores_by_theme.get(theme, -10.0))
+        return np.asarray(scores, dtype=np.float32)
+
+
 class BuildEmbeddingModel:
     def __init__(self) -> None:
         self.document_batches = []
@@ -242,6 +258,109 @@ class ThemeClassificationTests(unittest.TestCase):
                 theme_classifier.CLASSIFICATION_STATUS_READY,
             )
             self.assertFalse(checkpoint_path.exists())
+
+    def test_stream_build_defers_reranker_until_explicit_rerank_pass(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            csv_path = root / "survey.csv"
+            db_path = root / "vectors"
+            checkpoint_path = root / "vector_checkpoint.json"
+            cache_path = root / "gemma_cache.json"
+            question = "What should improve?"
+            pd.DataFrame(
+                {
+                    question: [
+                        "Teacher support and mentoring overlap.",
+                        "Professional practice projects are useful.",
+                    ],
+                    "location": ["A", "A"],
+                }
+            ).to_csv(csv_path, index=False)
+
+            model = BuildEmbeddingModel()
+            load_reranker = mock.Mock(
+                return_value=ThemeScoreReranker(
+                    {
+                        "Support / Mentoring": 8.0,
+                        "Teachers": 1.0,
+                        "No Meaningful Response": -5.0,
+                    }
+                )
+            )
+            with (
+                mock.patch.object(vector_builder, "VECTOR_CHECKPOINT", checkpoint_path),
+                mock.patch.object(vector_builder, "CACHE_FILE", cache_path),
+                mock.patch.object(
+                    vector_builder,
+                    "_classification_for_embedding_model",
+                    return_value=theme_classifier.classification_config(
+                        "Octen/Octen-Embedding-0.6B",
+                        reranker_model_id=None,
+                        ambiguity_score_margin=1.0,
+                    ),
+                ),
+                mock.patch.object(
+                    vector_builder,
+                    "load_embedding_model",
+                    return_value=model,
+                ),
+                mock.patch.object(
+                    vector_builder.reranker_models,
+                    "load_reranker_model",
+                    load_reranker,
+                ),
+                mock.patch.object(vector_builder, "unload_embedding_models"),
+                mock.patch.object(vector_builder.reranker_models, "unload_reranker_models"),
+            ):
+                events = [
+                    json.loads(line)
+                    for line in vector_builder.build_vector_db_stream(
+                        csv_path=str(csv_path),
+                        db_path=str(db_path),
+                        selected_columns=[question],
+                        allow_model_download=False,
+                    )
+                ]
+
+                self.assertEqual(events[-1]["status"], "success", events)
+                load_reranker.assert_not_called()
+                collection = chromadb.PersistentClient(
+                    path=str(db_path)
+                ).get_collection("survey_responses")
+                self.assertEqual(
+                    collection.metadata["theme_reranker_status"],
+                    "not_run",
+                )
+
+                rerank_events = [
+                    json.loads(line)
+                    for line in vector_builder.apply_theme_reranker_stream(
+                        db_path=str(db_path),
+                        reranker_model_id="fake-reranker",
+                        allow_model_download=False,
+                    )
+                ]
+
+            self.assertEqual(rerank_events[-1]["status"], "success", rerank_events)
+            self.assertGreater(rerank_events[-1]["reranked_documents"], 0)
+            self.assertGreater(rerank_events[-1]["changed_primary"], 0)
+            completed = chromadb.PersistentClient(
+                path=str(db_path)
+            ).get_collection("survey_responses")
+            self.assertEqual(
+                completed.metadata["theme_reranker_model"],
+                "fake-reranker",
+            )
+            updated = completed.get(include=["metadatas"])["metadatas"]
+            self.assertTrue(
+                any(
+                    metadata.get("theme_primary_score_kind")
+                    == "raw_cross_encoder_score"
+                    and metadata.get("theme_embedding_primary")
+                    and metadata.get("theme_ambiguous") is False
+                    for metadata in updated
+                )
+            )
 
 
 if __name__ == "__main__":

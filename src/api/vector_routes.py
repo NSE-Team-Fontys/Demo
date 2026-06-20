@@ -31,6 +31,27 @@ def build_vectors():
         return jsonify({"status": "error", "error": str(exc)}), 500
 
 
+@vector_bp.route("/api/rerank-theme-assignments", methods=["POST"])
+def rerank_theme_assignments():
+    try:
+        data = request.get_json(silent=True) or {}
+        max_documents = data.get("max_documents")
+        stream = embedding.rerank_theme_assignments_stream(
+            reranker_model=data.get("reranker_model"),
+            allow_model_download=bool(data.get("allow_model_download", True)),
+            max_documents=(
+                int(max_documents)
+                if max_documents is not None and str(max_documents).strip()
+                else None
+            ),
+        )
+        generation.clear_insight_cache()
+        return Response(stream, mimetype="application/x-ndjson")
+    except Exception as exc:
+        print(f"[RERANK-THEMES ERROR] {str(exc)}")
+        return jsonify({"status": "error", "error": str(exc)}), 500
+
+
 @vector_bp.route("/api/vector-checkpoint-status", methods=["GET"])
 def vector_checkpoint_status():
     return jsonify(embedding.vector_checkpoint_status_payload())

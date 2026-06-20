@@ -188,10 +188,7 @@ def current_reranker_id():
 
 
 def expected_classification_config(embedding_model_id: str):
-    return theme_classifier.classification_config(
-        embedding_model_id,
-        reranker_model_id=current_reranker_id(),
-    )
+    return theme_classifier.embedding_classification_config(embedding_model_id)
 
 
 def validate_theme_classification(collection):
@@ -201,13 +198,23 @@ def validate_theme_classification(collection):
     expected_metadata = expected.collection_metadata(
         status=theme_classifier.CLASSIFICATION_STATUS_READY
     )
+    required_keys = {
+        "theme_classification_status",
+        "theme_classification_version",
+        "theme_taxonomy_version",
+        "theme_candidate_count",
+        "theme_embedding_model",
+    }
     mismatches = [
         key
         for key, expected_value in expected_metadata.items()
+        if key in required_keys
         if metadata.get(key) != expected_value
     ]
+    if metadata.get("embedding_model") != embedding_model_id:
+        mismatches.append("embedding_model")
     if mismatches:
-        mismatch_list = ", ".join(sorted(mismatches))
+        mismatch_list = ", ".join(sorted(set(mismatches)))
         raise RuntimeError(
             "Vector database is missing compatible persisted theme "
             f"classification ({mismatch_list}). Delete it and run a fresh "
@@ -216,13 +223,28 @@ def validate_theme_classification(collection):
     return expected
 
 
+def _persisted_classification_metadata(collection, config) -> dict:
+    metadata = getattr(collection, "metadata", None) or {}
+    result = config.cache_metadata()
+    for key in list(result):
+        if key in metadata:
+            result[key] = metadata[key]
+    for key in (
+        "theme_embedding_confidence_margin",
+        "theme_reranker_status",
+    ):
+        if key in metadata:
+            result[key] = metadata[key]
+    return result
+
+
 def classification_cache_metadata(collection=None) -> dict:
     global _classification_metadata
     if collection is None and _classification_metadata is not None:
         return _classification_metadata
     selected_collection = collection or get_collection()
     config = validate_theme_classification(selected_collection)
-    result = config.cache_metadata()
+    result = _persisted_classification_metadata(selected_collection, config)
     if collection is None:
         _classification_metadata = result
     return result

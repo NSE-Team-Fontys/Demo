@@ -6,6 +6,7 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 import json
 from importlib import import_module
 
+from src.config.settings import EMBEDDING_BATCH_SIZE, RERANKER_BATCH_SIZE
 from src.config.paths import CACHE_FILE, VECTOR_CHECKPOINT
 from src.config.response_quality import (
     LOW_INFORMATION_VALUE,
@@ -32,7 +33,9 @@ from .theme_classifier import (
     ThemeClassificationConfig,
     classification_config,
     classify_theme_batch,
+    embedding_classification_config,
     encode_theme_definitions,
+    theme_definition_text,
 )
 from src.utils.model_device import describe_model_device, get_model_device
 from src.utils.file_parsers import detect_sep, is_questionnaire_column
@@ -136,6 +139,8 @@ def _collection_metadata(
         "embedding_model": embedding_model,
         "vector_schema_version": VECTOR_SCHEMA_VERSION,
         "response_quality_version": RESPONSE_QUALITY_VERSION,
+        "theme_embedding_confidence_margin": classification.ambiguity_score_margin,
+        "theme_reranker_status": "not_run",
         **classification.collection_metadata(status=status),
     }
     if include_hnsw_space:
@@ -217,11 +222,13 @@ def _load_reranker_for_classification(
 def _classification_for_embedding_model(
     embedding_model: str,
 ) -> ThemeClassificationConfig:
-    reranker_model_id = (
-        reranker_models.selected_reranker_model()
-        if reranker_models.reranker_enabled()
-        else None
-    )
+    return embedding_classification_config(embedding_model)
+
+
+def _reranker_classification_for_embedding_model(
+    embedding_model: str,
+    reranker_model_id: str,
+) -> ThemeClassificationConfig:
     return classification_config(
         embedding_model,
         reranker_model_id=reranker_model_id,
@@ -276,6 +283,329 @@ def build_metadata(row) -> dict:
     return meta
 
 
+def _candidate_rows_from_metadata(metadata: dict) -> list[dict]:
+    candidate_count = int(metadata.get("theme_candidate_count", 0) or 0)
+    candidates = []
+    for position in range(1, candidate_count + 1):
+        prefix = f"theme_candidate_{position}"
+        theme_name = metadata.get(prefix)
+        if not theme_name or theme_name == LOW_INFORMATION_THEME:
+            continue
+        candidates.append(
+            {
+                "theme": theme_name,
+                "embedding_similarity": float(
+                    metadata.get(f"{prefix}_embedding_similarity", 0.0)
+                ),
+                "embedding_distance": float(
+                    metadata.get(f"{prefix}_embedding_distance", 1.0)
+                ),
+                "embedding_rank": int(
+                    metadata.get(f"{prefix}_embedding_rank", position) or position
+                ),
+            }
+        )
+    return candidates
+
+
+def _strip_candidate_fields(metadata: dict) -> dict:
+    return {
+        key: value
+        for key, value in metadata.items()
+        if not key.startswith("theme_candidate_")
+    }
+
+
+def _metadata_with_ranked_candidates(
+    metadata: dict,
+    *,
+    ranked_candidates: list[dict],
+    classification: ThemeClassificationConfig,
+) -> dict:
+    updated = _strip_candidate_fields(dict(metadata))
+    updated.setdefault("theme_embedding_primary", metadata.get("theme_primary"))
+    updated.setdefault(
+        "theme_embedding_primary_score",
+        metadata.get("theme_primary_score"),
+    )
+    updated.setdefault(
+        "theme_embedding_score_margin",
+        metadata.get("theme_score_margin"),
+    )
+
+    primary = ranked_candidates[0]
+    if primary["theme"] == LOW_INFORMATION_THEME:
+        updated.update(
+            {
+                "theme_primary": LOW_INFORMATION_THEME,
+                "theme_primary_score": float(primary["score"]),
+                "theme_primary_score_kind": classification.score_kind,
+                "theme_ambiguous": False,
+                "theme_score_margin": 1.0,
+                "theme_candidate_count": 1,
+                "theme_classification_method": classification.method,
+                "theme_reranker_model": classification.reranker_model_id,
+                "theme_ambiguity_score_margin": classification.ambiguity_score_margin,
+                "theme_candidate_1": LOW_INFORMATION_THEME,
+                "theme_candidate_1_score": float(primary["score"]),
+                "theme_candidate_1_embedding_similarity": 0.0,
+                "theme_candidate_1_embedding_distance": 1.0,
+                "theme_candidate_1_embedding_rank": 0,
+            }
+        )
+        return updated
+
+    theme_candidates = [
+        candidate
+        for candidate in ranked_candidates
+        if candidate["theme"] != LOW_INFORMATION_THEME
+    ]
+    margin = (
+        float(theme_candidates[0]["score"] - theme_candidates[1]["score"])
+        if len(theme_candidates) > 1
+        else 1.0
+    )
+    updated.update(
+        {
+            "theme_primary": theme_candidates[0]["theme"],
+            "theme_primary_score": float(theme_candidates[0]["score"]),
+            "theme_primary_score_kind": classification.score_kind,
+            "theme_ambiguous": False,
+            "theme_score_margin": margin,
+            "theme_candidate_count": len(theme_candidates),
+            "theme_classification_method": classification.method,
+            "theme_reranker_model": classification.reranker_model_id,
+            "theme_classification_version": classification.classification_version,
+            "theme_taxonomy_version": classification.taxonomy_version,
+            "theme_ambiguity_score_margin": classification.ambiguity_score_margin,
+        }
+    )
+    for position, candidate in enumerate(theme_candidates, start=1):
+        prefix = f"theme_candidate_{position}"
+        updated[prefix] = candidate["theme"]
+        updated[f"{prefix}_score"] = float(candidate["score"])
+        updated[f"{prefix}_embedding_similarity"] = float(
+            candidate["embedding_similarity"]
+        )
+        updated[f"{prefix}_embedding_distance"] = float(
+            candidate["embedding_distance"]
+        )
+        updated[f"{prefix}_embedding_rank"] = int(candidate["embedding_rank"])
+    return updated
+
+
+def apply_theme_reranker_stream(
+    db_path="./survey_vector_db",
+    *,
+    reranker_model_id: str | None = None,
+    allow_model_download: bool = True,
+    max_documents: int | None = None,
+):
+    reranker_model = None
+    try:
+        client = chromadb.PersistentClient(path=str(db_path))
+        collection = client.get_collection("survey_responses")
+        collection_metadata = getattr(collection, "metadata", None) or {}
+        embedding_model = collection_metadata.get("embedding_model")
+        if not embedding_model:
+            yield json.dumps({
+                "status": "error",
+                "error": "Vector database is missing embedding model metadata.",
+            }) + "\n"
+            return
+
+        selected_reranker = str(
+            reranker_model_id or reranker_models.selected_reranker_model()
+        ).strip()
+        if not selected_reranker:
+            yield json.dumps({
+                "status": "error",
+                "error": "Reranker model id is required.",
+            }) + "\n"
+            return
+
+        classification = _reranker_classification_for_embedding_model(
+            embedding_model,
+            selected_reranker,
+        )
+        stored = collection.get(include=["documents", "metadatas"])
+        ids = stored.get("ids") or []
+        documents = stored.get("documents") or []
+        metadatas = stored.get("metadatas") or []
+        rows = []
+        for doc_id, document, metadata in zip(ids, documents, metadatas):
+            metadata = metadata or {}
+            if (
+                metadata.get("theme_primary") == LOW_INFORMATION_THEME
+                or not metadata.get("theme_ambiguous")
+            ):
+                continue
+            candidates = _candidate_rows_from_metadata(metadata)
+            if len(candidates) < 2:
+                continue
+            rows.append(
+                {
+                    "id": doc_id,
+                    "document": str(document or ""),
+                    "metadata": metadata,
+                    "candidates": candidates,
+                }
+            )
+
+        if max_documents is not None:
+            rows = rows[: max(0, int(max_documents))]
+
+        yield json.dumps({
+            "status": "progress",
+            "message": (
+                f"Found {len(rows)} ambiguous responses to rerank with "
+                f"{selected_reranker}."
+            ),
+            "ambiguous_documents": len(rows),
+            "progress": 5,
+        }) + "\n"
+
+        if not rows:
+            collection.modify(
+                metadata={
+                    **collection_metadata,
+                    "theme_reranker_status": "ready",
+                    "theme_reranker_model": selected_reranker,
+                    "theme_classification_method": classification.method,
+                    "theme_ambiguity_score_margin": classification.ambiguity_score_margin,
+                }
+            )
+            _invalidate_insight_cache()
+            yield json.dumps({
+                "status": "success",
+                "message": "No ambiguous responses needed reranking.",
+                "reranked_documents": 0,
+                "progress": 100,
+            }) + "\n"
+            return
+
+        yield json.dumps({
+            "status": "progress",
+            "message": f"Loading reranker {selected_reranker}...",
+            "progress": 10,
+        }) + "\n"
+        reranker_model = reranker_models.load_reranker_model(
+            selected_reranker,
+            allow_download=allow_model_download,
+        )
+
+        batch_size = 32
+        changed_primary = 0
+        low_information_reassigned = 0
+        still_ambiguous = 0
+        processed = 0
+        for start in range(0, len(rows), batch_size):
+            batch = rows[start : start + batch_size]
+            pairs = []
+            for row in batch:
+                row_candidates = [
+                    *row["candidates"],
+                    {
+                        "theme": LOW_INFORMATION_THEME,
+                        "embedding_similarity": 0.0,
+                        "embedding_distance": 1.0,
+                        "embedding_rank": 0,
+                    },
+                ]
+                row["reranker_candidates"] = row_candidates
+                for candidate in row_candidates:
+                    pairs.append(
+                        (
+                            theme_definition_text(candidate["theme"]),
+                            row["document"],
+                        )
+                    )
+
+            raw_scores = reranker_model.predict(
+                pairs,
+                batch_size=RERANKER_BATCH_SIZE,
+            )
+            raw_scores = [float(score) for score in raw_scores]
+            if len(raw_scores) != len(pairs):
+                raise ValueError(
+                    f"Reranker returned {len(raw_scores)} scores for "
+                    f"{len(pairs)} candidate pairs."
+                )
+
+            offset = 0
+            updated_metadatas = []
+            update_ids = []
+            for row in batch:
+                candidates = []
+                for candidate in row["reranker_candidates"]:
+                    candidates.append(
+                        {
+                            **candidate,
+                            "score": raw_scores[offset],
+                        }
+                    )
+                    offset += 1
+                ranked = sorted(
+                    candidates,
+                    key=lambda candidate: (
+                        candidate["score"],
+                        candidate["embedding_similarity"],
+                    ),
+                    reverse=True,
+                )
+                updated = _metadata_with_ranked_candidates(
+                    row["metadata"],
+                    ranked_candidates=ranked,
+                    classification=classification,
+                )
+                if updated.get("theme_primary") != row["metadata"].get("theme_primary"):
+                    changed_primary += 1
+                if updated.get("theme_primary") == LOW_INFORMATION_THEME:
+                    low_information_reassigned += 1
+                if updated.get("theme_ambiguous"):
+                    still_ambiguous += 1
+                update_ids.append(row["id"])
+                updated_metadatas.append(updated)
+
+            collection.update(ids=update_ids, metadatas=updated_metadatas)
+            processed += len(batch)
+            progress = 10 + int(85 * (processed / len(rows)))
+            yield json.dumps({
+                "status": "progress",
+                "message": f"Reranked {processed}/{len(rows)} ambiguous responses...",
+                "progress": progress,
+                "reranked_documents": processed,
+                "changed_primary": changed_primary,
+                "low_information_reassigned": low_information_reassigned,
+            }) + "\n"
+
+        collection.modify(
+            metadata={
+                **collection_metadata,
+                "theme_reranker_status": "ready",
+                "theme_reranker_model": selected_reranker,
+                "theme_classification_method": classification.method,
+                "theme_ambiguity_score_margin": classification.ambiguity_score_margin,
+            }
+        )
+        _invalidate_insight_cache()
+        yield json.dumps({
+            "status": "success",
+            "message": "Theme reranking completed",
+            "reranker_model": selected_reranker,
+            "reranked_documents": processed,
+            "changed_primary": changed_primary,
+            "low_information_reassigned": low_information_reassigned,
+            "still_ambiguous": still_ambiguous,
+            "progress": 100,
+        }) + "\n"
+    except Exception as e:
+        yield json.dumps({"status": "error", "error": str(e)}) + "\n"
+    finally:
+        reranker_model = None
+        reranker_models.unload_reranker_models()
+
+
 def build_vector_db(csv_path="data/anonymized_output.csv", db_path="./survey_vector_db"):
     if not os.path.exists(csv_path):
         raise Exception(f"Input file {csv_path} not found. Please anonymize first.")
@@ -286,7 +616,7 @@ def build_vector_db(csv_path="data/anonymized_output.csv", db_path="./survey_vec
     ANSWER_COLS = [col for col in df_temp.columns if is_questionnaire_column(col)]
     COLLECTION = 'survey_responses'
     EMBEDDING_MODEL = DEFAULT_EMBEDDING_MODEL
-    BATCH_SIZE = 64
+    BATCH_SIZE = EMBEDDING_BATCH_SIZE
     if EMBEDDING_MODEL not in AVAILABLE_EMBEDDING_MODELS:
         raise Exception(f"Unsupported embedding model: {EMBEDDING_MODEL}")
 
@@ -313,14 +643,7 @@ def build_vector_db(csv_path="data/anonymized_output.csv", db_path="./survey_vec
     device = get_model_device()
     print(f"Loading embedding model on {describe_model_device(device)}...")
     model = load_embedding_model(EMBEDDING_MODEL)
-    reranker_model = None
     try:
-        if classification.reranker_model_id != "disabled":
-            print(f"Loading reranker {classification.reranker_model_id}...")
-        reranker_model = _load_reranker_for_classification(
-            classification,
-            allow_model_download=True,
-        )
         theme_names, theme_embeddings = encode_theme_definitions(model)
 
         print(f"Writing to ChromaDB at '{db_path}'...")
@@ -356,7 +679,7 @@ def build_vector_db(csv_path="data/anonymized_output.csv", db_path="./survey_vec
                 theme_names=theme_names,
                 theme_embeddings=theme_embeddings,
                 config=classification,
-                reranker_model=reranker_model,
+                reranker_model=None,
             )
             batch_metadata = []
             for (_, row), assignment in zip(batch.iterrows(), assignments):
@@ -395,7 +718,6 @@ def build_vector_db(csv_path="data/anonymized_output.csv", db_path="./survey_vec
         }
     finally:
         model = None
-        reranker_model = None
         unload_embedding_models()
         reranker_models.unload_reranker_models()
 
@@ -411,13 +733,12 @@ def build_vector_db_stream(
         return
 
     model = None
-    reranker_model = None
     try:
         CSV_SEP = detect_sep(csv_path)
         COLLECTION = 'survey_responses'
         EMBEDDING_MODEL = str(embedding_model or DEFAULT_EMBEDDING_MODEL).strip()
         classification = _classification_for_embedding_model(EMBEDDING_MODEL)
-        BATCH_SIZE = 100
+        BATCH_SIZE = EMBEDDING_BATCH_SIZE
         if EMBEDDING_MODEL not in AVAILABLE_EMBEDDING_MODELS:
             supported = ", ".join(AVAILABLE_EMBEDDING_MODELS)
             yield json.dumps({
@@ -485,35 +806,22 @@ def build_vector_db_stream(
             yield json.dumps({"status": "error", "error": f"Embedding model could not be loaded: {e}.{download_hint}"}) + "\n"
             return
 
-        if classification.reranker_model_id == "disabled":
-            yield json.dumps({
-                "status": "progress",
-                "message": "Reranker disabled; theme classification will use embedding cosine similarity fallback.",
-                "progress": 27,
-            }) + "\n"
-        else:
-            yield json.dumps({
-                "status": "progress",
-                "message": f"Loading {classification.reranker_model_id} reranker for batched theme classification...",
-                "progress": 27,
-            }) + "\n"
-        try:
-            reranker_model = _load_reranker_for_classification(
-                classification,
-                allow_model_download=allow_model_download,
-            )
-        except Exception as e:
-            yield json.dumps({
-                "status": "error",
-                "error": f"Reranker model could not be loaded: {e}.",
-            }) + "\n"
-            return
+        yield json.dumps({
+            "status": "progress",
+            "message": (
+                "Embedding-only theme assignment enabled; reranker can be run "
+                "after vector indexing."
+            ),
+            "progress": 27,
+        }) + "\n"
 
         yield json.dumps({
             "status": "progress",
             "message": (
                 f"Embedding {len(THEME_EMBEDDING_DEFINITIONS)} theme definitions; "
-                f"top {classification.candidate_count} candidates per response will be reranked."
+                f"top {classification.candidate_count} candidates per response "
+                f"will be stored. Rows with top-two margin <= "
+                f"{classification.ambiguity_score_margin:g} stay ambiguous."
             ),
             "progress": 29,
         }) + "\n"
@@ -574,14 +882,18 @@ def build_vector_db_stream(
             batch_ids = [f"doc_{start + j}" for j in range(len(batch))]
             batch_meta = [build_metadata(row) for _, row in batch.iterrows()]
 
-            batch_embeddings = model.encode(batch_docs, normalize_embeddings=True)
+            batch_embeddings = model.encode(
+                batch_docs,
+                batch_size=BATCH_SIZE,
+                normalize_embeddings=True,
+            )
             assignments = classify_theme_batch(
                 batch_docs,
                 batch_embeddings,
                 theme_names=theme_names,
                 theme_embeddings=theme_embeddings,
                 config=classification,
-                reranker_model=reranker_model,
+                reranker_model=None,
             )
             batch_meta = [
                 {**metadata, **assignment}
@@ -643,6 +955,7 @@ def build_vector_db_stream(
             "theme_classification_version": classification.classification_version,
             "theme_candidate_count": classification.candidate_count,
             "theme_reranker_model": classification.reranker_model_id,
+            "theme_reranker_status": "not_run",
             "theme_ambiguity_score_margin": classification.ambiguity_score_margin,
             "low_information_responses": low_information_count,
             "progress": 100
@@ -653,6 +966,5 @@ def build_vector_db_stream(
     finally:
         if model is not None:
             model = None
-        reranker_model = None
         unload_embedding_models()
         reranker_models.unload_reranker_models()

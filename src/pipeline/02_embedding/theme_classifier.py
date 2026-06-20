@@ -9,6 +9,7 @@ from src.config.settings import (
     RERANKER_BATCH_SIZE,
     THEME_AMBIGUITY_SCORE_MARGIN,
     THEME_CLASSIFICATION_CANDIDATES,
+    THEME_EMBEDDING_CONFIDENCE_MARGIN,
 )
 from src.config.themes import (
     LOW_INFORMATION_THEME,
@@ -23,6 +24,12 @@ CLASSIFICATION_STATUS_BUILDING = "building"
 CLASSIFICATION_STATUS_READY = "ready"
 RERANKER_DISABLED_ID = "disabled"
 MAX_THEME_CANDIDATES = len(THEME_EMBEDDING_DEFINITIONS)
+LOW_INFORMATION_RERANKER_DEFINITION = (
+    f"{LOW_INFORMATION_THEME}. Responses with no usable thematic feedback, "
+    "including empty answers, no comment, none, n/a, weet ik niet, geen "
+    "opmerkingen, irrelevant filler, or answers too vague to assign to an "
+    "educational feedback theme."
+)
 
 
 @dataclass(frozen=True)
@@ -92,7 +99,23 @@ def classification_config(
     )
 
 
+def embedding_classification_config(
+    embedding_model_id: str,
+    *,
+    candidate_count: int = THEME_CLASSIFICATION_CANDIDATES,
+    confidence_margin: float = THEME_EMBEDDING_CONFIDENCE_MARGIN,
+) -> ThemeClassificationConfig:
+    return classification_config(
+        embedding_model_id,
+        reranker_model_id=None,
+        candidate_count=candidate_count,
+        ambiguity_score_margin=confidence_margin,
+    )
+
+
 def theme_definition_text(theme_name: str) -> str:
+    if theme_name == LOW_INFORMATION_THEME:
+        return LOW_INFORMATION_RERANKER_DEFINITION
     definition = THEME_EMBEDDING_DEFINITIONS[theme_name]
     return f"{theme_name}. {definition}"
 
