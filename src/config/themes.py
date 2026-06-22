@@ -1,3 +1,14 @@
+LOW_INFORMATION_THEME = "No Meaningful Response"
+THEME_TAXONOMY_VERSION = 1
+THEME_CLASSIFICATION_VERSION = 1
+
+THEME_RETRIEVAL_PROMPT = (
+    "Instruct: Given an educational feedback category, retrieve Dutch, English, "
+    "or German student survey responses whose primary topic matches that category. "
+    "Focus on the main issue being evaluated, not incidental words or secondary topics.\n"
+    "Query: "
+)
+
 THEMES_LIST = [
     "Content and Organisation",
     "Professional Practice",
@@ -6,97 +17,95 @@ THEMES_LIST = [
     "Examination & Assessment",
     "Engagement & Contact",
     "Special Circumstances",
+    LOW_INFORMATION_THEME,
 ]
 
 THEME_LLM_DEFINITIONS = {
 
     "Content and Organisation": (
-        "Comments about how the programme, curriculum, courses, and learning activities are "
-        "structured and organized. Focus on course content, module sequence, curriculum coherence, "
-        "schedules, timetables, planning, workload, study materials, learning objectives, and "
-        "whether information is clear and available on time. "
-        "Include: unclear planning, heavy or uneven workload, missing materials, confusing course "
-        "structure, overlap between modules, timetable issues, and programme-level organization. "
-        "Exclude: individual teacher behaviour or teaching quality, mentoring or personal guidance, "
-        "assessment quality, grading fairness, exams, and special accommodations."
+        "Comments about the academic content, curriculum design, and programme-level structure "
+        "of the course programme. This includes the relevance of programme content to current "
+        "professional or academic developments, the quality and usefulness of study materials, "
+        "the academic level and challenge of the programme, and the learning methods built into "
+        "the curriculum. It also includes opportunities to broaden, deepen, or personalise knowledge "
+        "and skills, alignment and progression between curriculum components, repetition or gaps "
+        "between modules, and the overall amount and distribution of academic pressure and workload. "
+        "Learning methods here refer to programme-level formats such as lectures, projects, group "
+        "work, practical activities, and self-study."
     ),
 
     "Professional Practice": (
-        "Comments about how well the programme prepares students for professional work and real "
-        "practice. Focus on internships, projects, practical assignments, industry relevance, "
-        "workplace preparation, career orientation, professional skills, teamwork, employability, "
-        "and applying theory in realistic situations. "
-        "Include: lack of practical experience, weak connection to the profession, useful projects, "
-        "internship preparation, professional skills, and real-world application. "
-        "Exclude: general course organization, normal study workload, teacher performance, exam "
-        "procedures, grading, and general mentoring unless it is directly about career or workplace preparation."
+        "Comments about how well the course programme prepares students for professional practice "
+        "and connects them with the professional field. This includes opportunities to develop and "
+        "practise professional skills, apply knowledge in realistic work situations, and prepare for "
+        "future employment or professional careers. It also includes internships, work placements, "
+        "guest speakers, company visits, networking opportunities, assignments for external "
+        "organisations, contact with professionals, and whether the programme reflects current "
+        "professional expectations and workplace practices."
     ),
 
     "Teachers": (
-        "Comments about teachers, lecturers, tutors, and instructors in their teaching role. Focus "
-        "on lesson quality, clarity of explanations, subject expertise, didactics, enthusiasm, "
-        "communication during class, responsiveness to course-related questions, classroom guidance, "
-        "and feedback on learning activities or assignments. "
-        "Include: unclear explanations, inspiring teaching, poor lesson preparation, teacher expertise, "
-        "availability for subject questions, and feedback from teachers on coursework. "
-        "Boundary rule: if the comment is about a teacher acting as a course instructor, classify it "
-        "as Teachers; if it is about a mentor, study coach, or advisor helping with study progress, "
-        "personal circumstances, or wellbeing outside class, classify it as Support / Mentoring. "
-        "Exclude: personal coaching, study planning support, wellbeing support, disability support, "
-        "special accommodations, grading fairness, and exam procedures."
+        "Comments about the qualities, behaviour, expertise, and teaching performance of teachers. "
+        "This includes whether teachers care about students, have strong didactic skills, possess "
+        "sufficient subject-matter expertise, and understand the relevant professional practice. "
+        "It also includes teachers' ability to explain concepts and instructions clearly, teach "
+        "clearly in English, inspire and motivate students, support students with learning and "
+        "academic work, and create a respectful and safe environment in which students feel "
+        "comfortable asking questions and making mistakes. Teacher support here refers to support "
+        "provided as part of the teacher's normal teaching role."
     ),
 
     "Support / Mentoring": (
-        "Comments about structured support outside normal classroom teaching. Focus on mentors, "
-        "study coaches, academic advisors, student counsellors, study progress guidance, personal "
-        "guidance, planning help, motivation support, accessibility of help, and wellbeing-oriented "
-        "conversations provided by the programme or institution. "
-        "Include: mentor availability, useful or missing study guidance, help with planning, advice "
-        "about study choices, follow-up on student progress, and access to personal or academic support. "
-        "Boundary rule: if the comment is mainly about lessons, explanations, teacher expertise, or "
-        "feedback in a course, classify it as Teachers. If the comment is mainly about a diagnosed "
-        "condition, disability, mental health issue, financial pressure, caring responsibility, work-study "
-        "conflict, or formal accommodation, classify it as Special Circumstances unless the student is "
-        "specifically evaluating the support they received for that situation. "
-        "Exclude: teacher performance in class, exam and grading issues, general curriculum organization, "
-        "and special circumstances themselves without a clear support or mentoring angle."
+        "Comments about guidance, counselling, coaching, or advisory support provided outside "
+        "teachers' normal guidance on course content and academic work. This includes support from "
+        "mentors, counsellors, coaches, study advisors, student advisors, career advisors, and "
+        "similar support roles. It covers the availability and accessibility of guidance, knowing "
+        "where and how to request support, waiting times or difficulty arranging appointments, and "
+        "the quality, consistency, relevance, and usefulness of the advice provided. It also includes "
+        "help with study planning, academic progress, study choices, personal development, career "
+        "orientation, and general difficulties that affect study progress."
     ),
 
     "Examination & Assessment": (
-        "Comments about how students are tested, assessed, graded, and given assessment feedback. "
-        "Focus on exams, tests, assignments as assessments, rubrics, assessment criteria, grading "
-        "fairness, resits, deadlines tied to assessments, assessment workload, feedback on graded work, "
-        "and examination procedures. "
-        "Include: unclear criteria, unfair grades, too many assessments, late grades, resit issues, "
-        "rubric problems, and feedback on assessed assignments. "
-        "Exclude: general teaching quality, general course content, planning that is not assessment-related, "
-        "mentoring, personal support, and professional practice unless the comment is specifically about assessment."
+        "Comments about how students' knowledge, understanding, and skills are examined, assessed, "
+        "judged, or graded. This includes the alignment between assessments and the content taught "
+        "in the programme, the clarity and consistency of assessment criteria, rubrics, instructions, "
+        "and performance expectations, and the quality and difficulty of theoretical and practical "
+        "examinations. It also includes the suitability of assessment methods such as written exams, "
+        "presentations, projects, portfolios, reports, and practical demonstrations. Feedback in this "
+        "theme refers to feedback on assignments, examinations, reports, or other assessed work, "
+        "including whether it is clear, useful, timely, and helps students understand their performance "
+        "and how to improve it."
     ),
 
     "Engagement & Contact": (
-        "Comments about connection, communication, interaction, and involvement within the programme. "
-        "Focus on student participation, student voice, opportunities to give input, responsiveness "
-        "to feedback, contact with fellow students, collaboration, community feeling, belonging, and "
-        "general communication between students and the programme. "
-        "Include: feeling unheard, weak communication, strong community, poor contact with classmates, "
-        "collaboration opportunities, participation, and whether student feedback is acted on. "
-        "Exclude: one-to-one mentoring, individual wellbeing support, teacher expertise, exam quality, "
-        "grading fairness, and curriculum structure unless the comment is mainly about communication or involvement."
+        "Comments about students' contact with teachers, involvement in learning, sense of safety "
+        "and belonging, motivation to participate, and whether student opinions are welcomed and "
+        "valued. This includes whether students can reach teachers when needed, whether feedback on "
+        "their work helps them understand course materials, and whether they feel safe to be themselves "
+        "within the programme. It also includes feeling accepted and connected to the programme "
+        "community, feeling inspired by what is being learned, regularly preparing for classes and "
+        "working with course materials, reflecting on or applying learning outside class, and taking "
+        "part in activities beyond normal lessons and assignments. Student voice includes whether "
+        "teachers and the programme value student feedback and provide meaningful channels such as "
+        "evaluations, consultations, or student panels."
     ),
 
     "Special Circumstances": (
-        "Comments about studying while dealing with circumstances that create extra barriers or require "
-        "formal flexibility. Focus on disabilities, chronic conditions, ADHD, autism, dyslexia, concentration "
-        "difficulties, mental health challenges, severe stress, financial pressure, accessibility issues, "
-        "caring responsibilities, family circumstances, elite sports, employment, entrepreneurship, work-study "
-        "balance, and accommodations such as extra time, adjusted deadlines, accessible materials, or other provisions. "
-        "Include: difficulty combining study with work or care duties, mental health pressure, disability-related "
-        "barriers, requests for accommodations, accessibility problems, and experiences with special arrangements. "
-        "Boundary rule: classify the underlying circumstance here even if the student also mentions needing help. "
-        "Use Support / Mentoring only when the main point is the quality, availability, or absence of guidance "
-        "provided by mentors, coaches, advisors, or student support staff. "
-        "Exclude: ordinary study stress or normal workload without a special circumstance, general mentoring, "
-        "teaching quality, curriculum organization, and exam quality unless an accommodation or special barrier is central."
+        "Comments about studying while personal, medical, financial, family-related, accessibility, "
+        "or other exceptional circumstances affect a student's ability to participate in or complete "
+        "their studies. This includes difficulties involving concentration, energy, sensitivity to "
+        "stimuli, planning and organisation, social interaction, reading, writing, mathematics, "
+        "stress, finances, transport, housing, caring responsibilities, family situations, "
+        "entrepreneurship, top-level sport, work, internships, or health-related circumstances. "
+        "It also includes the effect of mandatory attendance, fixed schedules, examinations, physical "
+        "or digital environments, websites, learning platforms, and learning materials on students "
+        "with special circumstances. The theme covers whether students know who to contact, how to "
+        "notify the institution, barriers to disclosure, meetings and information after disclosure, "
+        "accommodations or alternative arrangements, accessibility, and whether the institution is "
+        "understanding and able to respond appropriately. A health condition may appear as '[health]'. "
+        "Treat '[health]' only as a redacted health-related circumstance and do not infer or reconstruct "
+        "the specific condition."
     )
 
 }
@@ -104,46 +113,108 @@ THEME_LLM_DEFINITIONS = {
 THEME_EMBEDDING_DEFINITIONS = {
 
     "Content and Organisation": (
-        "Inhoud en organisatie van de opleiding, curriculum, vakinhoud, modules, leerlijnen, "
-        "rooster, planning, studielast, werkdruk, lesmateriaal, informatievoorziening, "
-        "opbouw van het programma, course structure, workload, timetable, study materials."
+        "Feedback over de academische inhoud, opbouw en organisatie van het curriculum. "
+        "De kern is wat studenten leren, hoe onderdelen van de opleiding samenhangen en "
+        "of het programma voldoende relevant, uitdagend, coherent en studeerbaar is. "
+        "Onderwerpen: inhoud opleiding, curriculum, vakken, modules, academisch niveau, "
+        "uitdaging, studiemateriaal, onderwijsmethoden, leermethoden, samenhang, opbouw, "
+        "doorlopende leerlijn, overlap, herhaling, ontbrekende inhoud, verdieping, verbreding, "
+        "keuzevrijheid, personalisering, studielast, werkdruk, academische druk. "
+        "English terms: curriculum content, programme structure, academic level, study materials, "
+        "curriculum coherence, workload, academic pressure. "
+        "German terms: Studieninhalt, Studienaufbau, Lehrmaterial, akademisches Niveau, "
+        "Abstimmung der Module, Arbeitsbelastung, Studiendruck."
     ),
 
     "Professional Practice": (
-        "Beroepspraktijk, praktijkopdrachten, projecten, stages, werkveld, praktijkervaring, "
-        "professionele vaardigheden, beroepsvaardigheden, samenwerken, toepassen in de praktijk, "
-        "arbeidsmarkt, employability, internships, professional skills, real-world application."
+        "Feedback over hoe de opleiding studenten voorbereidt op het beroep en hen in contact "
+        "brengt met de beroepspraktijk. De kern is het ontwikkelen van professionele vaardigheden, "
+        "praktijkervaring en aansluiting op toekomstig werk. "
+        "Onderwerpen: beroepspraktijk, werkveld, beroepsvaardigheden, praktische vaardigheden, "
+        "beroepsvoorbereiding, loopbaanvoorbereiding, carrière, stage, werkplekleren, praktijkervaring, "
+        "externe opdrachtgever, bedrijfsopdracht, project voor bedrijf, gastspreker, bedrijfsbezoek, "
+        "netwerken, contact met professionals, aansluiting arbeidsmarkt. "
+        "English terms: professional practice, career readiness, professional skills, internship, "
+        "work placement, external project, contact with professionals. "
+        "German terms: Berufspraxis, Berufsvorbereitung, berufliche Fähigkeiten, Praktikum, "
+        "Praxisprojekt, Unternehmenskontakt."
     ),
 
     "Teachers": (
-        "Docenten, leraren, lecturers, tutors, lesgeven, lessen, uitleg, vakinhoudelijke "
-        "deskundigheid, didactiek, bereikbaarheid van docenten, communicatie tijdens de les, "
-        "enthousiasme, begeleiding in de les, feedback van docenten op vakken en opdrachten."
+        "Feedback over docenten en hun functioneren in hun onderwijsrol. De kern is hoe docenten "
+        "lesgeven, uitleggen, studenten behandelen en hun vak- en praktijkkennis inzetten. "
+        "Onderwerpen: docent, leraar, lesgever, didactische vaardigheden, pedagogische vaardigheden, "
+        "vakkennis, deskundigheid, praktijkkennis, duidelijke uitleg, instructies, lesgeven in Engels, "
+        "betrokken docent, zorg voor studenten, inspirerend lesgeven, ondersteuning tijdens de les, "
+        "veilig vragen stellen, respectvol gedrag, sfeer in de klas. "
+        "English terms: teacher quality, teaching skills, didactic skills, subject expertise, "
+        "clear explanations, inspiring teacher, classroom support, safe learning environment. "
+        "German terms: Lehrkraft, Lehrqualität, didaktische Fähigkeiten, Fachwissen, "
+        "verständliche Erklärung, Unterstützung im Unterricht."
     ),
 
     "Support / Mentoring": (
-        "Studiebegeleiding, mentoring, coaching, SLB, mentor, studiecoach, studentbegeleider, "
-        "studieadviseur, persoonlijke begeleiding bij studievoortgang, voortgangsgesprekken, "
-        "hulp bij plannen, keuzes maken, motivatie, welzijnsgesprekken, academic advising."
+        "Feedback over begeleiding, coaching, counselling en advies buiten de gewone vakinhoudelijke "
+        "begeleiding door docenten. De kern is of studenten passende begeleiding kunnen krijgen en "
+        "hoe bruikbaar en toegankelijk deze begeleiding is. "
+        "Onderwerpen: begeleiding, mentoring, mentor, coach, counsellor, studieadviseur, studentadviseur, "
+        "decaan, studieloopbaanbegeleider, SLB, loopbaanadviseur, afspraak, beschikbaarheid begeleiding, "
+        "wachttijd, advies, studieplanning, studievoortgang, studiekeuze, persoonlijke ontwikkeling, "
+        "loopbaanadvies, hulp bij studieproblemen. "
+        "English terms: mentoring, counselling, coaching, study advisor, student support, "
+        "study planning, academic progress, career advice. "
+        "German terms: Betreuung, Mentoring, Beratung, Studienberatung, Coaching, Studienplanung, "
+        "Unterstützung beim Studienfortschritt."
     ),
 
     "Examination & Assessment": (
-        "Toetsing en beoordeling, tentamens, examens, toetsen, opdrachten beoordelen, cijfers, "
-        "beoordelingscriteria, rubrics, nakijken, feedback op beoordeling, herkansingen, "
-        "deadlines voor toetsen, toetsprocedure, grading, assessment criteria."
+        "Feedback over toetsing, examinering, beoordeling en feedback op beoordeeld werk. "
+        "De kern is hoe kennis en vaardigheden worden getoetst, beoordeeld en van een cijfer "
+        "of beoordeling worden voorzien. "
+        "Onderwerpen: toets, tentamen, examen, assessment, opdracht, beoordeling, cijfer, nakijken, "
+        "beoordelingscriteria, rubric, toetscriteria, toetsinstructies, theoretische toets, praktische toets, "
+        "toetsvorm, toetsmethode, aansluiting toets en lesstof, moeilijkheid toets, eerlijke beoordeling, "
+        "consistente beoordeling, herkansing, toetsplanning, feedback op tentamen, feedback op opdracht, "
+        "feedback op verslag, feedback op beoordeeld werk. "
+        "English terms: examination, assessment, grading, assessment criteria, rubric, exam quality, "
+        "assessment alignment, feedback on assessed work. "
+        "German terms: Prüfung, Bewertung, Benotung, Bewertungskriterien, Prüfungsform, "
+        "Prüfungsqualität, Feedback zu bewerteten Leistungen."
     ),
 
     "Engagement & Contact": (
-        "Betrokkenheid, contact, communicatie, interactie, participatie, inspraak, studentvoice, "
-        "meedenken, responsiviteit, binding met de opleiding, gemeenschapsgevoel, contact met "
-        "medestudenten, samenwerking, student involvement, sense of community."
+        "Feedback over contact, betrokkenheid, motivatie, participatie, verbondenheid en inspraak "
+        "binnen de opleiding. De kern is of studenten zich bereikbaar, betrokken, gehoord en onderdeel "
+        "van de opleidingsgemeenschap voelen. "
+        "Onderwerpen: contact met docent, docent bereiken, bereikbaarheid docent, reactie op bericht, "
+        "communicatie met docent, betrokkenheid, motivatie, inspiratie door leren, actief leren, "
+        "voorbereiden op les, werken met lesmateriaal, oefenen, reflecteren, toepassen buiten de les, "
+        "participatie, je veilig voelen om jezelf te zijn, erbij horen, verbondenheid, sense of belonging, "
+        "studentenfeedback, studentinspraak, gehoord worden, feedback wordt gewaardeerd, evaluatie, "
+        "studentenpanel, consultatie. "
+        "English terms: teacher contact, student engagement, participation, belonging, motivation, "
+        "student voice, student feedback is valued. "
+        "German terms: Kontakt zu Lehrkräften, studentisches Engagement, Teilnahme, Motivation, "
+        "Zugehörigkeitsgefühl, Mitbestimmung, Studierendenfeedback."
     ),
 
     "Special Circumstances": (
-        "Bijzondere omstandigheden, functiebeperking, beperking, handicap, ADHD, autisme, "
-        "dyslexie, concentratieproblemen, mentale gezondheid, psychische klachten, stress, "
-        "financiele zorgen, mantelzorg, topsport, werk naast studie, familieomstandigheden, "
-        "toegankelijkheid, voorzieningen, HEALTH, aanpassingen, extra tijd, accommodations."
+        "Feedback over persoonlijke of bijzondere omstandigheden die het studeren beïnvloeden en "
+        "over hoe de instelling deze omstandigheden ondersteunt of faciliteert. De kern is de relatie "
+        "tussen de omstandigheid van de student, de gevolgen voor de studie en de reactie van de instelling. "
+        "De tag [health] staat voor verwijderde gezondheidsinformatie en moet worden behandeld als een "
+        "gezondheidsgerelateerde bijzondere omstandigheid zonder de aandoening te reconstrueren. "
+        "Onderwerpen: [health], bijzondere omstandigheden, persoonlijke omstandigheden, concentratie, "
+        "energie, prikkelgevoeligheid, lezen, schrijven, rekenen, stress, financiën, geldproblemen, vervoer, "
+        "huisvesting, gezinssituatie, mantelzorg, zorgtaak, ondernemerschap, topsport, werk naast studie, "
+        "stageverplichting, aanwezigheidsplicht, vast rooster, toegankelijkheid, fysieke toegankelijkheid, "
+        "digitale toegankelijkheid, online toegankelijkheid, voorziening, aanpassing, accommodatie, "
+        "alternatieve regeling, omstandigheden melden, ondersteuning aanvragen, discriminatie, vooroordeel, "
+        "begrip van instelling, informatie na melding. "
+        "English terms: special circumstances, health-related circumstances, disability, accessibility, "
+        "financial circumstances, caring responsibilities, disclosure, accommodation, institutional support. "
+        "German terms: besondere Studienumstände, gesundheitliche Umstände, Barrierefreiheit, "
+        "finanzielle Belastung, Betreuungspflichten, Nachteilsausgleich, Unterstützung."
     )
 
 }

@@ -32,6 +32,26 @@ def build_vectors_stream(
     )
 
 
+def rerank_theme_assignments_stream(
+    *,
+    reranker_model: str | None,
+    allow_model_download: bool,
+    max_documents: int | None = None,
+):
+    print(
+        f"[RERANK-THEMES] Starting post-embedding rerank with "
+        f"model={reranker_model or 'configured default'}, "
+        f"allow_model_download={allow_model_download}, "
+        f"max_documents={max_documents}"
+    )
+    return _builder.apply_theme_reranker_stream(
+        db_path=str(VECTOR_DB_PATH),
+        reranker_model_id=reranker_model,
+        allow_model_download=allow_model_download,
+        max_documents=max_documents,
+    )
+
+
 def vector_checkpoint_status_payload() -> dict:
     if not _builder.VECTOR_CHECKPOINT.exists():
         return {"has_checkpoint": False}
@@ -49,9 +69,33 @@ def vector_checkpoint_status_payload() -> dict:
 
 
 def pipeline_status_payload() -> dict:
-    vector_db_exists = VECTOR_DB_PATH.exists() and any(os.scandir(VECTOR_DB_PATH))
+    vector_db_storage_exists = VECTOR_DB_PATH.exists() and any(
+        os.scandir(VECTOR_DB_PATH)
+    )
+    vector_db_ready = (
+        vector_db_storage_exists
+        and _builder.vector_db_is_ready(str(VECTOR_DB_PATH))
+    )
+    vector_metadata = {}
+    if vector_db_ready:
+        try:
+            import chromadb
+
+            collection = chromadb.PersistentClient(
+                path=str(VECTOR_DB_PATH)
+            ).get_collection("survey_responses")
+            vector_metadata = getattr(collection, "metadata", None) or {}
+        except Exception:
+            vector_metadata = {}
     return {
         "status": "success",
         "anonymized_exists": ANONYMIZED_CSV_PATH.exists(),
-        "vector_db_exists": vector_db_exists,
+        "vector_db_exists": vector_db_ready,
+        "vector_db_storage_exists": vector_db_storage_exists,
+        "vector_db_ready": vector_db_ready,
+        "theme_reranker_status": vector_metadata.get("theme_reranker_status"),
+        "theme_reranker_model": vector_metadata.get("theme_reranker_model"),
+        "theme_embedding_confidence_margin": vector_metadata.get(
+            "theme_embedding_confidence_margin"
+        ),
     }

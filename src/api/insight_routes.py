@@ -1,11 +1,54 @@
 from importlib import import_module
+from itertools import product
+import json
 
 from flask import Blueprint, Response, jsonify, request
 
 insight_bp = Blueprint("insight", __name__)
 generation = import_module("src.pipeline.04_generation.service")
+retrieval = import_module("src.pipeline.03_retrieval.service")
 settings = import_module("src.config.settings")
 llama_cpp_models = import_module("src.pipeline.04_generation.llama_cpp_models")
+
+
+# Mapping: filter dimension key (sent by frontend) -> (filter_options bucket, canonical filter key)
+FILTER_DIMENSION_SOURCES = {
+    "academic_year": ("academic_years", "academic_year"),
+    "location": ("locations", "location"),
+    "programme": ("programmes", "programme"),
+    "study_mode": ("study_modes", "study_mode"),
+    "language": ("languages", "language"),
+}
+
+
+def _build_filter_grid(dimension_keys: list[str]) -> list[dict]:
+    """Expand the cross-product of the requested filter dimensions."""
+    if not dimension_keys:
+        return []
+    try:
+        options_payload = retrieval.filter_options_payload()
+    except Exception:
+        return []
+    options = options_payload.get("options") or {}
+
+    value_lists: list[list[tuple[str, str]]] = []
+    for dim_key in dimension_keys:
+        mapping = FILTER_DIMENSION_SOURCES.get(dim_key)
+        if not mapping:
+            continue
+        bucket_key, canonical_key = mapping
+        values = options.get(bucket_key) or []
+        if not values:
+            continue
+        value_lists.append([(canonical_key, str(v)) for v in values])
+
+    if not value_lists:
+        return []
+
+    grid: list[dict] = []
+    for combo in product(*value_lists):
+        grid.append({key: value for key, value in combo})
+    return grid
 
 
 @insight_bp.route("/api/theme-summary", methods=["POST"])
@@ -40,6 +83,40 @@ def clear_cache():
         return jsonify({"status": "error", "error": str(exc)}), 500
 
 
+@insight_bp.route("/api/clear-subtheme-cache", methods=["POST"])
+def clear_subtheme_cache():
+    try:
+        return jsonify(generation.clear_subtheme_cache())
+    except Exception as exc:
+        return jsonify({"status": "error", "error": str(exc)}), 500
+
+
+@insight_bp.route("/api/cache-status", methods=["GET"])
+def cache_status():
+    try:
+        main = generation.load_cache()
+        sub = generation.load_subtheme_cache()
+        def is_filtered(key): return "::filters=" in key
+        valid_main_keys = [
+            key
+            for key, value in main.items()
+            if generation.cache_has_full_dashboard_payload(value)
+        ]
+        valid_sub_keys = [
+            key
+            for key, value in sub.items()
+            if generation.cache_has_full_subtheme_payload(value, cache_key=key)
+        ]
+        return jsonify({
+            "main_baseline": sum(1 for k in valid_main_keys if not is_filtered(k)),
+            "main_filtered": sum(1 for k in valid_main_keys if is_filtered(k)),
+            "subtheme_baseline": sum(1 for k in valid_sub_keys if not is_filtered(k)),
+            "subtheme_filtered": sum(1 for k in valid_sub_keys if is_filtered(k)),
+        })
+    except Exception as exc:
+        return jsonify({"status": "error", "error": str(exc)}), 500
+
+
 @insight_bp.route("/api/precompute-insights", methods=["POST"])
 def precompute_insights():
     data = request.get_json(silent=True) or {}
@@ -50,18 +127,68 @@ def precompute_insights():
     raw_max = data.get("max_documents")
     max_documents = int(raw_max) if raw_max and str(raw_max).isdigit() else None
 
+    raw_dims = data.get("filter_dimensions") or []
+    dimension_keys = [str(d) for d in raw_dims if isinstance(d, str)]
+    filter_grid = _build_filter_grid(dimension_keys)
+    precache_subthemes = bool(data.get("precache_subthemes", False))
+
     return Response(
         generation.precompute_insights_stream(
             themes=themes,
             llm_model=data.get("llm_model") or settings.DEFAULT_LLM_MODEL,
-            custom_prompt=data.get("custom_prompt", ""),
             allow_model_download=bool(data.get("allow_model_download", False)),
             provider=data.get("provider", settings.DEFAULT_LLM_PROVIDER),
             filters=_filters_from_payload(data),
             max_documents=max_documents,
+            filter_grid=filter_grid,
+            precache_subthemes=precache_subthemes,
         ),
         mimetype="application/x-ndjson",
     )
+
+
+@insight_bp.route("/api/precompute-subthemes", methods=["POST"])
+def precompute_subthemes():
+    data = request.get_json(silent=True) or {}
+    themes = data.get("themes", [])
+    if not themes:
+        return jsonify({"error": "No themes provided"}), 400
+
+    raw_max = data.get("max_documents")
+    max_documents = int(raw_max) if raw_max and str(raw_max).isdigit() else None
+
+    raw_dims = data.get("filter_dimensions") or []
+    dimension_keys = [str(d) for d in raw_dims if isinstance(d, str)]
+    filter_grid = _build_filter_grid(dimension_keys)
+
+    return Response(
+        generation.precompute_subthemes_stream(
+            themes=themes,
+            llm_model=data.get("llm_model") or settings.DEFAULT_LLM_MODEL,
+            allow_model_download=bool(data.get("allow_model_download", False)),
+            provider=data.get("provider", settings.DEFAULT_LLM_PROVIDER),
+            filters=_filters_from_payload(data),
+            max_documents=max_documents,
+            filter_grid=filter_grid,
+        ),
+        mimetype="application/x-ndjson",
+    )
+
+
+@insight_bp.route("/api/precompute-preview", methods=["POST"])
+def precompute_preview():
+    """Return cross-product size and valid combo count for the given filter dimensions."""
+    data = request.get_json(silent=True) or {}
+    raw_dims = data.get("filter_dimensions") or []
+    dimension_keys = [str(d) for d in raw_dims if isinstance(d, str)]
+    grid = _build_filter_grid(dimension_keys)
+    valid_grid = retrieval.filter_valid_combos(grid) if grid else []
+    options_payload = retrieval.filter_options_payload()
+    options = options_payload.get("options") or {}
+    sizes = {}
+    for dim_key, (bucket_key, _canonical) in FILTER_DIMENSION_SOURCES.items():
+        sizes[dim_key] = len(options.get(bucket_key) or [])
+    return jsonify({"combos": len(grid), "valid_combos": len(valid_grid), "dimension_sizes": sizes})
 
 
 @insight_bp.route("/api/llm-models", methods=["GET"])
@@ -112,9 +239,19 @@ def get_themes_overview():
         "language",
     ]:
         value = request.args.get(key)
-        if value and value != "All":
+        if value and value not in {"All", "all"}:
             filters[key] = value
-    return jsonify(generation.themes_overview_payload(filters))
+    try:
+        filter_key = json.dumps(filters, sort_keys=True)
+        cached_bytes = generation.cache_store.get_overview_response(filter_key)
+        if cached_bytes is not None:
+            return Response(cached_bytes, mimetype="application/json")
+        payload = generation.themes_overview_payload(filters)
+        serialized = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+        generation.cache_store.set_overview_response(filter_key, serialized)
+        return Response(serialized, mimetype="application/json")
+    except Exception as exc:
+        return jsonify({"status": "error", "error": str(exc)}), 409
 
 
 def _filters_from_payload(data: dict) -> dict:
@@ -129,6 +266,8 @@ def _filters_from_payload(data: dict) -> dict:
         "programme",
         "study_mode",
         "cohort",
+        "sector",
+        "language",
     ]:
         value = raw_filters.get(key) or data.get(key)
         if value and value not in {"All", "all"}:

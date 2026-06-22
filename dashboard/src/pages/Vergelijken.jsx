@@ -53,27 +53,6 @@ function MirroredRow({ label, valueA, valueB, maxVal = 5 }) {
   )
 }
 
-// ── Live sentiment bar ────────────────────────────────────────────────────────
-function SentimentBar({ avg, label }) {
-  // avg_sentiment is -1.0 to 1.0 — convert to 0-100 for display
-  const pct = Math.round(((avg + 1) / 2) * 100)
-  const color = pct >= 65 ? '#005119' : pct <= 38 ? '#ba1a1a' : '#b45309'
-  return (
-    <div className="flex items-center gap-3">
-      <span className="text-xs text-on-surface-variant w-28 md:w-40 shrink-0 truncate">{label}</span>
-      <div className="flex-1 bg-surface-container rounded-full h-2 overflow-hidden">
-        <div
-          className="h-full rounded-full transition-all duration-500"
-          style={{ width: `${pct}%`, background: color }}
-        />
-      </div>
-      <span className="text-xs font-semibold text-on-surface w-10 text-right">
-        {avg >= 0 ? '+' : ''}{avg.toFixed(2)}
-      </span>
-    </div>
-  )
-}
-
 // ── Live pipeline section ─────────────────────────────────────────────────────
 function LiveCompareSection({ compare }) {
   if (!compare || compare.length === 0) return null
@@ -88,25 +67,15 @@ function LiveCompareSection({ compare }) {
           hub
         </span>
         <h2 className="text-base font-bold font-headline text-primary">
-          Live Pipeline — Avg Sentiment by Programme
+          Live Pipeline — Top Themes by Programme
         </h2>
         <span className="ml-auto text-xs font-medium text-tertiary-container bg-tertiary-container/10 px-2 py-0.5 rounded-full">
           Live
         </span>
       </div>
 
-      <div className="space-y-3">
-        {compare.map((row) => (
-          <SentimentBar
-            key={row.group}
-            label={row.group}
-            avg={row.avg_sentiment ?? 0}
-          />
-        ))}
-      </div>
-
       {/* Top themes per programme */}
-      <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {compare.map((row) => (
           <div key={row.group} className="bg-surface-container-low rounded-xl p-4">
             <p className="text-xs font-bold text-primary mb-2 truncate">{row.group}</p>

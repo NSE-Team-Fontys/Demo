@@ -28,7 +28,9 @@ class LLMClient(Protocol):
     def ensure_model_available(self, model_name: str, allow_download: bool = False) -> None:
         ...
 
-    def generate_json(self, model_name: str, prompt: str, timeout: int = 600) -> str:
+    def generate_json(
+        self, model_name: str, prompt: str, timeout: int | None = None
+    ) -> str:
         ...
 
     def unload(self, model_name: str) -> None:
@@ -51,12 +53,13 @@ class LlamaCppClient:
         model = resolve_llama_cpp_model(model_name)
         return model.server_command(LLAMA_CPP_SERVER_BIN)
 
-    def _check_llama_server_binary(self) -> None:
-        if shutil.which(LLAMA_CPP_SERVER_BIN):
+    def _check_llama_server_binary(self, model_name: str) -> None:
+        server_bin = self._server_command(model_name)[0]
+        if shutil.which(server_bin):
             return
         raise RuntimeError(
-            f"Could not find `{LLAMA_CPP_SERVER_BIN}` on PATH. Install llama.cpp "
-            "or set LLAMA_CPP_SERVER_BIN to the full llama-server path."
+            f"Could not find `{server_bin}` on PATH. Install the required llama.cpp "
+            "server binary or set its full path in the environment."
         )
 
     @staticmethod
@@ -116,7 +119,7 @@ class LlamaCppClient:
             self._wait_until_server_ready(model_name)
             return
 
-        self._check_llama_server_binary()
+        self._check_llama_server_binary(model_name)
         self._managed_log_path.parent.mkdir(parents=True, exist_ok=True)
         command = self._server_command(model_name)
         with self._managed_log_path.open("ab") as log_file:
@@ -235,7 +238,9 @@ class LlamaCppClient:
             f"Available models: {installed}. {self._model_command_hint(model.id)}"
         )
 
-    def generate_json(self, model_name: str, prompt: str, timeout: int = 600) -> str:
+    def generate_json(
+        self, model_name: str, prompt: str, timeout: int | None = None
+    ) -> str:
         model = resolve_llama_cpp_model(model_name)
         try:
             response = requests.post(
@@ -258,7 +263,14 @@ class LlamaCppClient:
         choices = data.get("choices") or []
         if not choices:
             return "{}"
-        message = choices[0].get("message") or {}
+        choice = choices[0]
+        finish_reason = choice.get("finish_reason") or ""
+        if finish_reason == "length":
+            print(
+                f"[LLM] Warning: model '{model_name}' hit max_tokens limit "
+                f"(finish_reason=length). Output may be truncated."
+            )
+        message = choice.get("message") or {}
         return message.get("content") or "{}"
 
     def unload(self, model_name: str) -> None:
@@ -282,35 +294,62 @@ class LlamaCppClient:
 
     @classmethod
     def _is_saved_llama_server(cls, pid: int) -> bool:
+        command = cls._pid_command(pid)
+        if not command:
+            return False
+        configured_binaries = {str(Path(LLAMA_CPP_SERVER_BIN).expanduser())}
+        return (
+            any(binary in command for binary in configured_binaries)
+            or "llama-server" in command
+        )
+
+    @classmethod
+    def _pid_command(cls, pid: int) -> str:
         cmdline_path = Path(f"/proc/{pid}/cmdline")
         try:
-            command = cmdline_path.read_bytes().replace(b"\0", b" ").decode(
+            return cmdline_path.read_bytes().replace(b"\0", b" ").decode(
                 errors="replace"
             )
         except OSError:
-            return False
-        configured_binary = str(Path(LLAMA_CPP_SERVER_BIN).expanduser())
-        return configured_binary in command or "llama-server" in command
+            pass
+        try:
+            return subprocess.check_output(
+                ["ps", "-p", str(pid), "-o", "command="],
+                text=True,
+                stderr=subprocess.DEVNULL,
+                timeout=2,
+            ).strip()
+        except (OSError, subprocess.SubprocessError):
+            return ""
 
     @classmethod
     def _configured_server_pids(cls) -> list[int]:
         proc_root = Path("/proc")
-        if not proc_root.is_dir():
-            return []
         configured_binary = str(Path(LLAMA_CPP_SERVER_BIN).expanduser().resolve())
         matches = []
+        if not proc_root.is_dir():
+            try:
+                pids = subprocess.check_output(
+                    ["pgrep", "-f", "llama.*server"],
+                    text=True,
+                    stderr=subprocess.DEVNULL,
+                    timeout=2,
+                )
+            except (OSError, subprocess.SubprocessError):
+                return []
+            for line in pids.splitlines():
+                try:
+                    pid = int(line.strip())
+                except ValueError:
+                    continue
+                if cls._is_saved_llama_server(pid):
+                    matches.append(pid)
+            return matches
+
         for entry in proc_root.iterdir():
             if not entry.name.isdigit():
                 continue
-            try:
-                command = (
-                    (entry / "cmdline")
-                    .read_bytes()
-                    .split(b"\0", 1)[0]
-                    .decode(errors="replace")
-                )
-            except OSError:
-                continue
+            command = cls._pid_command(int(entry.name)).split(" ", 1)[0]
             if command and str(Path(command).expanduser().resolve()) == configured_binary:
                 matches.append(int(entry.name))
         return matches

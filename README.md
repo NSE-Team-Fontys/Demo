@@ -125,7 +125,7 @@ llama-server --version
 If the version prints correctly, start the server once manually to trigger the model download:
 
 ```bash
-llama-server -hf unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL -c 32000 -ngl 99
+llama-server -hf unsloth/gemma-4-12B-it-qat-GGUF:UD-Q4_K_XL -c 127000 -ngl auto
 ```
 
 Wait until the server prints `listening`, then close it. After that the app can manage the server automatically.
@@ -134,13 +134,13 @@ If `llama-server --version` gives an error, restart your computer and try the co
 
 #### Enabling GPU on Windows (NVIDIA)
 
-Set `LLAMA_CPP_N_GPU_LAYERS=99` in your `.env` so the app offloads all layers to the GPU when it auto-starts the server:
+Set `LLAMA_CPP_N_GPU_LAYERS=auto` in your `.env` so the app offloads as many layers as fit on the GPU when it auto-starts the server:
 
 ```env
-LLAMA_CPP_N_GPU_LAYERS=99
+LLAMA_CPP_N_GPU_LAYERS=auto
 ```
 
-Without this the server runs on CPU only. With an RTX 4050 (6 GB VRAM) and the default E4B model (~5 GB), all layers fit in VRAM and generation runs at ~30 tokens/second instead of ~5 tokens/second on CPU.
+Without this the server runs on CPU only. With enough VRAM for the selected Gemma model, GPU offload is much faster than CPU-only generation. Use `auto` if the default 12B model does not fully fit in VRAM.
 
 To verify the GPU is being used, check the llama-server startup log for a line like:
 
@@ -168,15 +168,15 @@ enabled, selecting a model in Generate Insights starts it immediately. Clicking
 app will:
 
 1. Check that `llama-server` is on your PATH (or at `LLAMA_CPP_SERVER_BIN`).
-2. Launch `llama-server -hf <selected-model> -c 32000 -ngl auto`.
-3. On first run, llama-server downloads the model (~5 GB) from Hugging Face automatically.
+2. Launch `llama-server -hf <selected-model> -c 127000 -ngl auto`.
+3. On first run, llama-server downloads the default 12B model (~6.2 GB) from Hugging Face automatically.
 4. After startup it connects on `http://127.0.0.1:8080` (configurable via `LLAMA_CPP_BASE_URL`).
 5. When another model is selected, stop the app-managed server and restart it with that model.
 
 To run the server manually instead, start it before selecting the model and leave the checkbox unchecked:
 
 ```powershell
-llama-server -hf unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL -c 32000 -ngl auto
+llama-server -hf unsloth/gemma-4-12B-it-qat-GGUF:UD-Q4_K_XL -c 127000 -ngl auto
 ```
 
 ### PyTorch GPU acceleration
@@ -249,13 +249,16 @@ LAYER2_FP16=1
 DISABLE_SPACY_MODEL_AUTO_INSTALL=1
 RERANKER_ENABLED=true
 RERANKER_MODEL=zeroentropy/zerank-2-reranker
+RERANKER_BATCH_SIZE=4
 RERANKER_CANDIDATE_MULTIPLIER=5
 RERANKER_MAX_CANDIDATES=100
+THEME_CLASSIFICATION_CANDIDATES=3
+THEME_AMBIGUITY_SCORE_MARGIN=0.15
 LLM_CONTEXT_DOCUMENTS=100
 HIERARCHICAL_RAG_BATCH_DOCUMENTS=60
 HIERARCHICAL_RAG_MAX_DOCUMENTS=0
 DEFAULT_LLM_PROVIDER=llama.cpp
-DEFAULT_LLM_MODEL=unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL
+DEFAULT_LLM_MODEL=unsloth/gemma-4-12B-it-qat-GGUF:UD-Q4_K_XL
 LLAMA_CPP_BASE_URL=http://127.0.0.1:8080
 LLAMA_CPP_API_KEY=no-key
 LLAMA_CPP_SERVER_BIN=C:\tools\llama.cpp\llama-server.exe
@@ -496,7 +499,8 @@ Behavior:
 - Embeds search queries with the same embedding model stored in the Chroma collection.
 - Retrieves broad candidates from Chroma.
 - Uses `zeroentropy/zerank-2-reranker` by default to rerank candidates.
-- Computes theme distribution from the closest hardcoded theme embedding.
+- Reads predefined dashboard theme distribution from persisted primary assignments.
+- Returns definite primary evidence plus ambiguous candidate evidence without loading models.
 - Caches filtered theme overview frequency results in memory.
 
 ### 5. Generate Insights
@@ -524,9 +528,10 @@ Behavior:
 
 - Uses local llama.cpp at `http://127.0.0.1:8080` by default.
 - Checks llama.cpp availability and the selected Gemma GGUF model before generation.
-- Supports these Unsloth dynamic Q4 model ids: `unsloth/gemma-4-E2B-it-GGUF:UD-Q4_K_XL`, `unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL`, `unsloth/gemma-4-26B-A4B-it-GGUF:UD-Q4_K_M`, and `unsloth/gemma-4-31B-it-GGUF:UD-Q4_K_XL`.
+- Supports these Unsloth dynamic Q4 model ids: `unsloth/gemma-4-E2B-it-qat-GGUF:UD-Q4_K_XL`, `unsloth/gemma-4-E4B-it-qat-GGUF:UD-Q4_K_XL`, `unsloth/gemma-4-12B-it-qat-GGUF:UD-Q4_K_XL`, `unsloth/gemma-4-26B-A4B-it-qat-GGUF:UD-Q4_K_XL`, and `unsloth/gemma-4-31B-it-qat-GGUF:UD-Q4_K_XL`.
 - Uses semantic hierarchical RAG for theme insights instead of fixing answers to their original survey question.
-- First applies metadata filters, then compares every remaining answer with every theme embedding and assigns each answer to the closest theme.
+- First applies metadata filters, then reads indexing-time primary and ambiguous candidate assignments directly from Chroma metadata.
+- Counts each answer once under its primary theme while allowing genuinely multi-topic ambiguous evidence in multiple summaries.
 - Splits the assigned answers into map batches of `HIERARCHICAL_RAG_BATCH_DOCUMENTS` answers. The default is `60` answers per small summary.
 - Generates one JSON summary per batch, then sends those batch summaries into a final reduce prompt that produces the dashboard insight.
 - `HIERARCHICAL_RAG_MAX_DOCUMENTS=0` means no artificial document cap; set it above `0` to sample only the closest assigned answers during testing.
@@ -606,6 +611,12 @@ gemma_cache.json
 __pycache__/
 ```
 
+## Technical docs
+
+Design notes for non-obvious implementation choices live in [`docs/`](docs/):
+
+- [Filter combination validation](docs/filter-combo-validation.md) — how empty filter combos are detected upfront before LLM calls, using one bulk ChromaDB fetch and Python-side set intersection.
+
 ## Contributor Notes
 
 - Keep application logic out of `app.py`.
@@ -642,7 +653,7 @@ Check llama.cpp:
 
 ```bash
 llama-server
-llama-server -hf unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL
+llama-server -hf unsloth/gemma-4-12B-it-qat-GGUF:UD-Q4_K_XL
 ```
 
 For multiple selectable models, use llama.cpp router mode. Start `llama-server` without a model, cache the Unsloth dynamic Q4 model ids you want with `llama-server -hf <repo>:<quant>`, then restart the router.

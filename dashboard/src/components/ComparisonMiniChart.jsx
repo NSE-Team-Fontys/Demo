@@ -47,7 +47,7 @@ export default function ComparisonMiniChart({ theme, filters }) {
         })}
       </div>
       <p className="text-xs text-on-surface-variant mt-auto">
-        Positive sentiment for{' '}
+        Response share for{' '}
         <span className="font-semibold text-primary">{theme.name}</span> by study mode.
       </p>
     </div>

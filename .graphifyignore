@@ -1,0 +1,9 @@
+*
+!src/
+!src/**
+!dashboard/
+!dashboard/**
+!app.py
+!queryVectorDB.py
+!tests/
+!tests/**

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import AnonymizerTab from '../components/AnonymizerTab';
 import VectorDBBuilder from '../components/VectorDBBuilder'; 
+import ThemeReranker from '../components/ThemeReranker';
 import InsightGenerator from '../components/InsightGenerator';
 import QueryTab from '../components/QueryTab';
 
@@ -30,8 +31,9 @@ export default function PipelineDemo() {
   const steps = [
     { id: 'anonymize', title: '1. Anonymize Data', icon: '🔒', enabled: true },
     { id: 'vectors', title: '2. Build Vector DB', icon: '🗄️', enabled: true },
-    { id: 'insights', title: '3. Generate Insights', icon: '🧠', enabled: true },
-    { id: 'query', title: '4. AI Query', icon: '✨', enabled: true },
+    { id: 'rerank', title: '3. Rerank Themes', icon: '🎯', enabled: true },
+    { id: 'insights', title: '4. Generate Insights', icon: '🧠', enabled: true },
+    { id: 'query', title: '5. AI Query', icon: '✨', enabled: true },
   ];
 
   return (
@@ -85,8 +87,16 @@ export default function PipelineDemo() {
             <VectorDBBuilder 
               onSuccess={() => {
                 setVectorDbReady(true);
-                setActiveTab('insights');
+                setActiveTab('rerank');
               }} 
+            />
+          )}
+
+          {activeTab === 'rerank' && (
+            <ThemeReranker
+              onSuccess={() => {
+                setActiveTab('insights');
+              }}
             />
           )}
           

@@ -5,21 +5,23 @@ The `04_generation` module represents the final analytical stage of the data pip
 ## Architecture & Workflow
 
 ### 1. Semantic Theme Evidence Selection
-Theme insight generation uses semantic assignment instead of hard-wiring each answer to the survey question it came from. The backend first applies any dashboard metadata filters, such as programme, cohort, location, study mode, or academic year. It then compares every remaining answer against every theme embedding from `THEME_EMBEDDING_DEFINITIONS`.
+Theme insight generation uses assignments persisted during vector construction instead of hard-wiring each answer to its survey question. The backend applies dashboard metadata filters and queries the stored primary/candidate theme fields directly.
 
-Each answer is assigned to the closest theme in embedding space. For example, if a student writes about teachers inside a general programme-organization question, that answer can still be assigned to `Teachers`. This keeps the system flexible enough for human survey behavior while still giving every answer one primary theme for frequency counting.
+Every answer has exactly one primary theme for frequency counting. A response marked ambiguous can also be evidence for its other candidate themes. Definite and ambiguous evidence are labeled separately in prompts, and the LLM is told to ignore candidate evidence that is not genuinely relevant.
 
-The retrieval helper for this is `collect_theme_documents()` in `src/pipeline/03_retrieval/service.py`. It returns the assigned documents, per-theme counts, percentages, and the total number of filtered documents.
+Conservative whole-response matching reserves empty, placeholder, refusal, and generic Dutch, English, and German answers for `No Meaningful Response`. The sink is persisted deterministically and is not sent to normal educational-theme generation.
+
+Normal predefined summaries never load the embedding model or reranker. Generated subthemes follow the same principle: the main theme summary caches a `subtheme_manifest` with parent evidence IDs, and subtheme precompute re-summarizes only those parent-theme documents with the LLM. Arbitrary free-text searches remain a separate runtime vector-search/reranking path.
 
 ### 2. Hierarchical Map-Reduce RAG
 After semantic assignment, generation does not send only the top `LLM_CONTEXT_DOCUMENTS` answers. Instead, it reads the full assigned evidence set unless `HIERARCHICAL_RAG_MAX_DOCUMENTS` is set above `0`.
 
 The assigned answers are split into batches controlled by `HIERARCHICAL_RAG_BATCH_DOCUMENTS`. The default is `60`, so one small summary reads up to 60 student answers. A theme with 145 assigned answers produces three map prompts: answers 1-60, 61-120, and 121-145.
 
-Each map prompt returns the same compact JSON structure as the final insight: summary, sentiments, positive points, critical points, exact student suggestions, and subthemes. The reduce prompt then receives only these batch summaries and merges them into the final dashboard JSON. This lets the pipeline consider hundreds or thousands of unique answers without forcing all raw answers into one context window.
+Each map prompt returns the same compact JSON structure as the final insight: summary, positive points, critical points, exact student suggestions, subthemes, and a `subtheme_manifest` that grounds each discovered subtheme to evidence IDs. The reduce prompt then receives only these batch summaries and merges them into the final dashboard JSON. This lets the pipeline consider hundreds or thousands of unique answers without forcing all raw answers into one context window.
 
 ### 3. Prompt Engineering & Scope Enforcement
-To prevent "hallucinations" and topic drift, the generation stage bounds the LLM explicitly. Using definitions from `THEME_LLM_DEFINITIONS`, the model focuses entirely on extracting information relevant to the current theme (e.g., *Support / Mentoring*). The system prompt mathematically constrains the outputs required, demanding exactly 3 positive/critical comments, up to 3 student suggestions (concrete next steps), sentiments, and discrete subthemes.
+To prevent "hallucinations" and topic drift, the generation stage bounds the LLM explicitly. Using definitions from `THEME_LLM_DEFINITIONS`, the model focuses entirely on extracting information relevant to the current theme (e.g., *Support / Mentoring*). The prompt constrains the outputs required, demanding up to 3 positive/critical points, up to 3 student suggestions (concrete next steps), and discrete subthemes.
 
 ### 4. Local Model Generation
 This component talks directly to local execution clients, with **llama.cpp** as the default via `http://127.0.0.1:8080`. If the UI enables model startup, selecting a model calls `POST /api/llm-models/start`. The backend starts `llama-server -hf <selected-model>` when needed or restarts its managed server when the selected model changes, applies that model's registry-owned server settings, and verifies the model identity through `/v1/models`. Generation then uses the OpenAI-compatible `/v1/chat/completions` endpoint. The selected model is resolved through `llama_cpp_models.py`, so Unsloth quant names and model-specific tuning stay centralized instead of being repeated across routes or clients.
@@ -28,7 +30,7 @@ This component talks directly to local execution clients, with **llama.cpp** as 
 Once the final JSON answer is returned, the `insight_metrics.py` component structurally evaluates the extracted "Subthemes." Instead of blindly trusting the LLM, the system performs a localized NLP intersection check (ignoring stopwords, comparing structural roots) to calculate precisely what percentage of the assigned source documents maps directly back to the LLM-generated subthemes.
 
 ### 6. Deterministic Cache Control
-Since LLM generation is hardware expensive and slow, results are aggressively serialized to a file-based storage cache (`CACHE_FILE`). The pipeline has strict invalidation checks preventing stale data: if the `INSIGHT_CACHE_VERSION`, `LLM_CONTEXT_DOCUMENTS`, `HIERARCHICAL_RAG_BATCH_DOCUMENTS`, selected model settings, or the active Cross-Encoder ID changes, the cache safely treats prior generations as obsolete and forces a rebuild. Cache keys also include applied filters, so filtered summaries such as "ICT students only" do not reuse all-student insights.
+Since LLM generation is hardware expensive and slow, results are serialized to `CACHE_FILE`. Cache keys include applied filters, and existing payloads are reused when their dashboard shape is usable. Generation metadata such as cache version, model, and document limits is kept for audit/debugging, but changing those settings does not force regeneration; use the clear-cache endpoints when a fresh run is required.
 
 ---
 
@@ -46,12 +48,14 @@ Abstract protocol (`LLMClient`) governing the interaction between Python and ext
 
 ### `llama_cpp_models.py`
 Central registry for the supported Gemma Unsloth dynamic Q4 GGUF model options and their model-specific llama.cpp tuning:
-- `unsloth/gemma-4-E2B-it-GGUF:UD-Q4_K_XL`
-- `unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL`
-- `unsloth/gemma-4-26B-A4B-it-GGUF:UD-Q4_K_M`
-- `unsloth/gemma-4-31B-it-GGUF:UD-Q4_K_XL`
+- `unsloth/gemma-4-E2B-it-qat-GGUF:UD-Q4_K_XL`
+- `unsloth/gemma-4-E4B-it-qat-GGUF:UD-Q4_K_XL`
+- `unsloth/gemma-4-12B-it-qat-GGUF:UD-Q4_K_XL`
+- `unsloth/gemma-4-26B-A4B-it-qat-GGUF:UD-Q4_K_XL`
+- `unsloth/gemma-4-31B-it-qat-GGUF:UD-Q4_K_XL`
 
 Each registry entry owns its context size, max completion tokens, sampling controls, JSON-mode setting, and thinking flag. `llm_clients.py` only resolves the model and passes through those settings.
+The QAT entries with MTP support enable their bundled MTP drafter with `--spec-type draft-mtp --spec-draft-n-max 2`.
 
 ### `prompts.py`
 Handles LLM IO formatting.
@@ -63,7 +67,7 @@ Handles LLM IO formatting.
 ### `cache.py`
 Safeguards heavy computation time by tracking JSON payloads on local disk.
 - Utilizes suffix swapping (`.tmp.`) during writes in `save_cache()` to prevent race conditions or corrupted JSON files on sudden process terminations.
-- **`cache_matches_generation_settings()`**: Core validation ensuring `cache_version`, reranker context limits, reranker identity, and model generation settings match what the dashboard structurally requires. LLM provider/model metadata is retained for auditability, and active generation requests avoid reusing payloads produced with stale tuning.
+- **`cache_matches_generation_settings()`**: Strict metadata comparison helper retained for diagnostics and targeted checks. Normal dashboard and subtheme cache reuse validates payload shape instead, so model or document-limit changes do not invalidate existing insights.
 
 ### `insight_metrics.py`
 - **`subtheme_mention_rows()`**: Iterates the documents providing term-frequency calculations. Performs basic tokenization, filters common English/Dutch stopwords, matches suffix bounds > 6 lengths, and translates counts into frontend structural pie-chart friendly percentages (`doc_percentage` and total `percentage`).
@@ -85,4 +89,6 @@ Variables strictly managing the bounds of generation performance:
 | `LLAMA_CPP_STARTUP_TIMEOUT` | `settings.py` | Seconds to wait for a managed `llama-server` to become ready. |
 | Model context, max tokens, temperature, top-k, thinking, JSON mode | `llama_cpp_models.py` | Per-model llama.cpp server and chat-completion tuning. |
 | `INSIGHT_CACHE_VERSION` | `settings.py` | Overridden to force-invalidate existing cached structures generated by older model logic. |
-| `RERANKER_MAX_CANDIDATES` | `settings.py` | Still used by ad-hoc vector query/reranking endpoints, not as the cap for hierarchical theme insights. |
+| `THEME_CLASSIFICATION_CANDIDATES` | `settings.py` | Candidate themes selected at indexing time. Default: `3`. |
+| `THEME_AMBIGUITY_SCORE_MARGIN` | `settings.py` | Raw top-two classification score margin used to flag ambiguity. |
+| `RERANKER_MAX_CANDIDATES` | `settings.py` | Runtime ad-hoc query/reranking cap, not a predefined-theme summary cap. |
