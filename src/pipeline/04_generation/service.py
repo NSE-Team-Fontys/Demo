@@ -26,6 +26,7 @@ clear_insight_cache = cache_store.clear_insight_cache
 clear_subtheme_cache = cache_store.clear_subtheme_cache
 cache_matches_generation_settings = cache_store.cache_matches_generation_settings
 cache_has_full_dashboard_payload = cache_store.cache_has_full_dashboard_payload
+cache_has_full_subtheme_payload = cache_store.cache_has_full_subtheme_payload
 load_subtheme_cache = cache_store.load_subtheme_cache
 save_subtheme_cache = cache_store.save_subtheme_cache
 clear_subtheme_cache = cache_store.clear_subtheme_cache
@@ -256,11 +257,45 @@ def _cached_dashboard_response(
         llm_model=llm_model,
         llm_generation_settings=llm_generation_settings,
         match_llm_identity=match_llm_identity,
-    ) or not _cache_filters_match(cached_data, filters):
+    ):
         return None
-    response_data = _sanitize_cached_subthemes(cached_data)
+    response_data = dict(_sanitize_cached_subthemes(cached_data) or {})
     response_data["status"] = "success"
     response_data.setdefault("theme", theme_name)
+    response_data.setdefault("query", theme_name)
+    response_data.setdefault("is_subtheme", False)
+    response_data.setdefault("filters_applied", filters)
+    return response_data
+
+
+def _cached_subtheme_response(
+    cache: dict,
+    theme_name: str,
+    theme_query: str,
+    *,
+    filters: dict | None = None,
+    llm_provider: str | None = None,
+    llm_model: str | None = None,
+    llm_generation_settings: dict | None = None,
+    match_llm_identity: bool = False,
+) -> dict | None:
+    cache_key = _cache_key(theme_name, filters, theme_query)
+    cached_data = cache.get(cache_key)
+    if not cache_has_full_subtheme_payload(
+        cached_data,
+        llm_provider=llm_provider,
+        llm_model=llm_model,
+        llm_generation_settings=llm_generation_settings,
+        match_llm_identity=match_llm_identity,
+        cache_key=cache_key,
+    ):
+        return None
+    response_data = dict(_sanitize_cached_subthemes(cached_data) or {})
+    response_data["status"] = "success"
+    response_data.setdefault("theme", theme_name)
+    response_data["query"] = str(response_data.get("query") or theme_query)
+    response_data["is_subtheme"] = True
+    response_data.setdefault("filters_applied", filters)
     return response_data
 
 
@@ -363,7 +398,7 @@ def _generate_hierarchical_json(
                 theme_name,
                 evidence,
             )
-        return prompts.parse_llm_json(client.generate_json(llm_model, prompt, timeout=600))
+        return prompts.parse_llm_json(client.generate_json(llm_model, prompt))
 
     batch_summaries = []
     for i, batch in enumerate(batches, start=1):
@@ -383,7 +418,7 @@ def _generate_hierarchical_json(
                 total_batches=len(batches),
             )
         parsed = prompts.parse_llm_json(
-            client.generate_json(llm_model, prompt, timeout=600)
+            client.generate_json(llm_model, prompt)
         )
         parsed["batch_number"] = i
         parsed["source_document_count"] = len(batch)
@@ -403,7 +438,7 @@ def _generate_hierarchical_json(
             source_document_count=len(evidence),
         )
     return prompts.parse_llm_json(
-        client.generate_json(llm_model, reduce_prompt, timeout=600)
+        client.generate_json(llm_model, reduce_prompt)
     )
 
 
@@ -495,15 +530,19 @@ def generate_theme_summary(
             return cached_response
     elif is_subquery:
         subtheme_cache = load_subtheme_cache()
-        if cache_key in subtheme_cache and cache_matches_generation_settings(
-            subtheme_cache[cache_key],
+        cached_response = _cached_subtheme_response(
+            subtheme_cache,
+            theme_name,
+            theme_query,
+            filters=filters,
             llm_provider=provider,
             llm_model=llm_model,
             llm_generation_settings=llm_generation_settings,
             match_llm_identity=True,
-        ):
+        )
+        if cached_response is not None:
             print(f"[LLM] Returning cached subquery summary for: {theme_query}")
-            return subtheme_cache[cache_key]
+            return cached_response
         print(f"[LLM] Subtheme not pre-cached: {theme_query}")
         return {
             "status": "not_cached",
@@ -676,6 +715,7 @@ def precompute_insights_stream(
     try:
         llm_generation_settings = _model_generation_settings(provider, llm_model)
         cache = load_cache()
+        collection = None
         cached_theme_names = {
             theme.get("name")
             for theme in themes
@@ -690,6 +730,16 @@ def precompute_insights_stream(
             )
             is not None
         }
+        missing_theme_names = [
+            theme.get("name")
+            for theme in themes
+            if theme.get("name") not in cached_theme_names
+        ]
+        baseline_work = [
+            theme
+            for theme in themes
+            if theme.get("name") in set(missing_theme_names)
+        ]
         if (
             len(cached_theme_names) == len(themes)
             and not normalized_grid
@@ -714,60 +764,43 @@ def precompute_insights_stream(
             ) + "\n"
             return
 
-        collection = retrieval.get_collection()
+        yield json.dumps(
+            {
+                "status": "progress",
+                "progress": 0,
+                "message": (
+                    f"Cache plan: {len(cached_theme_names)} cached, "
+                    f"{len(missing_theme_names)} to generate"
+                    + (
+                        f" ({', '.join(missing_theme_names)})"
+                        if missing_theme_names
+                        else ""
+                    )
+                ),
+            }
+        ) + "\n"
 
         # Filter grid upfront with one bulk metadata fetch — avoids per-combo ChromaDB calls later.
         valid_grid = retrieval.filter_valid_combos(normalized_grid) if normalized_grid else []
 
-        yield json.dumps(
-            {
-                "status": "progress",
-                "progress": 1,
-                "message": f"Checking {provider} model '{llm_model}'...",
-            }
-        ) + "\n"
-
-        client = get_llm_client(provider)
-        client.ensure_model_available(llm_model, allow_download=allow_model_download)
-
         # Total steps across baseline + every valid grid combo, so progress never resets.
-        total_passes = 1 + len(valid_grid)
-        total_steps = len(themes) * total_passes
+        total_steps = max(1, len(baseline_work) + (len(themes) * len(valid_grid)))
 
         def _pct(step: float) -> int:
-            return min(99, int((step / max(total_steps, 1)) * 100))
+            return min(99, int((step / total_steps) * 100))
 
-        for i, theme in enumerate(themes):
+        for i, theme in enumerate(baseline_work):
             theme_name = theme.get("name")
-
-            if (
-                _cached_dashboard_response(
-                    cache,
-                    theme_name,
-                    filters=filters,
-                    llm_provider=provider,
-                    llm_model=llm_model,
-                    llm_generation_settings=llm_generation_settings,
-                    match_llm_identity=True,
-                )
-                is not None
-            ):
-                yield json.dumps(
-                    {
-                        "status": "progress",
-                        "theme": theme_name,
-                        "progress": _pct(i + 1),
-                        "message": f"Loaded cached insights for {theme_name}",
-                    }
-                ) + "\n"
-                continue
 
             yield json.dumps(
                 {
                     "status": "progress",
                     "theme": theme_name,
                     "progress": _pct(i),
-                    "message": f"Collecting semantically assigned answers for {theme_name}...",
+                    "message": (
+                        f"Generating missing theme {i + 1}/{len(baseline_work)}: "
+                        f"{theme_name}"
+                    ),
                 }
             ) + "\n"
 
@@ -784,6 +817,21 @@ def precompute_insights_stream(
             ) + "\n"
 
             try:
+                if client is None:
+                    yield json.dumps(
+                        {
+                            "status": "progress",
+                            "progress": 1,
+                            "message": f"Checking {provider} model '{llm_model}'...",
+                        }
+                    ) + "\n"
+                    client = get_llm_client(provider)
+                    client.ensure_model_available(
+                        llm_model,
+                        allow_download=allow_model_download,
+                    )
+                if collection is None:
+                    collection = retrieval.get_collection()
                 response_data = _generate_theme_payload(
                     client=client,
                     collection=collection,
@@ -812,13 +860,7 @@ def precompute_insights_stream(
             for i, theme in enumerate(themes):
                 theme_name = theme.get("name")
                 response_data = cache.get(_cache_key(theme_name, filters))
-                if not cache_has_full_dashboard_payload(
-                    response_data,
-                    llm_provider=provider,
-                    llm_model=llm_model,
-                    llm_generation_settings=llm_generation_settings,
-                    match_llm_identity=True,
-                ):
+                if not cache_has_full_dashboard_payload(response_data):
                     continue
                 subthemes = [
                     subtheme
@@ -827,12 +869,13 @@ def precompute_insights_stream(
                 ]
                 for st_idx, subtheme in enumerate(subthemes):
                     sub_key = _cache_key(theme_name, filters, subtheme)
-                    if sub_key in subtheme_cache and cache_matches_generation_settings(
+                    if sub_key in subtheme_cache and cache_has_full_subtheme_payload(
                         subtheme_cache[sub_key],
                         llm_provider=provider,
                         llm_model=llm_model,
                         llm_generation_settings=llm_generation_settings,
                         match_llm_identity=True,
+                        cache_key=sub_key,
                     ):
                         continue
                     yield json.dumps(
@@ -847,6 +890,21 @@ def precompute_insights_stream(
                         }
                     ) + "\n"
                     try:
+                        if client is None:
+                            yield json.dumps(
+                                {
+                                    "status": "progress",
+                                    "progress": 1,
+                                    "message": f"Checking {provider} model '{llm_model}'...",
+                                }
+                            ) + "\n"
+                            client = get_llm_client(provider)
+                            client.ensure_model_available(
+                                llm_model,
+                                allow_download=allow_model_download,
+                            )
+                        if collection is None:
+                            collection = retrieval.get_collection()
                         manifest = _manifest_for_subtheme(response_data, subtheme)
                         sub_data = _generate_theme_payload(
                             client=client,
@@ -888,7 +946,7 @@ def precompute_insights_stream(
                 for j, theme in enumerate(themes):
                     theme_name = theme.get("name")
                     # Step offset: baseline used steps 0..len(themes), grid continues from there.
-                    overall_step = len(themes) + combo_idx * len(themes) + j
+                    overall_step = len(baseline_work) + combo_idx * len(themes) + j
                     base_progress = _pct(overall_step)
 
                     if (
@@ -929,6 +987,21 @@ def precompute_insights_stream(
                     ) + "\n"
 
                     try:
+                        if client is None:
+                            yield json.dumps(
+                                {
+                                    "status": "progress",
+                                    "progress": 1,
+                                    "message": f"Checking {provider} model '{llm_model}'...",
+                                }
+                            ) + "\n"
+                            client = get_llm_client(provider)
+                            client.ensure_model_available(
+                                llm_model,
+                                allow_download=allow_model_download,
+                            )
+                        if collection is None:
+                            collection = retrieval.get_collection()
                         response_data = _generate_theme_payload(
                             client=client,
                             collection=collection,
@@ -964,12 +1037,13 @@ def precompute_insights_stream(
                         ]
                         for st_idx, subtheme in enumerate(subthemes):
                             sub_key = _cache_key(theme_name, combo, subtheme)
-                            if sub_key in subtheme_cache and cache_matches_generation_settings(
+                            if sub_key in subtheme_cache and cache_has_full_subtheme_payload(
                                 subtheme_cache[sub_key],
                                 llm_provider=provider,
                                 llm_model=llm_model,
                                 llm_generation_settings=llm_generation_settings,
                                 match_llm_identity=True,
+                                cache_key=sub_key,
                             ):
                                 continue
                             yield json.dumps(
@@ -984,6 +1058,21 @@ def precompute_insights_stream(
                                 }
                             ) + "\n"
                             try:
+                                if client is None:
+                                    yield json.dumps(
+                                        {
+                                            "status": "progress",
+                                            "progress": 1,
+                                            "message": f"Checking {provider} model '{llm_model}'...",
+                                        }
+                                    ) + "\n"
+                                    client = get_llm_client(provider)
+                                    client.ensure_model_available(
+                                        llm_model,
+                                        allow_download=allow_model_download,
+                                    )
+                                if collection is None:
+                                    collection = retrieval.get_collection()
                                 manifest = _manifest_for_subtheme(
                                     response_data, subtheme
                                 )
@@ -1064,13 +1153,11 @@ def precompute_subthemes_stream(
                 theme_name = theme.get("name")
                 main_key = _cache_key(theme_name, combo)
                 main_entry = main_cache.get(main_key)
-                if not cache_has_full_dashboard_payload(
-                    main_entry,
-                    llm_provider=provider,
-                    llm_model=llm_model,
-                    llm_generation_settings=llm_generation_settings,
-                    match_llm_identity=True,
-                ):
+                # Subtheme generation only needs the parent cache as a source
+                # manifest. Do not force users to regenerate expensive parent
+                # theme insights just because they selected a different LLM for
+                # the subtheme drilldowns.
+                if not cache_has_full_dashboard_payload(main_entry):
                     continue
                 subtheme_labels = [
                     subtheme
@@ -1079,12 +1166,13 @@ def precompute_subthemes_stream(
                 ]
                 for subtheme in subtheme_labels:
                     sub_key = _cache_key(theme_name, combo, subtheme)
-                    if sub_key in subtheme_cache and cache_matches_generation_settings(
+                    if sub_key in subtheme_cache and cache_has_full_subtheme_payload(
                         subtheme_cache[sub_key],
                         llm_provider=provider,
                         llm_model=llm_model,
                         llm_generation_settings=llm_generation_settings,
                         match_llm_identity=True,
+                        cache_key=sub_key,
                     ):
                         continue
                     manifest = _manifest_for_subtheme(main_entry, subtheme)

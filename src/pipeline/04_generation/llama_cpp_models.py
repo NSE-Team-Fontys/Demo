@@ -159,10 +159,9 @@ GEMMA_LLAMA_CPP_MODELS = (
             "--spec-draft-n-max",
             "2",
         ),
-        recommended=True,
         generation=LlamaCppGenerationSettings(
-            context_size=32000,
-            max_tokens=12768,
+            context_size=127000,
+            max_tokens=18768,
             temperature=1.0,
             top_p=0.95,
             top_k=64,
@@ -182,6 +181,7 @@ GEMMA_LLAMA_CPP_MODELS = (
             "--spec-draft-n-max",
             "2",
         ),
+        recommended=True,
         generation=LlamaCppGenerationSettings(
             context_size=127000,
             max_tokens=18192,
@@ -227,8 +227,8 @@ GEMMA_LLAMA_CPP_MODELS = (
             "2",
         ),
         generation=LlamaCppGenerationSettings(
-            context_size=32000,
-            max_tokens=8192,
+            context_size=128000,
+            max_tokens=18192,
             temperature=1.0,
             top_p=0.95,
             top_k=64,

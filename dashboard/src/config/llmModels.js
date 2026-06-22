@@ -14,19 +14,19 @@ export const AVAILABLE_LLM_MODELS = [
     id: 'unsloth/gemma-4-E4B-it-qat-GGUF:UD-Q4_K_XL',
     name: 'Gemma 4 E4B QAT',
     provider: 'Unsloth GGUF',
-    description: 'Default Unsloth dynamic Q4 model. Good balance for structured JSON summaries.',
+    description: 'Fast Unsloth dynamic Q4 option for structured JSON summaries.',
     size: '~5 GB',
     speed: 'Fast',
-    recommended: true
+    recommended: false
   },
   {
     id: 'unsloth/gemma-4-12B-it-qat-GGUF:UD-Q4_K_XL',
     name: 'Gemma 4 12B QAT',
     provider: 'Unsloth GGUF',
-    description: 'Larger QAT dynamic Q4 option with MTP enabled for stronger local insight generation.',
+    description: 'Default QAT dynamic Q4 option with MTP enabled for stronger local insight generation.',
     size: '6.2 GB',
     speed: 'Moderate',
-    recommended: false
+    recommended: true
   },
   {
     id: 'unsloth/gemma-4-26B-A4B-it-qat-GGUF:UD-Q4_K_XL',
