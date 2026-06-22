@@ -28,7 +28,9 @@ class LLMClient(Protocol):
     def ensure_model_available(self, model_name: str, allow_download: bool = False) -> None:
         ...
 
-    def generate_json(self, model_name: str, prompt: str, timeout: int = 600) -> str:
+    def generate_json(
+        self, model_name: str, prompt: str, timeout: int | None = None
+    ) -> str:
         ...
 
     def unload(self, model_name: str) -> None:
@@ -236,7 +238,9 @@ class LlamaCppClient:
             f"Available models: {installed}. {self._model_command_hint(model.id)}"
         )
 
-    def generate_json(self, model_name: str, prompt: str, timeout: int = 600) -> str:
+    def generate_json(
+        self, model_name: str, prompt: str, timeout: int | None = None
+    ) -> str:
         model = resolve_llama_cpp_model(model_name)
         try:
             response = requests.post(

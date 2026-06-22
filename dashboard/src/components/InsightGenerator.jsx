@@ -23,9 +23,10 @@ export default function InsightGenerator({ onComplete }) {
   const [progress, setProgress] = useState(0);
   const [logs, setLogs] = useState([]);
   const [generating, setGenerating] = useState(false);
+  const [completedRun, setCompletedRun] = useState(null);
 
   // Configuration
-  const [selectedModel, setSelectedModel] = useState('unsloth/gemma-4-E4B-it-qat-GGUF:UD-Q4_K_XL');
+  const [selectedModel, setSelectedModel] = useState('unsloth/gemma-4-12B-it-qat-GGUF:UD-Q4_K_XL');
   const [clearCache, setClearCache] = useState(false);
   const [allowModelDownload, setAllowModelDownload] = useState(true);
   const [maxDocuments, setMaxDocuments] = useState(240);
@@ -182,6 +183,7 @@ export default function InsightGenerator({ onComplete }) {
 
   const launchPrecompute = async ({ endpoint, useFilterGrid, label }) => {
     setGenerating(true);
+    setCompletedRun(null);
     setLogs([`Starting ${label} with ${activeModel?.name || selectedModel}...`]);
     setProgress(0);
 
@@ -223,6 +225,7 @@ export default function InsightGenerator({ onComplete }) {
         } else if (data.status === 'success') {
           completed = true;
           setProgress(100);
+          setCompletedRun({ endpoint, label });
           setLogs(prev => [...prev, "✅ " + data.message]);
           setGenerating(false);
           setTimeout(onComplete, 1500);
@@ -529,15 +532,15 @@ export default function InsightGenerator({ onComplete }) {
               </button>
 
               <button
-                onClick={() => launchPrecompute({ endpoint: '/api/precompute-subthemes', useFilterGrid: false, label: 'Dashboard Subthemes' })}
+                onClick={() => launchPrecompute({ endpoint: '/api/precompute-subthemes', useFilterGrid: false, label: 'Subtheme Insights' })}
                 className="px-5 py-3 bg-gradient-to-r from-teal-600 to-cyan-600 text-white rounded-xl font-bold shadow hover:shadow-lg hover:-translate-y-0.5 transition-all text-sm text-left"
               >
                 <div className="flex items-center justify-between">
-                  <span>Dashboard Subthemes</span>
+                  <span>Generate Subtheme Insights</span>
                   <span>🔍</span>
                 </div>
                 <div className="flex items-center justify-between mt-0.5">
-                  <span className="text-xs font-normal text-white/80">Subthemes for baseline themes</span>
+                  <span className="text-xs font-normal text-white/80">Insight pages for baseline subthemes</span>
                   <CacheBadge cached={cacheStatus.subtheme_baseline} />
                 </div>
               </button>
@@ -560,17 +563,17 @@ export default function InsightGenerator({ onComplete }) {
               </button>
 
               <button
-                onClick={() => launchPrecompute({ endpoint: '/api/precompute-subthemes', useFilterGrid: true, label: 'Filtered Subthemes' })}
+                onClick={() => launchPrecompute({ endpoint: '/api/precompute-subthemes', useFilterGrid: true, label: 'Filtered Subtheme Insights' })}
                 disabled={filterDimensions.length === 0}
                 className="px-5 py-3 bg-gradient-to-r from-fuchsia-600 to-pink-600 text-white rounded-xl font-bold shadow hover:shadow-lg hover:-translate-y-0.5 transition-all disabled:opacity-40 disabled:cursor-not-allowed text-sm text-left"
               >
                 <div className="flex items-center justify-between">
-                  <span>Filtered Subthemes</span>
+                  <span>Generate Filtered Subtheme Insights</span>
                   <span>🪢</span>
                 </div>
                 <div className="flex items-center justify-between mt-0.5">
                   <span className="text-xs font-normal text-white/80">
-                    {filterDimensions.length > 0 ? `Subthemes for each combo` : 'Select dimensions first'}
+                    {filterDimensions.length > 0 ? `Insight pages for each combo` : 'Select dimensions first'}
                   </span>
                   <CacheBadge cached={cacheStatus.subtheme_filtered} />
                 </div>
@@ -653,8 +656,12 @@ export default function InsightGenerator({ onComplete }) {
               <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
             </div>
             <div>
-              <h4 className="text-lg font-bold text-emerald-900">All Insights Generated Successfully</h4>
-              <p className="text-emerald-700 mt-1">Theme summaries, comments, suggestions, and sub-themes are cached and ready. The Overview dashboard and view-more pages will load instantly.</p>
+              <h4 className="text-lg font-bold text-emerald-900">{completedRun?.label || 'Insights'} Generated Successfully</h4>
+              <p className="text-emerald-700 mt-1">
+                {completedRun?.endpoint === '/api/precompute-subthemes'
+                  ? 'Subtheme drilldown summaries, comments, suggestions, and nested subtopics are cached and ready for the view-more pages.'
+                  : 'Theme summaries, comments, suggestions, and subthemes are cached and ready for the Overview dashboard.'}
+              </p>
               <p className="text-xs text-emerald-600 mt-2">Model used: <span className="font-semibold">{activeModel?.name}</span></p>
             </div>
           </div>

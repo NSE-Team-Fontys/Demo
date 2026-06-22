@@ -97,11 +97,21 @@ def cache_status():
         main = generation.load_cache()
         sub = generation.load_subtheme_cache()
         def is_filtered(key): return "::filters=" in key
+        valid_main_keys = [
+            key
+            for key, value in main.items()
+            if generation.cache_has_full_dashboard_payload(value)
+        ]
+        valid_sub_keys = [
+            key
+            for key, value in sub.items()
+            if generation.cache_has_full_subtheme_payload(value, cache_key=key)
+        ]
         return jsonify({
-            "main_baseline": sum(1 for k in main if not is_filtered(k)),
-            "main_filtered": sum(1 for k in main if is_filtered(k)),
-            "subtheme_baseline": sum(1 for k in sub if not is_filtered(k)),
-            "subtheme_filtered": sum(1 for k in sub if is_filtered(k)),
+            "main_baseline": sum(1 for k in valid_main_keys if not is_filtered(k)),
+            "main_filtered": sum(1 for k in valid_main_keys if is_filtered(k)),
+            "subtheme_baseline": sum(1 for k in valid_sub_keys if not is_filtered(k)),
+            "subtheme_filtered": sum(1 for k in valid_sub_keys if is_filtered(k)),
         })
     except Exception as exc:
         return jsonify({"status": "error", "error": str(exc)}), 500

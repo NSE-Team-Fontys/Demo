@@ -142,6 +142,26 @@ class LlamaCppClientTests(unittest.TestCase):
         ):
             self.assertEqual(llm_clients.LlamaCppClient._configured_server_pids(), [1234])
 
+    def test_generate_json_has_no_read_timeout_by_default(self) -> None:
+        response = mock.Mock()
+        response.status_code = 200
+        response.json.return_value = {
+            "choices": [
+                {
+                    "message": {"content": '{"ok": true}'},
+                    "finish_reason": "stop",
+                }
+            ]
+        }
+
+        with mock.patch.object(llm_clients.requests, "post", return_value=response) as post:
+            self.assertEqual(
+                self.client.generate_json(E4B_MODEL, "Generate JSON."),
+                '{"ok": true}',
+            )
+
+        self.assertIsNone(post.call_args.kwargs["timeout"])
+
 
 if __name__ == "__main__":
     unittest.main()

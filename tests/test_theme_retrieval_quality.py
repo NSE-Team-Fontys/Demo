@@ -99,6 +99,67 @@ class FakeReranker:
         )
 
 
+def _main_cache_entry(config, *, subthemes: list[str] | None = None) -> dict:
+    return {
+        "status": "success",
+        "theme": "Teachers",
+        "query": "Teachers",
+        "is_subtheme": False,
+        "frequency": 40,
+        "vector_relevant_count": 3,
+        "total_filtered_documents": 5,
+        "document_count": 3,
+        "llm_document_count": 3,
+        "hierarchical_document_count": 3,
+        "hierarchical_batch_documents": HIERARCHICAL_RAG_BATCH_DOCUMENTS,
+        "rag_strategy": generation.HIERARCHICAL_RAG_STRATEGY,
+        "filters_applied": {},
+        "cache_version": INSIGHT_CACHE_VERSION,
+        "llm_context_documents": LLM_CONTEXT_DOCUMENTS,
+        "llm_provider": "test",
+        "llm_model": "fake-llm",
+        "llm_generation_settings": None,
+        "reranker": config.reranker_model_id,
+        "definite_evidence_count": 1,
+        "ambiguous_evidence_count": 2,
+        **config.cache_metadata(),
+        "summary": "Theme summary.",
+        "positive_comments": [],
+        "critical_comments": [],
+        "student_suggestions": [],
+        "subthemes": subthemes or ["Clear explanations"],
+        "subtheme_manifest": [
+            {
+                "name": "Clear explanations",
+                "description": "Students mention clear teacher explanations.",
+                "evidence_ids": ["E0001"],
+            }
+        ],
+        "subtheme_mentions": [],
+        "quotes": [],
+    }
+
+
+def _legacy_dashboard_entry(theme: str = "Teachers") -> dict:
+    return {
+        "status": "success",
+        "theme": theme,
+        "query": theme,
+        "frequency": 40,
+        "vector_relevant_count": 3,
+        "total_filtered_documents": 5,
+        "document_count": 3,
+        "source_document_count": 3,
+        "summary": "Cached legacy summary.",
+        "positive_comments": [],
+        "critical_comments": [],
+        "student_suggestions": [],
+        "subthemes": ["Clear explanations"],
+        "subtheme_mentions": [],
+        "quotes": ["Cached quote."],
+    }
+
+
 class PersistedThemeRetrievalTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory()
@@ -430,6 +491,119 @@ class PersistedThemeRetrievalTests(unittest.TestCase):
             [30, 70],
         )
 
+    def test_subtheme_cache_requires_full_drilldown_payload(self) -> None:
+        main_entry = _main_cache_entry(self.config)
+        partial_subtheme = {
+            "cache_version": INSIGHT_CACHE_VERSION,
+            "llm_context_documents": LLM_CONTEXT_DOCUMENTS,
+            "hierarchical_batch_documents": HIERARCHICAL_RAG_BATCH_DOCUMENTS,
+            "llm_provider": "test",
+            "llm_model": "fake-llm",
+            "llm_generation_settings": None,
+            **self.config.cache_metadata(),
+            "theme": "Teachers",
+            "query": "Clear explanations",
+            "is_subtheme": True,
+        }
+        full_subtheme = {
+            **main_entry,
+            "query": "Clear explanations",
+            "is_subtheme": True,
+        }
+
+        with mock.patch.object(
+            retrieval,
+            "classification_cache_metadata",
+            return_value=self.config.cache_metadata(),
+        ):
+            self.assertFalse(cache_store.cache_has_full_subtheme_payload(main_entry))
+            self.assertFalse(
+                cache_store.cache_has_full_subtheme_payload(partial_subtheme)
+            )
+            self.assertTrue(cache_store.cache_has_full_subtheme_payload(full_subtheme))
+
+    def test_precompute_insights_keeps_legacy_cache_without_model_start(self) -> None:
+        with (
+            mock.patch.object(
+                generation,
+                "load_cache",
+                return_value={"Teachers": _legacy_dashboard_entry("Teachers")},
+            ),
+            mock.patch.object(generation, "get_llm_client") as get_client,
+            mock.patch.object(retrieval, "get_collection") as get_collection,
+        ):
+            events = list(
+                generation.precompute_insights_stream(
+                    themes=[{"name": "Teachers"}],
+                    provider="test",
+                    llm_model="smaller-llm",
+                )
+            )
+
+        get_client.assert_not_called()
+        get_collection.assert_not_called()
+        self.assertTrue(any("All insights already cached" in line for line in events))
+
+    def test_precompute_insights_generates_only_missing_theme_with_selected_model(self) -> None:
+        client = FakeLlmClient()
+        saved_cache = {"Teachers": _legacy_dashboard_entry("Teachers")}
+
+        with (
+            mock.patch.object(generation, "load_cache", return_value=saved_cache),
+            mock.patch.object(
+                generation,
+                "save_cache",
+                side_effect=lambda cache: saved_cache.update(cache),
+            ),
+            mock.patch.object(generation, "get_llm_client", return_value=client),
+            mock.patch.object(retrieval, "get_collection", return_value=self.collection),
+        ):
+            events = list(
+                generation.precompute_insights_stream(
+                    themes=[
+                        {"name": "Teachers"},
+                        {"name": "Support / Mentoring"},
+                    ],
+                    provider="test",
+                    llm_model="smaller-llm",
+                    max_documents=1,
+                )
+            )
+
+        self.assertTrue(any("Cache plan: 1 cached, 1 to generate" in line for line in events))
+        self.assertFalse(any("Loaded cached insights for Teachers" in line for line in events))
+        self.assertTrue(
+            any("Generating missing theme 1/1: Support / Mentoring" in line for line in events)
+        )
+        self.assertEqual(saved_cache["Teachers"]["summary"], "Cached legacy summary.")
+        self.assertEqual(saved_cache["Support / Mentoring"]["llm_model"], "smaller-llm")
+        self.assertEqual(saved_cache["Support / Mentoring"]["llm_document_count"], 1)
+
+    def test_generate_theme_summary_returns_legacy_subtheme_cache_by_key(self) -> None:
+        sub_key = "Teachers::subquery=Clear explanations"
+        legacy_subtheme = {
+            **_legacy_dashboard_entry("Teachers"),
+            "query": None,
+            "is_subtheme": None,
+        }
+
+        with mock.patch.object(
+            generation,
+            "load_subtheme_cache",
+            return_value={sub_key: legacy_subtheme},
+        ):
+            result = generation.generate_theme_summary(
+                theme_name="Teachers",
+                theme_query="Clear explanations",
+                provider="test",
+                llm_model="newer-llm",
+            )
+
+        self.assertEqual(result["status"], "success")
+        self.assertTrue(result["is_subtheme"])
+        self.assertEqual(result["query"], "Clear explanations")
+        self.assertEqual(result["summary"], "Cached legacy summary.")
+
     def test_precompute_subthemes_uses_cached_manifest_without_models(self) -> None:
         client = FakeLlmClient()
         saved_subtheme_cache = {}
@@ -477,6 +651,7 @@ class PersistedThemeRetrievalTests(unittest.TestCase):
                 "save_subtheme_cache",
                 side_effect=lambda cache: saved_subtheme_cache.update(cache),
             ),
+            mock.patch.object(generation, "save_cache"),
             mock.patch.object(generation, "get_llm_client", return_value=client),
             mock.patch.object(retrieval, "get_collection", return_value=self.collection),
             mock.patch.object(
@@ -508,6 +683,96 @@ class PersistedThemeRetrievalTests(unittest.TestCase):
         self.assertEqual(
             saved_subtheme_cache["Teachers::subquery=Clear explanations"]["quotes"],
             ["The teacher explains clearly."],
+        )
+
+    def test_precompute_subthemes_regenerates_partial_subtheme_cache(self) -> None:
+        client = FakeLlmClient()
+        main_entry = _main_cache_entry(self.config)
+        sub_key = "Teachers::subquery=Clear explanations"
+        saved_subtheme_cache = {
+            sub_key: {
+                "cache_version": INSIGHT_CACHE_VERSION,
+                "llm_context_documents": LLM_CONTEXT_DOCUMENTS,
+                "hierarchical_batch_documents": HIERARCHICAL_RAG_BATCH_DOCUMENTS,
+                "llm_provider": "test",
+                "llm_model": "fake-llm",
+                "llm_generation_settings": None,
+                **self.config.cache_metadata(),
+                "theme": "Teachers",
+                "query": "Clear explanations",
+                "is_subtheme": True,
+            }
+        }
+
+        with (
+            mock.patch.object(generation, "load_cache", return_value={"Teachers": main_entry}),
+            mock.patch.object(generation, "load_subtheme_cache", return_value=saved_subtheme_cache),
+            mock.patch.object(
+                generation,
+                "save_subtheme_cache",
+                side_effect=lambda cache: saved_subtheme_cache.update(cache),
+            ),
+            mock.patch.object(generation, "save_cache"),
+            mock.patch.object(generation, "get_llm_client", return_value=client),
+            mock.patch.object(retrieval, "get_collection", return_value=self.collection),
+            mock.patch.object(
+                retrieval,
+                "classification_cache_metadata",
+                return_value=self.config.cache_metadata(),
+            ),
+        ):
+            events = list(
+                generation.precompute_subthemes_stream(
+                    themes=[{"name": "Teachers"}],
+                    provider="test",
+                    llm_model="fake-llm",
+                )
+            )
+
+        self.assertTrue(any("Generating subtheme" in line for line in events))
+        self.assertEqual(
+            saved_subtheme_cache[sub_key]["quotes"],
+            ["The teacher explains clearly."],
+        )
+
+    def test_precompute_subthemes_uses_parent_cache_from_different_llm(self) -> None:
+        client = FakeLlmClient()
+        saved_subtheme_cache = {}
+        main_entry = {
+            **_main_cache_entry(self.config),
+            "llm_model": "old-main-theme-llm",
+        }
+
+        with (
+            mock.patch.object(generation, "load_cache", return_value={"Teachers": main_entry}),
+            mock.patch.object(generation, "load_subtheme_cache", return_value={}),
+            mock.patch.object(
+                generation,
+                "save_subtheme_cache",
+                side_effect=lambda cache: saved_subtheme_cache.update(cache),
+            ),
+            mock.patch.object(generation, "save_cache"),
+            mock.patch.object(generation, "get_llm_client", return_value=client),
+            mock.patch.object(retrieval, "get_collection", return_value=self.collection),
+            mock.patch.object(
+                retrieval,
+                "classification_cache_metadata",
+                return_value=self.config.cache_metadata(),
+            ),
+        ):
+            events = list(
+                generation.precompute_subthemes_stream(
+                    themes=[{"name": "Teachers"}],
+                    provider="test",
+                    llm_model="new-subtheme-llm",
+                )
+            )
+
+        self.assertTrue(any("Generating subtheme" in line for line in events))
+        self.assertIn("Teachers::subquery=Clear explanations", saved_subtheme_cache)
+        self.assertEqual(
+            saved_subtheme_cache["Teachers::subquery=Clear explanations"]["llm_model"],
+            "new-subtheme-llm",
         )
 
     def test_precompute_subthemes_skips_empty_manifest_labels(self) -> None:
@@ -565,6 +830,7 @@ class PersistedThemeRetrievalTests(unittest.TestCase):
                 "save_subtheme_cache",
                 side_effect=lambda cache: saved_subtheme_cache.update(cache),
             ),
+            mock.patch.object(generation, "save_cache"),
             mock.patch.object(generation, "get_llm_client", return_value=client),
             mock.patch.object(retrieval, "get_collection", return_value=self.collection),
             mock.patch.object(

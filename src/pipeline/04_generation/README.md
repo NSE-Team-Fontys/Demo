@@ -30,7 +30,7 @@ This component talks directly to local execution clients, with **llama.cpp** as 
 Once the final JSON answer is returned, the `insight_metrics.py` component structurally evaluates the extracted "Subthemes." Instead of blindly trusting the LLM, the system performs a localized NLP intersection check (ignoring stopwords, comparing structural roots) to calculate precisely what percentage of the assigned source documents maps directly back to the LLM-generated subthemes.
 
 ### 6. Deterministic Cache Control
-Since LLM generation is hardware expensive and slow, results are serialized to `CACHE_FILE`. Cache validity includes the classification/taxonomy version, candidate count, reranker identity, ambiguity margin, embedding identity, hierarchical settings, and selected LLM settings. Cache keys also include applied filters.
+Since LLM generation is hardware expensive and slow, results are serialized to `CACHE_FILE`. Cache keys include applied filters, and existing payloads are reused when their dashboard shape is usable. Generation metadata such as cache version, model, and document limits is kept for audit/debugging, but changing those settings does not force regeneration; use the clear-cache endpoints when a fresh run is required.
 
 ---
 
@@ -67,7 +67,7 @@ Handles LLM IO formatting.
 ### `cache.py`
 Safeguards heavy computation time by tracking JSON payloads on local disk.
 - Utilizes suffix swapping (`.tmp.`) during writes in `save_cache()` to prevent race conditions or corrupted JSON files on sudden process terminations.
-- **`cache_matches_generation_settings()`**: Core validation ensuring `cache_version`, reranker context limits, reranker identity, and model generation settings match what the dashboard structurally requires. LLM provider/model metadata is retained for auditability, and active generation requests avoid reusing payloads produced with stale tuning.
+- **`cache_matches_generation_settings()`**: Strict metadata comparison helper retained for diagnostics and targeted checks. Normal dashboard and subtheme cache reuse validates payload shape instead, so model or document-limit changes do not invalidate existing insights.
 
 ### `insight_metrics.py`
 - **`subtheme_mention_rows()`**: Iterates the documents providing term-frequency calculations. Performs basic tokenization, filters common English/Dutch stopwords, matches suffix bounds > 6 lengths, and translates counts into frontend structural pie-chart friendly percentages (`doc_percentage` and total `percentage`).
